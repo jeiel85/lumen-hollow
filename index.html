@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Lumen Hollow — 빛으로 버티는 밤</title>
+  <meta name="description" content="정전된 작은 마을에서 낮에는 퓨즈를 모으고, 밤에는 손전등과 가로등 불빛으로 그림자 형체를 버티는 아이소메트릭 생존 게임 프로토타입.">
+  <meta name="theme-color" content="#0e1a1d">
+  <meta property="og:title" content="Lumen Hollow — 빛으로 버티는 밤">
+  <meta property="og:description" content="정전된 마을에 다시 불을 밝히는 아이소메트릭 로우폴리 생존 게임 프로토타입. 브라우저에서 바로 플레이.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://jeiel85.github.io/lumen-hollow/docs/og.jpg">
+  <meta property="og:url" content="https://jeiel85.github.io/lumen-hollow/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{ "imports": { "three": "./vendor/three/three.module.js" } }</script>
+</head>
+<body>
+  <canvas id="game" aria-label="게임 화면"></canvas>
+
+  <div id="hud" class="hud hidden">
+    <div class="hud-top">
+      <div class="pill clock"><span id="phase-icon" class="ico">☀</span><span id="day-label">1일차</span><span id="time-label" class="mono">07:30</span><span id="phase-label" class="dim">아침</span></div>
+      <div class="pill zones" title="불이 들어온 구역"><span class="bulb"></span><span>구역</span><span id="zones-label" class="mono">1 / 9</span></div>
+      <div class="hud-buttons">
+        <button id="mute-btn" class="chip" type="button">소리 켜짐</button>
+        <button id="pause-btn" class="chip" type="button" aria-label="일시정지">II</button>
+      </div>
+    </div>
+    <div class="hud-bottom">
+      <div class="stats">
+        <div class="bar hp"><span class="label">체력</span><div class="track"><div id="hp-fill" class="fill"></div></div></div>
+        <div id="bat-wrap" class="bar bat"><span class="label">손전등 <b id="flash-state">OFF</b></span><div class="track"><div id="bat-fill" class="fill"></div></div></div>
+        <div class="inv"><span class="item">퓨즈 <b id="inv-fuse">1</b></span><span class="item">붕대 <b id="inv-band">0</b></span></div>
+      </div>
+      <div id="key-hints" class="keys">WASD 이동 · 마우스 조준 · F/클릭 손전등 · E 길게 상호작용 · Q 붕대 · 휠 줌 · Esc 일시정지</div>
+    </div>
+    <div id="prompt" class="prompt hidden"><span id="prompt-text"></span><div class="prompt-bar"><div id="prompt-fill"></div></div></div>
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+    <div id="pointer" class="pointer hidden"><div class="arrow"></div><span id="pointer-dist">0m</span></div>
+  </div>
+
+  <div id="touch" class="touch hidden">
+    <div id="stick-zone" class="stick-zone"><div id="stick" class="stick"><div id="knob" class="knob"></div></div></div>
+    <div class="touch-btns">
+      <button type="button" data-act="flash">손전등</button>
+      <button type="button" data-act="band">붕대</button>
+      <button type="button" data-act="use" class="big">상호작용</button>
+    </div>
+  </div>
+
+  <section id="title" class="screen">
+    <div class="card">
+      <p class="eyebrow">ISOMETRIC SURVIVAL · PROTOTYPE</p>
+      <h1>Lumen Hollow</h1>
+      <p class="tagline">정전된 작은 마을. 밤이 오면 어둠 속에서 무언가가 다가온다.<br>낮에는 퓨즈를 모으고, 꺼진 구역에 하나씩 다시 불을 밝혀라.</p>
+      <button id="start-btn" class="btn" type="button">시작하기</button>
+      <ul class="howto">
+        <li><b>낮</b> 마을을 돌며 반짝이는 곳을 뒤져 퓨즈·배터리·붕대를 모은다</li>
+        <li><b>밤</b> 그늘이는 빛을 싫어한다. 켜진 가로등 아래는 안전하고 손전등으로 쫓아낼 수 있다</li>
+        <li><b>목표</b> 배전함 8곳에 퓨즈를 끼워 마을 전체에 다시 불을 켠다</li>
+      </ul>
+      <p id="best" class="best"></p>
+    </div>
+  </section>
+
+  <section id="pause" class="screen hidden">
+    <div class="card small">
+      <h2>일시정지</h2>
+      <button id="resume-btn" class="btn" type="button">계속하기</button>
+      <button id="quit-btn" class="btn ghost" type="button">처음 화면으로</button>
+    </div>
+  </section>
+
+  <section id="end" class="screen hidden">
+    <div class="card small">
+      <h2 id="end-title"></h2>
+      <p id="end-text" class="tagline"></p>
+      <button id="continue-btn" class="btn hidden" type="button">불 켜진 마을 산책하기</button>
+      <button id="restart-btn" class="btn" type="button">다시 하기</button>
+      <button id="title-btn" class="btn ghost" type="button">처음 화면으로</button>
+    </div>
+  </section>
+
+  <section id="error" class="screen hidden">
+    <div class="card small">
+      <h2>실행할 수 없어요</h2>
+      <p id="error-text" class="tagline"></p>
+    </div>
+  </section>
+
+  <noscript><p class="noscript">이 게임은 JavaScript가 필요합니다.</p></noscript>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
