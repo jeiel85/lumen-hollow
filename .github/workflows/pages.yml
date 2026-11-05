@@ -1,0 +1,57 @@
+name: Deploy Pages
+
+# main에 올라온 내용을 GitHub Pages로 배포한다. 빌드는 없고, 캐시 무효화용 버전만 찍는다.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check import map covers every module
+        run: |
+          missing=0
+          for f in src/*.js; do
+            b=$(basename "$f")
+            [ "$b" = "main.js" ] && continue
+            if ! grep -q "\"./src/$b\": \"./src/$b?v=__BUILD__\"" index.html; then
+              echo "::error file=index.html::src/$b 가 import map에 없습니다. 캐시 무효화가 적용되지 않습니다."
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Stamp build id
+        run: |
+          build="${GITHUB_SHA::8}"
+          grep -q "__BUILD__" index.html || { echo "::error file=index.html::__BUILD__ 표식이 없습니다."; exit 1; }
+          mkdir -p _site
+          cp -r index.html style.css favicon.svg src vendor docs _site/
+          sed -i "s/__BUILD__/${build}/g" _site/index.html
+          if grep -q "__BUILD__" _site/index.html; then echo "::error::__BUILD__ 치환 실패"; exit 1; fi
+          echo "build id: ${build}"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

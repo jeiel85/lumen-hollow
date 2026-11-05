@@ -22,7 +22,9 @@ if (document.body.dataset.slowLoad) {
 
 function showFatal(message, err) {
   console.error(err);
-  $('error-title').textContent = '실행할 수 없어요';
+  // 배포 직후 캐시된 옛 index.html과 섞일 수 있어, 새로 추가된 요소는 없을 수도 있다고 보고 다룬다.
+  const errTitle = $('error-title');
+  if (errTitle) errTitle.textContent = '실행할 수 없어요';
   $('error-text').textContent = message;
   $('error').classList.remove('hidden');
   $('title').classList.add('hidden');
@@ -498,14 +500,14 @@ if (params.has('debug')) {
 let reloadHintTimer = 0;
 function setContextLost(lost) {
   game.contextLost = lost;
-  $('gl-notice').classList.toggle('hidden', !lost);
-  $('gl-reload').classList.add('hidden');
+  $('gl-notice')?.classList.toggle('hidden', !lost);
+  $('gl-reload')?.classList.add('hidden');
   clearTimeout(reloadHintTimer);
   for (const id of ['start-btn', 'resume-btn', 'restart-btn', 'continue-btn']) $(id).disabled = lost || !game.ready;
   if (lost) {
     pauseGame(true);
     // 브라우저가 끝내 복구해 주지 않는 경우를 위해 새로고침 안내를 띄운다.
-    reloadHintTimer = setTimeout(() => $('gl-reload').classList.remove('hidden'), 6000);
+    reloadHintTimer = setTimeout(() => $('gl-reload')?.classList.remove('hidden'), 6000);
   } else {
     resize();
   }
@@ -519,7 +521,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   console.info('[gl] WebGL 컨텍스트가 복구되었습니다.');
   setContextLost(false);
 });
-$('gl-reload').addEventListener('click', () => location.reload());
+$('gl-reload')?.addEventListener('click', () => location.reload());
 
 // ---------------------------------------------------------------- 시작 준비
 
