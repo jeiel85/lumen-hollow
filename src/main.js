@@ -13,8 +13,16 @@ const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const mobile = matchMedia('(pointer: coarse)').matches;
 
+// index.html의 로드 감시 타이머가 "아직 불러오는 중" 안내를 띄운 뒤에 모듈이 도착했다면, 안내를 걷고 타이틀로 돌아간다.
+if (document.body.dataset.slowLoad) {
+  delete document.body.dataset.slowLoad;
+  $('error').classList.add('hidden');
+  $('title').classList.remove('hidden');
+}
+
 function showFatal(message, err) {
   console.error(err);
+  $('error-title').textContent = '실행할 수 없어요';
   $('error-text').textContent = message;
   $('error').classList.remove('hidden');
   $('title').classList.add('hidden');

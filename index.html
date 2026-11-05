@@ -85,8 +85,9 @@
 
   <section id="error" class="screen hidden">
     <div class="card small">
-      <h2>실행할 수 없어요</h2>
+      <h2 id="error-title">실행할 수 없어요</h2>
       <p id="error-text" class="tagline"></p>
+      <button id="error-reload" class="btn ghost" type="button" onclick="location.reload()">새로고침</button>
     </div>
   </section>
 
@@ -98,10 +99,13 @@
   <noscript><p class="noscript">이 게임은 JavaScript가 필요합니다.</p></noscript>
   <script type="module" src="src/main.js"></script>
   <script>
-    // 모듈을 불러오지 못하면(네트워크 오류·구형 브라우저) 무한 "불러오는 중"에 머물지 않게 안내한다.
+    // 모듈 로드가 20초 넘게 끝나지 않으면(느린 네트워크·로드 실패·구형 브라우저) 무한 "불러오는 중"에
+    // 머물지 않게 안내한다. 나중에라도 로드가 끝나면 main.js가 이 안내를 걷고 타이틀을 되살린다.
     setTimeout(function () {
       if (document.body.classList.contains('ready')) return;
-      document.getElementById('error-text').textContent = '게임 파일을 불러오지 못했어요. 네트워크를 확인하고 새로고침해 주세요. 최신 Chrome·Safari·Edge·Firefox에서 동작합니다.';
+      document.body.dataset.slowLoad = '1';
+      document.getElementById('error-title').textContent = '아직 불러오는 중이에요';
+      document.getElementById('error-text').textContent = '게임 파일을 받는 데 오래 걸리고 있어요. 계속 이 화면이면 네트워크를 확인하고 새로고침해 주세요. 최신 Chrome·Safari·Edge·Firefox에서 동작합니다.';
       document.getElementById('error').classList.remove('hidden');
       document.getElementById('title').classList.add('hidden');
     }, 20000);
