@@ -55,7 +55,7 @@
       <p class="eyebrow">ISOMETRIC SURVIVAL · PROTOTYPE</p>
       <h1>Lumen Hollow</h1>
       <p class="tagline">정전된 작은 마을. 밤이 오면 어둠 속에서 무언가가 다가온다.<br>낮에는 퓨즈를 모으고, 꺼진 구역에 하나씩 다시 불을 밝혀라.</p>
-      <button id="start-btn" class="btn" type="button">시작하기</button>
+      <button id="start-btn" class="btn" type="button" disabled>불러오는 중…</button>
       <ul class="howto">
         <li><b>낮</b> 마을을 돌며 반짝이는 곳을 뒤져 퓨즈·배터리·붕대를 모은다</li>
         <li><b>밤</b> 그늘이는 빛을 싫어한다. 켜진 가로등 아래는 안전하고 손전등으로 쫓아낼 수 있다</li>
@@ -85,12 +85,30 @@
 
   <section id="error" class="screen hidden">
     <div class="card small">
-      <h2>실행할 수 없어요</h2>
+      <h2 id="error-title">실행할 수 없어요</h2>
       <p id="error-text" class="tagline"></p>
+      <button id="error-reload" class="btn ghost" type="button" onclick="location.reload()">새로고침</button>
     </div>
   </section>
 
+  <div id="gl-notice" class="notice hidden" role="status">
+    <span>그래픽 장치가 초기화되어 잠시 멈췄어요. 복구되면 이어서 할 수 있어요.</span>
+    <button id="gl-reload" class="chip hidden" type="button">새로고침</button>
+  </div>
+
   <noscript><p class="noscript">이 게임은 JavaScript가 필요합니다.</p></noscript>
   <script type="module" src="src/main.js"></script>
+  <script>
+    // 모듈 로드가 20초 넘게 끝나지 않으면(느린 네트워크·로드 실패·구형 브라우저) 무한 "불러오는 중"에
+    // 머물지 않게 안내한다. 나중에라도 로드가 끝나면 main.js가 이 안내를 걷고 타이틀을 되살린다.
+    setTimeout(function () {
+      if (document.body.classList.contains('ready')) return;
+      document.body.dataset.slowLoad = '1';
+      document.getElementById('error-title').textContent = '아직 불러오는 중이에요';
+      document.getElementById('error-text').textContent = '게임 파일을 받는 데 오래 걸리고 있어요. 계속 이 화면이면 네트워크를 확인하고 새로고침해 주세요. 최신 Chrome·Safari·Edge·Firefox에서 동작합니다.';
+      document.getElementById('error').classList.remove('hidden');
+      document.getElementById('title').classList.add('hidden');
+    }, 20000);
+  </script>
 </body>
 </html>

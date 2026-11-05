@@ -13,8 +13,16 @@ const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const mobile = matchMedia('(pointer: coarse)').matches;
 
+// index.html의 로드 감시 타이머가 "아직 불러오는 중" 안내를 띄운 뒤에 모듈이 도착했다면, 안내를 걷고 타이틀로 돌아간다.
+if (document.body.dataset.slowLoad) {
+  delete document.body.dataset.slowLoad;
+  $('error').classList.add('hidden');
+  $('title').classList.remove('hidden');
+}
+
 function showFatal(message, err) {
   console.error(err);
+  $('error-title').textContent = '실행할 수 없어요';
   $('error-text').textContent = message;
   $('error').classList.remove('hidden');
   $('title').classList.add('hidden');
@@ -153,6 +161,7 @@ function setScreen(id) {
 }
 
 function startGame() {
+  if (game.contextLost || !game.ready) return;
   sound.init();
   world.reset((Math.random() * 1e9) | 0);
   player.reset(START.x, START.z);
@@ -180,7 +189,7 @@ function pauseGame(on) {
   if (on && game.state === 'play') {
     game.state = 'pause';
     setScreen('pause');
-  } else if (!on && game.state === 'pause') {
+  } else if (!on && game.state === 'pause' && !game.contextLost) {
     game.state = 'play';
     setScreen(null);
   }
@@ -482,8 +491,70 @@ if (params.has('debug')) {
   };
 }
 
+// ---------------------------------------------------------------- WebGL 컨텍스트 손실
+
+// 모바일 백그라운드 전환·GPU 리셋 때 컨텍스트를 잃을 수 있다. three.js가 복구를 허용(preventDefault)하고
+// 복구되면 GPU 자원을 다시 올리므로, 여기서는 진행을 멈추고 안내한 뒤 복구를 기다린다.
+let reloadHintTimer = 0;
+function setContextLost(lost) {
+  game.contextLost = lost;
+  $('gl-notice').classList.toggle('hidden', !lost);
+  $('gl-reload').classList.add('hidden');
+  clearTimeout(reloadHintTimer);
+  for (const id of ['start-btn', 'resume-btn', 'restart-btn', 'continue-btn']) $(id).disabled = lost || !game.ready;
+  if (lost) {
+    pauseGame(true);
+    // 브라우저가 끝내 복구해 주지 않는 경우를 위해 새로고침 안내를 띄운다.
+    reloadHintTimer = setTimeout(() => $('gl-reload').classList.remove('hidden'), 6000);
+  } else {
+    resize();
+  }
+}
+renderer.domElement.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  console.warn('[gl] WebGL 컨텍스트를 잃었습니다. 복구를 기다립니다.');
+  setContextLost(true);
+});
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+  console.info('[gl] WebGL 컨텍스트가 복구되었습니다.');
+  setContextLost(false);
+});
+$('gl-reload').addEventListener('click', () => location.reload());
+
+// ---------------------------------------------------------------- 시작 준비
+
+// 밤·비·그늘이처럼 처음엔 숨겨진 물체까지 포함해 셰이더를 미리 컴파일해 둔다.
+// 그렇지 않으면 첫 밤이나 첫 그늘이 등장 순간에 컴파일로 프레임이 멈춘다.
+async function warmUp() {
+  updateCamera(0);
+  const hidden = [];
+  scene.traverse((o) => {
+    if (!o.visible) {
+      hidden.push(o);
+      o.visible = true;
+    }
+  });
+  try {
+    // 프로그램 변형(출력 색공간·톤매핑)은 현재 렌더 타깃으로 정해지므로, 실제로 그리는 HDR 타깃 기준으로 컴파일한다.
+    renderer.setRenderTarget(post.rtScene);
+    await renderer.compileAsync(scene, camera);
+    renderer.setRenderTarget(null);
+    post.render(scene, camera, env.look, 0, { focus: 0.5, band: 0.07, blurScale: 1, hurt: 0 });
+  } catch (err) {
+    console.error('[warmup] 셰이더 사전 컴파일에 실패했습니다. 첫 등장 때 끊김이 있을 수 있습니다.', err);
+  } finally {
+    for (const o of hidden) o.visible = false;
+  }
+}
+
 renderBest();
 env.setHour(Number(params.get('hour')) || 16.5);
-if (params.get('start') === '1') startGame();
 document.body.classList.add('ready');
 requestAnimationFrame(frame);
+warmUp().then(() => {
+  game.ready = true;
+  document.body.classList.add('loaded');
+  $('start-btn').textContent = '시작하기';
+  setContextLost(game.contextLost ?? false);
+  if (params.get('start') === '1') startGame();
+});
