@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { makeBeam, addXray } from './player.js';
+import { BOUND } from './world.js';
 
 // 은신처 앞에 세워 둔 낡은 픽업트럭. 연료가 있으면 몰 수 있고, 밤에는 전조등이 그늘이를 태운다.
 // 좌표 규약은 플레이어와 같다: 방향각 a의 정면 = (sin a, cos a), a가 커지면 왼쪽으로 돈다.
 
 const HALF_W = 0.95;
 const HALF_L = 2.15;
-const AXLE = 1.15; // 앞·뒤 충돌 원의 중심 거리
-const COLLIDE_R = 1.0;
+const REACH = Math.hypot(HALF_W, HALF_L); // 차체 중심에서 모서리까지
 const WHEEL_R = 0.38;
 export const MAX_FWD = 15;
 const MAX_REV = 5.5;
@@ -295,6 +295,11 @@ export class Vehicle {
     if (this.braking || this.fuel <= 0) thr = 0;
     this.throttle = Math.abs(thr);
 
+    // 겹치지 않았던 이번 프레임 시작 상태(좁은 틈에 끼면 여기로 되돌린다)
+    const ox = this.pos.x;
+    const oz = this.pos.z;
+    const oa = this.a;
+
     // 핸들: 굴러야 돌고, 빠를수록 덜 꺾인다. 후진 중에는 반대로 돈다.
     const grip = Math.min(1, Math.abs(vf) / 3) / (1 + Math.abs(vf) * 0.045);
     const yaw = -steer * STEER_RATE * grip * Math.sign(vf);
@@ -310,27 +315,42 @@ export class Vehicle {
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
 
-    // 충돌: 앞·뒤 두 원으로 차체를 근사해 정적 충돌체 밖으로 밀어낸다.
-    _a.set(this.pos.x + nfx * AXLE, 0, this.pos.z + nfz * AXLE);
-    _b.set(this.pos.x - nfx * AXLE, 0, this.pos.z - nfz * AXLE);
-    const ax = _a.x, az = _a.z, bx = _b.x, bz = _b.z;
-    world.collide(_a, COLLIDE_R);
-    world.collide(_b, COLLIDE_R);
-    const nx = _a.x - ax + _b.x - bx;
-    const nz = _a.z - az + _b.z - bz;
+    // 충돌: 차체를 회전된 직사각형 그대로 정적 충돌체 밖으로 밀어내고, 밀린 방향으로 튕긴다.
+    let { x: nx, z: nz, ok } = this._resolve(world);
+    if (!ok) {
+      // 차폭보다 조금 넓은 틈에서 돌다가 양쪽 벽에 끼면 미는 힘이 서로 상쇄되어 풀리지 않는다.
+      // 이번 프레임 이동을 취소하고 회전만 남겨 본다(제자리에서 조금씩 틀어 빠져나올 수 있게).
+      // 그래도 겹치면 회전까지 되돌린다. 프레임 시작 상태가 부동소수 오차로 살짝 겹쳐 있었다면
+      // 거기서 한 번 더 밀어낸다(되돌리기만 반복하면 그 자리에 영영 갇힌다).
+      this.pos.x = ox;
+      this.pos.z = oz;
+      if (!this._resolve(world).ok) {
+        this.pos.x = ox;
+        this.pos.z = oz;
+        this.a = oa;
+        this._resolve(world);
+      }
+      const hit = this.vel.length();
+      if (hit > 3.5 && this.crashCool <= 0) {
+        ev.crash = hit;
+        this.crashCool = 0.4;
+      }
+      this.vel.set(0, 0, 0);
+      nx = 0;
+      nz = 0;
+    }
     const push = Math.hypot(nx, nz);
     if (push > 1e-5) {
-      this.pos.x = (_a.x + _b.x) / 2;
-      this.pos.z = (_a.z + _b.z) / 2;
-      // 한쪽 끝만 밀렸으면 차체가 그만큼 돈다(모서리로 스치며 비틀리는 느낌).
-      this.a = wrap(this.a + clamp(wrap(Math.atan2(_a.x - _b.x, _a.z - _b.z) - this.a), -0.08, 0.08));
       const ux = nx / push;
       const uz = nz / push;
       const vn = this.vel.x * ux + this.vel.z * uz;
       if (vn < 0) {
-        this.vel.x -= ux * vn * 1.25;
-        this.vel.z -= uz * vn * 1.25;
-        this.vel.multiplyScalar(0.94);
+        // 세게 부딪히면 조금 튕기고, 느리게 밀고 있을 때는 튕기지 않고 벽을 따라 미끄러진다
+        // (저속에서 튕기면 앞뒤 방향이 번갈아 바뀌어 핸들이 반대로 먹고, 틈에 끼어 못 빠져나온다).
+        const bounce = -vn > 2 ? 1.25 : 1;
+        this.vel.x -= ux * vn * bounce;
+        this.vel.z -= uz * vn * bounce;
+        this.vel.multiplyScalar(Math.exp(-dt * 2.5));
         if (-vn > 3.5 && this.crashCool <= 0) {
           ev.crash = -vn;
           this.crashCool = 0.4;
@@ -359,6 +379,105 @@ export class Vehicle {
     this._animate(dt, steer, nvf, night);
     this.prevVf = nvf;
     return ev;
+  }
+
+  // 모서리에 여러 충돌체가 겹치면 몇 번 반복해 푼다. ok가 거짓이면 끝내 겹침이 남은 것(끼임).
+  _resolve(world) {
+    let x = 0;
+    let z = 0;
+    for (let i = 0; i < 3; i++) {
+      const r = this._collide(world);
+      x += r.x;
+      z += r.z;
+      if (r.depth < 1e-4) return { x, z, ok: true };
+    }
+    return { x, z, ok: false };
+  }
+
+  // 차체(회전된 직사각형)와 정적 충돌체(축 정렬 상자·원)의 겹침을 풀어 위치를 고친다.
+  // 밀어낸 총 변위(x, z)와 겹침 깊이의 합(depth, 0이면 겹친 곳 없음)을 돌려준다.
+  // 상자는 분리축 정리(월드 x·z축, 차의 앞·옆 축)로 가장 얕게 겹친 축을 따라 밀어낸다.
+  _collide(world) {
+    const s = Math.sin(this.a);
+    const c = Math.cos(this.a);
+    const as = Math.abs(s);
+    const ac = Math.abs(c);
+    const carX = HALF_W * ac + HALF_L * as; // 차체를 월드 x·z축에 투영한 반길이
+    const carZ = HALF_W * as + HALF_L * ac;
+    let px = this.pos.x;
+    let pz = this.pos.z;
+    let tx = 0;
+    let tz = 0;
+    let depth = 0;
+    for (const col of world.colliders) {
+      if (col.t === 0) {
+        const ex = (col.x1 - col.x0) / 2;
+        const ez = (col.z1 - col.z0) / 2;
+        const dx = px - (col.x0 + ex);
+        const dz = pz - (col.z0 + ez);
+        if (Math.abs(dx) >= ex + carX || Math.abs(dz) >= ez + carZ) continue;
+        const df = dx * s + dz * c;
+        const dr = -dx * c + dz * s;
+        const of = HALF_L + ex * as + ez * ac - Math.abs(df);
+        const or = HALF_W + ex * ac + ez * as - Math.abs(dr);
+        if (of <= 0 || or <= 0) continue;
+        // 네 축 중 가장 얕게 겹친 축(차를 상자에서 떼어 내는 쪽)
+        const ox = ex + carX - Math.abs(dx);
+        const oz = ez + carZ - Math.abs(dz);
+        let o = ox;
+        let mx = Math.sign(dx) || 1;
+        let mz = 0;
+        if (oz < o) { o = oz; mx = 0; mz = Math.sign(dz) || 1; }
+        if (of < o) { o = of; const g = Math.sign(df) || 1; mx = s * g; mz = c * g; }
+        if (or < o) { o = or; const g = Math.sign(dr) || 1; mx = -c * g; mz = s * g; }
+        depth += o;
+        px += mx * o;
+        pz += mz * o;
+        tx += mx * o;
+        tz += mz * o;
+      } else {
+        const dx = col.x - px;
+        const dz = col.z - pz;
+        if (dx * dx + dz * dz >= (REACH + col.r) ** 2) continue;
+        // 원 중심을 차체 좌표로 옮겨 사각형 위 가장 가까운 점과 비교
+        const lx = -dx * c + dz * s;
+        const lz = dx * s + dz * c;
+        let ux = lx - clamp(lx, -HALF_W, HALF_W);
+        let uz = lz - clamp(lz, -HALF_L, HALF_L);
+        const d = Math.hypot(ux, uz);
+        let o;
+        if (d > 1e-6) {
+          if (d >= col.r) continue;
+          o = col.r - d;
+          ux /= d;
+          uz /= d;
+        } else if (HALF_W - Math.abs(lx) < HALF_L - Math.abs(lz)) {
+          o = HALF_W - Math.abs(lx) + col.r;
+          ux = Math.sign(lx) || 1;
+          uz = 0;
+        } else {
+          o = HALF_L - Math.abs(lz) + col.r;
+          ux = 0;
+          uz = Math.sign(lz) || 1;
+        }
+        // 차는 원에서 멀어지는 쪽(차체 좌표의 -u)으로 밀린다.
+        const mx = c * ux - s * uz;
+        const mz = -s * ux - c * uz;
+        depth += o;
+        px += mx * o;
+        pz += mz * o;
+        tx += mx * o;
+        tz += mz * o;
+      }
+    }
+    const cx = clamp(px, -BOUND + carX, BOUND - carX);
+    const cz = clamp(pz, -BOUND + carZ, BOUND - carZ);
+    tx += cx - px;
+    tz += cz - pz;
+    depth += Math.abs(cx - px) + Math.abs(cz - pz);
+    this.pos.x = cx;
+    this.pos.z = cz;
+    return { x: tx, z: tz, depth };
   }
 
   _skid(lx, lz, world) {
