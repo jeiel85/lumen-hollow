@@ -1,0 +1,37 @@
+# Lumen Hollow 공유 보급품 API. 배포 순서는 server/README.md 참고.
+name = "lumen-hollow-caches"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+# CORS 허용 출처(쉼표 구분). 남용 방지 수단이 아니라 브라우저 호출 허용 목록이다.
+ALLOWED_ORIGINS = "https://jeiel85.github.io,http://localhost:8000,http://127.0.0.1:8000"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lumen-hollow-caches"
+# 운영 D1(2026-11-06 생성, 위치 APAC). 로컬 개발(--local)은 이 값을 쓰지 않는다.
+database_id = "e0949202-1be3-4d95-ab6d-b0af5f18e1c0"
+
+# 분당 요청 한도(IP 해시 기준, 근사치이며 Cloudflare 위치마다 따로 센다). 하루 한도는 D1(rate_daily)이 엄격하게 센다.
+# namespace_id는 이 계정 안에서 카운터를 구분하는 임의의 정수다.
+# 선택 기능이다: 무료 플랜에서 배포가 이 블록 때문에 거절되면 두 블록을 지우고 배포한다(코드는 없어도 동작한다).
+[[ratelimits]]
+name = "RL_READ"
+namespace_id = "7301"
+simple = { limit = 30, period = 60 }
+
+[[ratelimits]]
+name = "RL_WRITE"
+namespace_id = "7302"
+simple = { limit = 10, period = 60 }
+
+# 하루 한 번 정리 작업(UTC 03:17): 만료 표시 → 집계 → 90일 지난 기록 삭제
+[triggers]
+crons = ["17 3 * * *"]
+
+# Workers Logs(저장되는 로그)는 끈다. 2026-12-01부터 Cloudflare Observability 요금 체계로 바뀔 예정이라
+# 비용 위험을 남기지 않는다. 요청 수·오류율 같은 기본 지표는 대시보드에서 계속 보이고, 실시간 로그는 `npx wrangler tail`로 본다.
+[observability]
+enabled = false

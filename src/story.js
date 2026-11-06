@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Builder, Frame, geo, tint } from './geometry.js';
 import { makeBeaconMaterial } from './world.js';
+import { SLOT_COUNT, blockedSlots, slotPos } from './slots.js';
 import { Rng } from './rng.js';
 import { load, save, remove } from './storage.js';
 import { SCENES, CLUES } from './script.js';
@@ -37,15 +38,19 @@ const READ_R = 1.8;
 // 기록이 놓이는 곳. 마을은 고정 시드로 만들어지지만 가로수·가로등·뒤질 곳이 블록마다 달라서,
 // 후보 [x, z, 정면 각도] 가운데 충돌체·뒤질 곳·배전함과 겹치지 않는 첫 자리를 쓴다.
 // 정면(+z가 0)은 카메라 쪽(+x, +z)을 보게 해서 소품의 글 쪽이 보이게 한다.
+// 인도 쪽 후보는 공유 보급품 슬롯(블록 중심에서 11m 줄, 3m 간격) 사이, 줄보다 안쪽에 둔다.
 const PLACES = {
   log: [[2.5, 1.2, 0], [2.9, 1.5, 0], [-2.6, 1.3, 0]], // 은신처 현관 오른쪽
-  notice: [[2.9, 54.9, 0], [-2.9, 54.9, 0], [3.9, 55.3, 0], [-3.9, 55.3, 0]], // 남쪽 광장(공원) 북쪽 입구
-  diner: [[29.2, 9.8, 0], [39.2, 9.8, 0], [27.4, 9.8, 0]], // 다이너 앞 인도
-  chart: [[-5.3, -22.7, 0], [-4.1, -22.7, 0], [1.4, -22.7, 0]], // 약국 앞
-  diary: [[28.8, -53.2, 0], [35.4, -53.2, 0], [42.8, -60.5, Math.PI / 2], [42.8, -67.5, Math.PI / 2], [25.5, -53.2, 0]], // 동북 주택가 남쪽 인도
-  letter: [[29.3, 42.8, 0], [34.8, 42.8, 0], [42.8, 29.2, Math.PI / 2], [42.8, 35.0, Math.PI / 2], [38.5, 42.8, 0]], // 동남 주택가 인도
+  notice: [[2.9, 54.9, 0], [-2.9, 54.9, 0], [3.0, 55.3, 0], [-3.0, 55.3, 0]], // 남쪽 광장(공원) 북쪽 입구
+  diner: [[29.0, 9.3, 0], [32.0, 9.3, 0], [38.0, 9.3, 0]], // 다이너 앞
+  chart: [[-6.0, -22.7, 0], [-3.0, -22.7, 0], [3.0, -22.7, 0]], // 약국 앞
+  diary: [[29.0, -54.7, 0], [32.0, -54.7, 0], [35.0, -54.7, 0], [41.3, -61.0, Math.PI / 2], [41.3, -67.0, Math.PI / 2], [26.0, -54.7, 0]], // 동북 주택가 남쪽 길가
+  letter: [[29.0, 41.3, 0], [35.0, 41.3, 0], [32.0, 41.3, 0], [41.3, 29.0, Math.PI / 2], [41.3, 35.0, Math.PI / 2], [38.0, 41.3, 0]], // 동남 주택가 길가
   order: [[-69.9, 64.6, 0], [-60.3, 64.8, 0], [-70.8, 63.9, 0], [-58.5, 63.6, 0]], // 헛간 앞마당
 };
+// 소품 충돌체가 빈 보급품 슬롯을 새로 막지 않게 하는 거리. slots.js는 충돌체에서 1m 안의 슬롯을 막고,
+// 가장 큰 소품(게시판)의 반 대각선이 1m 남짓이다. 슬롯 목록은 서버와 맞춰야 하는 약속이라 바뀌면 안 된다.
+const SLOT_CLEAR = 2.1;
 // 남쪽 광장 공원 동상(블록 중심)과 약국 거리 급수탑 사다리. world.js의 _park·_tower와 같은 자리다.
 const STATUE = { x: 0, z: 64 };
 const LADDER = { x: 4.75, z: -66 };
@@ -73,6 +78,10 @@ export class Story {
     scene.add(this.root);
     ({ seen: this.seen, found: this.found } = loadProgress());
     this.spots = [];
+    // 소품을 놓기 전(마을 충돌체만 있을 때)의 빈 보급품 슬롯
+    const blocked = new Set(blockedSlots(world));
+    this.slotSpots = [];
+    for (let id = 0; id < SLOT_COUNT; id++) if (!blocked.has(id)) this.slotSpots.push(slotPos(id));
     this.lit = false;
     this.lightLevel = 0;
 
@@ -216,6 +225,7 @@ export class Story {
       if (w.loot.some((l) => Math.hypot(l.x - ix, l.z - iz) < 2.4)) continue;
       if (w.fuseBoxes.some((f) => Math.hypot(f.ix - ix, f.iz - iz) < 2.6)) continue;
       if (w.lamps.some((L) => Math.hypot(L.x - x, L.z - z) < 1.2)) continue;
+      if (this.slotSpots.some((q) => Math.hypot(q.x - x, q.z - z) < SLOT_CLEAR)) continue;
       return { x, z, a, ix, iz };
     }
     const [x, z, a] = cands[0];
