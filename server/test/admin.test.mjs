@@ -170,6 +170,30 @@ test('14일 판단: 기간 밖 기록은 빼고, 14일이 지나면 확정한다
   assert.equal(r.period.metrics.placers, 3, '출시 이후 기간에는 들어간다');
 });
 
+test('보존 기간(90일)이 지나 판단 기간 기록이 지워지기 시작하면 판정을 다시 내리지 않는다', async () => {
+  const s = setup();
+  await seed(s);
+  let r = (await s.call()).body;
+  assert.equal(r.decision.expired, false);
+  assert.equal(r.period.partial, false);
+
+  s.clock.t = LAUNCH + RULES.retentionMs - HOUR;
+  r = (await s.call()).body;
+  assert.equal(r.decision.expired, false, '보존 기간 안에서는 판정이 그대로');
+  assert.equal(r.decision.verdict, 'stop');
+
+  s.clock.t = LAUNCH + RULES.retentionMs + DAY;
+  await s.game.scheduled(s.gameEnv);
+  r = (await s.call()).body;
+  assert.equal(r.decision.expired, true);
+  assert.equal(r.decision.final, true);
+  assert.equal(r.decision.metrics, null, '줄어든 기록으로 다시 센 수치를 내놓지 않는다');
+  assert.equal(r.decision.verdict, null);
+  assert.equal(r.period.partial, true, '출시 이후 합계에서 지워진 기록이 빠졌다고 알린다');
+  assert.equal(r.period.metrics.uses, 0, '실제로 지워졌다');
+  assert.equal((await s.call('/api/summary?range=7d')).body.period.partial, false);
+});
+
 test('판단 기준: 계속·재검토·중단, 그리고 기준 사이', () => {
   const m = (placers, takers, usedPct) => ({ placers, takers, usedPct });
   assert.equal(verdict(m(4, 100, 100)), 'stop');

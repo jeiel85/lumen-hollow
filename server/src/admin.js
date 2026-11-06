@@ -116,6 +116,8 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
     if (!Object.hasOwn(RANGES, range)) throw new HttpError(400, 'bad_range');
     const periodFrom = RANGES[range] === null ? launchAt : t - RANGES[range];
     const untilNow = t + 1; // 기간은 [from, to)라서 지금 이 순간에 생긴 기록까지 넣으려면 1ms 뒤까지 센다
+    // 정리 작업은 이보다 오래된 사용·고마워요·접속 기록을 지운다. 그 앞을 덮는 기간의 수치는 빠진 채로 세진다.
+    const retainedFrom = t - rules.retentionMs;
     const decisionEnd = launchAt + DECISION.days * DAY_MS;
     const decisionTo = Math.max(launchAt, Math.min(untilNow, decisionEnd));
     const today = Date.parse(utcDay(t));
@@ -150,7 +152,9 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
     const rows = res.map((r) => r.results);
     const [decisionRow, periodRow, settingRow, liveRows, statRow, seenD, placesD, usesD, thanksD, owners, rates] = rows;
 
-    const decisionMetrics = shapeMetrics(decisionRow[0]);
+    // 판단 기간 기록이 지워지기 시작하면 다시 센 수치로 판정을 새로 내리지 않는다(판정은 판단일에 사람이 기록해 둔다).
+    const decisionExpired = launchAt < retainedFrom;
+    const decisionMetrics = decisionExpired ? null : shapeMetrics(decisionRow[0]);
     const live = { total: 0, bandage: 0, fuel: 0, battery: 0 };
     for (const r of liveRows) {
       live[r.kind] = r.n;
@@ -182,11 +186,12 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
         to: decisionTo,
         endsAt: decisionEnd,
         final: t >= decisionEnd,
+        expired: decisionExpired,
         metrics: decisionMetrics,
-        verdict: verdict(decisionMetrics),
+        verdict: decisionMetrics && verdict(decisionMetrics),
         criteria: DECISION,
       },
-      period: { range, from: periodFrom, to: t, metrics: shapeMetrics(periodRow[0]) },
+      period: { range, from: periodFrom, to: t, partial: periodFrom < retainedFrom, metrics: shapeMetrics(periodRow[0]) },
       status: {
         enabled: settingRow[0]?.value !== 'false',
         live,

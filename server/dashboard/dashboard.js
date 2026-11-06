@@ -35,7 +35,9 @@ const pct = (n) => (n === null || n === undefined ? '—' : `${n}%`);
 let token = null;
 let range = 'launch';
 let last = null;
-let loading = false;
+// 요청마다 번호를 올린다. 로그아웃하거나 새 요청을 보내면 앞 요청의 응답은 버린다(로그아웃 뒤 지표가 다시 그려지지 않게).
+let generation = 0;
+let inflight = null;
 
 // ---------------------------------------------------------------- 토큰 보관
 
@@ -57,7 +59,17 @@ function keepToken(value, persist) {
   }
 }
 
+// 진행 중인 요청을 끊고, 이미 도착 중인 응답도 쓰지 않게 한다.
+function cancelLoad() {
+  generation += 1;
+  inflight?.abort();
+  inflight = null;
+  document.body.classList.remove('loading');
+  $('refresh').disabled = false;
+}
+
 function dropToken() {
+  cancelLoad();
   token = null;
   try {
     sessionStorage.removeItem(KEY);
@@ -99,22 +111,30 @@ function showError(message) {
 // ---------------------------------------------------------------- 불러오기
 
 async function load(nextRange = range) {
-  if (!token || loading) return;
-  loading = true;
+  if (!token) return;
+  cancelLoad();
+  const mine = generation;
+  const controller = new AbortController();
+  inflight = controller;
+  const current = () => mine === generation;
   document.body.classList.add('loading');
   $('refresh').disabled = true;
   try {
     let res;
+    let body;
     try {
       res = await fetch(`/api/summary?range=${encodeURIComponent(nextRange)}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
+        signal: controller.signal,
       });
+      body = await res.json().catch(() => null);
     } catch {
-      showError('서버에 닿지 못했어요. 네트워크를 확인하고 다시 시도하세요.');
+      // 일부러 끊은 요청(로그아웃·새 요청)은 오류가 아니다.
+      if (current()) showError('서버에 닿지 못했어요. 네트워크를 확인하고 다시 시도하세요.');
       return;
     }
-    const body = await res.json().catch(() => null);
+    if (!current()) return;
     if (res.status === 401) {
       dropToken();
       showLogin('토큰이 맞지 않아요.');
@@ -130,9 +150,11 @@ async function load(nextRange = range) {
     $('board-error').hidden = true;
     render(body);
   } finally {
-    loading = false;
-    document.body.classList.remove('loading');
-    $('refresh').disabled = false;
+    if (current()) {
+      inflight = null;
+      document.body.classList.remove('loading');
+      $('refresh').disabled = false;
+    }
   }
 }
 
@@ -187,6 +209,16 @@ function renderStatus(s) {
 // ---------------------------------------------------------------- 14일 판단
 
 function renderDecision(d, now) {
+  if (d.expired) {
+    $('dc-when').textContent = `판단 기간(${when.format(d.from)} ~ ${when.format(d.endsAt)}) 기록이 보존 기간(90일)을 지나 지워지기 시작했어요.`;
+    setMeter($('dc-days'), d.criteria.days, d.criteria.days);
+    $('dc-verdict').replaceChildren(
+      document.createTextNode('다시 계산하지 않아요'),
+      el('span', 'muted small', ' — 남은 기록으로 세면 판정이 틀어집니다. 판단일에 남겨 둔 결정 기록을 보세요.'),
+    );
+    $('dc-criteria').replaceChildren();
+    return;
+  }
   const elapsed = Math.max(0, now - d.from);
   const dayNo = Math.min(d.criteria.days, Math.floor(elapsed / DAY) + 1);
   const left = Math.ceil((d.endsAt - now) / DAY);
@@ -261,7 +293,8 @@ function renderAbuse(a) {
 
 // ---------------------------------------------------------------- 기간 지표
 
-function renderKpis(m) {
+function renderKpis(m, partial) {
+  $('period-partial').hidden = !partial;
   const tiles = [
     ['접속 플레이어', fmt(m.players), '온라인을 켠 채 게임을 연 사람'],
     ['둔 플레이어', fmt(m.placers), `보급품 ${fmt(m.places)}개`],
@@ -417,7 +450,7 @@ function render(d) {
   renderStatus(d.status);
   renderDecision(d.decision, d.now);
   renderAbuse(d.abuse);
-  renderKpis(d.period.metrics);
+  renderKpis(d.period.metrics, d.period.partial);
   renderDaily(d.daily);
   for (const b of document.querySelectorAll('.filters button')) b.setAttribute('aria-pressed', String(b.dataset.range === d.period.range));
   $('cost').textContent = d.cost.rowsRead === null
