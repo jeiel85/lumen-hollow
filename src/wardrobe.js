@@ -357,6 +357,9 @@ export class Closet {
     this.tabsEl = document.getElementById('closet-tabs');
     this.gridEl = document.getElementById('closet-grid');
     this.countEl = document.getElementById('closet-count');
+    // 배포 직후 캐시된 옛 HTML과 섞이면 옷장 요소가 없다. 그때는 화면 없이 꾸러미·저장만 동작한다.
+    this.ok = !!(this.tabsEl && this.gridEl && this.countEl);
+    if (!this.ok) return;
     this.tabsEl.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-slot]');
       if (!b) return;
@@ -386,6 +389,7 @@ export class Closet {
   }
 
   render() {
+    if (!this.ok) return;
     const w = this.wardrobe;
     this.countEl.textContent = `모은 옷가지 ${w.foundCount} / ${w.findableCount}`;
     this.tabsEl.replaceChildren(...SLOTS.map((s) => {

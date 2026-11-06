@@ -24,27 +24,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check import map covers every module
+      - name: Check import map and service worker cover every module
         run: |
           missing=0
           for f in src/*.js; do
             b=$(basename "$f")
+            if ! grep -q "'src/$b'" sw.js; then
+              echo "::error file=sw.js::src/$b 가 서비스 워커 MODULES에 없습니다. 오프라인에서 이 모듈을 못 찾습니다."
+              missing=1
+            fi
             [ "$b" = "main.js" ] && continue
             if ! grep -q "\"./src/$b\": \"./src/$b?v=__BUILD__\"" index.html; then
               echo "::error file=index.html::src/$b 가 import map에 없습니다. 캐시 무효화가 적용되지 않습니다."
               missing=1
             fi
           done
+          for f in manifest.webmanifest icons/icon-192.png icons/icon-512.png icons/maskable-512.png icons/apple-touch-icon.png docs/mobile.jpg; do
+            [ -f "$f" ] || { echo "::error::$f 가 없습니다(PWA 설치·오프라인 캐시에 필요)."; missing=1; }
+          done
           exit $missing
 
       - name: Stamp build id
         run: |
           build="${GITHUB_SHA::8}"
-          grep -q "__BUILD__" index.html || { echo "::error file=index.html::__BUILD__ 표식이 없습니다."; exit 1; }
+          for f in index.html sw.js; do
+            grep -q "__BUILD__" "$f" || { echo "::error file=$f::__BUILD__ 표식이 없습니다."; exit 1; }
+          done
           mkdir -p _site
-          cp -r index.html style.css favicon.svg src vendor docs _site/
-          sed -i "s/__BUILD__/${build}/g" _site/index.html
-          if grep -q "__BUILD__" _site/index.html; then echo "::error::__BUILD__ 치환 실패"; exit 1; fi
+          cp -r index.html style.css favicon.svg manifest.webmanifest sw.js icons src vendor docs _site/
+          sed -i "s/__BUILD__/${build}/g" _site/index.html _site/sw.js
+          if grep -q "__BUILD__" _site/index.html _site/sw.js; then echo "::error::__BUILD__ 치환 실패"; exit 1; fi
           echo "build id: ${build}"
 
       - uses: actions/configure-pages@v5

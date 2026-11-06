@@ -8,12 +8,15 @@ import { Vehicle, MAX_FWD } from './vehicle.js';
 import { Input } from './input.js';
 import { Hud } from './hud.js';
 import { Sound } from './audio.js';
-import { load, save } from './storage.js';
+import { QUALITY, ZOOM, loadSettings, saveSettings, bindSettings } from './settings.js';
+import { loadBest, recordRun, hasRecords, describeBest, initRecordsPanel } from './records.js';
+import { initPwa } from './pwa.js';
 import { Wardrobe, OutfitDrops, Closet, itemLabel, objParticle } from './wardrobe.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const mobile = matchMedia('(pointer: coarse)').matches;
+const settings = loadSettings({ mobile });
 
 // index.html의 로드 감시 타이머가 "아직 불러오는 중" 안내를 띄운 뒤에 모듈이 도착했다면, 안내를 걷고 타이틀로 돌아간다.
 if (document.body.dataset.slowLoad) {
@@ -42,8 +45,7 @@ try {
   showFatal('이 브라우저(또는 그래픽 드라이버)에서 WebGL2를 사용할 수 없어 게임을 시작하지 못했습니다.', err);
   throw err;
 }
-renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.5 : 2));
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = QUALITY[settings.quality].shadows;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.setClearColor(0x0b1416);
 
@@ -56,13 +58,14 @@ const SCREEN_DOWN = new THREE.Vector3(1, 0, 1).normalize();
 
 const world = new World(scene, { mobile });
 const env = new Environment(scene, { mobile });
-const post = new Post(renderer, { samples: mobile ? 2 : 4 });
+const post = new Post(renderer, { samples: QUALITY[settings.quality].samples });
 const player = new Player(scene, { mobile });
 const shades = new Shades(scene);
 const car = new Vehicle(scene);
 const input = new Input(renderer.domElement);
 const hud = new Hud();
 const sound = new Sound();
+sound.setVolume(settings.volume, settings.ambience);
 
 const wardrobe = new Wardrobe();
 player.setOutfit(wardrobe.wear);
@@ -84,8 +87,8 @@ const game = {
   won: false,
   shake: 0,
   time: 0,
-  zoom: 12.5,
-  zoomTarget: 12.5,
+  zoom: settings.zoom,
+  zoomTarget: settings.zoom,
   zoomBoost: 0,
   hintFlash: false,
   driving: false,
@@ -119,25 +122,48 @@ let pxPerUnit = 30;
 
 // ---------------------------------------------------------------- 화면 크기
 
+// 휴대폰을 돌리면 resize 이벤트가 크기가 다 바뀌기 전에 오거나(iOS) 아예 늦게 오는 경우가 있어,
+// 매 프레임 창 크기·DPR을 비교해 달라졌을 때만 다시 맞춘다.
+const view = { w: 0, h: 0, dpr: 0 };
 function resize() {
+  view.w = innerWidth;
+  view.h = innerHeight;
+  view.dpr = devicePixelRatio;
+  renderer.setPixelRatio(Math.min(devicePixelRatio, QUALITY[settings.quality].dpr));
   // 탭이 숨겨진 채로 열리면 크기가 0일 수 있다. 0 크기 렌더 타깃은 만들지 않는다.
   renderer.setSize(Math.max(1, innerWidth), Math.max(1, innerHeight));
   const c = renderer.domElement;
   post.setSize(Math.max(1, c.width), Math.max(1, c.height));
 }
-addEventListener('resize', resize);
+function checkResize() {
+  if (innerWidth !== view.w || innerHeight !== view.h || devicePixelRatio !== view.dpr) resize();
+}
 resize();
+
+// 짧은 변 기준으로 보여 줄 범위를 정한다. 휴대폰(짧은 변 430px 이하)은 세로·가로 모두 짧은 변에
+// 17칸(반경 8.5)을 보여 줘서 화면을 돌려도 캐릭터 크기가 그대로이고, 긴 변 쪽으로 시야만 넓어진다.
+// 짧은 변이 600px 이상인 화면(데스크톱·태블릿)은 예전처럼 세로 반경을 줌 값 그대로 쓴다.
+function viewHalfFor(w, h, zoom) {
+  const aspect = w / h;
+  const minShort = 8.5 * (zoom / ZOOM.base);
+  if (aspect < 1) return Math.max(zoom, minShort / aspect);
+  const t = Math.min(1, Math.max(0, (h - 430) / (600 - 430)));
+  return minShort + (zoom - minShort) * t;
+}
 
 function updateCamera(dt) {
   game.zoom += (Math.min(24, game.zoomTarget + game.zoomBoost) - game.zoom) * (1 - Math.exp(-dt * 10));
-  const aspect = innerWidth / innerHeight;
-  viewHalf = aspect < 1 ? Math.max(game.zoom, 8.5 / aspect) : game.zoom;
+  const w = Math.max(1, innerWidth);
+  const h = Math.max(1, innerHeight);
+  const aspect = w / h;
+  viewHalf = viewHalfFor(w, h, game.zoom);
   camera.left = -viewHalf * aspect;
   camera.right = viewHalf * aspect;
   camera.top = viewHalf;
   camera.bottom = -viewHalf;
   camera.updateProjectionMatrix();
-  shakeOffset.set((Math.random() - 0.5) * game.shake, 0, (Math.random() - 0.5) * game.shake);
+  const shake = settings.shake ? game.shake : 0;
+  shakeOffset.set((Math.random() - 0.5) * shake, 0, (Math.random() - 0.5) * shake);
   camera.position.copy(camFocus).add(shakeOffset).addScaledVector(CAM_DIR, CAM_DIST);
   camera.lookAt(tmp.copy(camFocus).add(shakeOffset));
   camera.updateMatrixWorld();
@@ -146,35 +172,22 @@ function updateCamera(dt) {
 
 // ---------------------------------------------------------------- 기록
 
-function loadBest() {
-  const fallback = { nights: 0, zones: 1, winDay: 0 };
-  try {
-    return { ...fallback, ...JSON.parse(load('lumen.best')) };
-  } catch {
-    return fallback; // 손상된 기록은 무시하고 새로 시작
-  }
-}
-
 function saveBest() {
-  const best = loadBest();
-  best.nights = Math.max(best.nights, game.nights);
-  best.zones = Math.max(best.zones, world.poweredZones);
-  if (game.won) best.winDay = best.winDay ? Math.min(best.winDay, env.day) : env.day;
-  save('lumen.best', JSON.stringify(best));
+  recordRun({ nights: game.nights, zones: world.poweredZones, won: game.won, day: env.day }, world.totalZones);
 }
 
 function renderBest() {
-  const b = loadBest();
-  const parts = [];
-  if (b.winDay) parts.push(`${b.winDay}일 만에 마을 복구`);
-  parts.push(`최장 ${b.nights}번의 밤`, `최대 ${b.zones}/${world.totalZones} 구역`);
-  $('best').textContent = b.nights || b.zones > 1 || b.winDay ? `최고 기록 · ${parts.join(' · ')}` : '';
+  const b = loadBest(world.totalZones);
+  $('best').textContent = hasRecords(b) ? `최고 기록 · ${describeBest(b, world.totalZones)}` : '';
 }
 
 // ---------------------------------------------------------------- 게임 흐름
 
+// 배포 직후 캐시된 옛 index.html과 섞이면 settings 화면이 없을 수 있다.
+const SCREENS = ['title', 'pause', 'end', 'settings', 'closet'];
 function setScreen(id) {
-  for (const s of ['title', 'pause', 'end', 'closet']) $(s).classList.toggle('hidden', s !== id);
+  if (id !== 'settings') settingsFrom = null;
+  for (const s of SCREENS) $(s)?.classList.toggle('hidden', s !== id);
 }
 
 // 옷장: 처음 화면에서 주인공을 은신처 앞에 세워 놓고 가까이서 돌려 보며 갈아입힌다.
@@ -290,6 +303,82 @@ function backToTitle() {
   drops.clear();
   renderBest();
   setScreen('title');
+}
+
+// ---------------------------------------------------------------- 설정
+
+let settingsFrom = null; // 설정 화면을 연 곳('title' | 'pause'). 닫으면 그리로 돌아간다.
+let settingsUi = null;
+let recordsUi = null;
+let pwaUi = null;
+
+function openSettings() {
+  // 그래픽 컨텍스트를 잃은 동안에는 화질을 바꿔도 셰이더를 컴파일할 수 없으니 열지 않는다.
+  if (!$('settings') || settingsFrom || game.contextLost || (game.state !== 'title' && game.state !== 'pause')) return;
+  settingsFrom = game.state;
+  settingsUi?.sync();
+  recordsUi?.refresh();
+  pwaUi?.render();
+  setScreen('settings');
+  $('settings-title')?.focus();
+}
+
+function closeSettings() {
+  if (!settingsFrom) return;
+  const back = settingsFrom;
+  settingsFrom = null;
+  setScreen(back);
+  (back === 'pause' ? $('pause-settings-btn') : $('settings-btn'))?.focus({ preventScroll: true });
+}
+
+function toggleMute() {
+  sound.init();
+  const muted = sound.toggleMute();
+  hud.setMuted(muted);
+  return muted;
+}
+
+function applyQuality() {
+  const q = QUALITY[settings.quality];
+  post.setSamples(q.samples);
+  resize();
+  if (renderer.shadowMap.enabled === q.shadows) return;
+  renderer.shadowMap.enabled = q.shadows;
+  // 그림자 유무는 셰이더에 들어가므로 모든 재질을 다시 컴파일한다. 끌 때는 그림자 맵 메모리도 돌려준다.
+  scene.traverse((o) => {
+    for (const m of [o.material].flat()) if (m) m.needsUpdate = true;
+    if (!q.shadows && o.isLight && o.shadow?.map) {
+      o.shadow.map.dispose();
+      o.shadow.map = null;
+    }
+  });
+  if (game.ready) warmUp();
+}
+
+function applySetting(key) {
+  switch (key) {
+    case 'volume':
+    case 'ambience':
+      sound.setVolume(settings.volume, settings.ambience);
+      break;
+    case 'quality':
+      applyQuality();
+      break;
+    case 'zoom':
+      game.zoomTarget = settings.zoom;
+      break;
+    case 'lefty':
+      $('touch').classList.toggle('lefty', settings.lefty);
+      break;
+    case 'fps':
+      hud.showFps(settings.fps);
+      break;
+    case 'shake':
+      document.body.classList.toggle('calm', !settings.shake);
+      break;
+    default:
+      break; // tilt는 매 프레임 읽는다
+  }
 }
 
 function toggleFlash() {
@@ -607,24 +696,37 @@ function step(dt) {
 // ---------------------------------------------------------------- 루프
 
 let last = performance.now();
+const fpsMeter = { frames: 0, since: 0 };
 function frame(now) {
   requestAnimationFrame(frame);
   // rAF 타임스탬프가 직전 performance.now()보다 앞설 수 있어 음수 dt를 막는다.
   const raw = Math.min(0.05, Math.max(0, (now - last) / 1000));
   last = now;
+  checkResize();
 
   const w = input.takeWheel();
-  if (w && game.state === 'play') game.zoomTarget = Math.min(22, Math.max(8, game.zoomTarget + w * 1.2));
+  if (w && game.state === 'play') {
+    game.zoomTarget = Math.min(ZOOM.max, Math.max(ZOOM.min, game.zoomTarget + w * 1.2));
+    settings.zoom = game.zoomTarget;
+    saveSettings(settings);
+  }
   if (input.consume('Escape') || input.consume('KeyP')) {
-    if (game.state === 'play') pauseGame(true);
+    if (settingsFrom) closeSettings();
+    else if (game.state === 'play') pauseGame(true);
     else if (game.state === 'pause') pauseGame(false);
     else if (game.state === 'closet') closeCloset();
   }
   if (input.consume('KeyM')) {
-    sound.init();
-    const muted = sound.toggleMute();
-    $('mute-btn').textContent = muted ? '소리 꺼짐' : '소리 켜짐';
+    const muted = toggleMute();
     if (game.state === 'play') hud.toast(muted ? '소리를 껐다.' : '소리를 켰다.');
+  }
+  if (settings.fps) {
+    fpsMeter.frames++;
+    if (now - fpsMeter.since >= 500) {
+      hud.setFps((fpsMeter.frames * 1000) / (now - fpsMeter.since));
+      fpsMeter.frames = 0;
+      fpsMeter.since = now;
+    }
   }
 
   let dt = 0;
@@ -666,13 +768,17 @@ function frame(now) {
     on: true, rpm: Math.min(1, Math.abs(car.speed) / MAX_FWD), load: car.throttle, skid: Math.min(1, Math.max(0, car.slip - 2) / 4),
   } : { on: engineOn });
 
-  const lowHp = player.hp < 30 && game.state === 'play' ? 0.25 + 0.15 * Math.sin(game.time * 5) : 0;
+  // 흔들림·점멸을 끄면 체력 경고는 깜박이지 않는 붉은 테두리로, 피격 번쩍임은 절반으로 줄인다.
+  const lowHp = player.hp < 30 && game.state === 'play' ? 0.25 + (settings.shake ? 0.15 * Math.sin(game.time * 5) : 0) : 0;
   // 옷장은 전용 근접 카메라로 그리고, 인물이 화면 가운데가 아닐 수 있어 틸트시프트 흐림을 끈다.
   const inCloset = game.state === 'closet';
-  post.render(scene, inCloset ? closet.camera : camera, env.look, game.time, {
-    focus: 0.5, band: 0.07, blurScale: game.state === 'title' ? 1.25 : inCloset ? 0 : 1.0,
-    hurt: Math.max(player.hurtFx * 0.9, lowHp),
-  });
+  // 화질을 바꿔 셰이더를 다시 컴파일하는 동안에는 숨긴 물체까지 켜져 있으니 그리지 않고 직전 화면을 둔다.
+  if (!(game.warming && game.ready)) {
+    post.render(scene, inCloset ? closet.camera : camera, env.look, game.time, {
+      focus: 0.5, band: 0.07, blurScale: settings.tilt && !inCloset ? (game.state === 'title' ? 1.25 : 1.0) : 0,
+      hurt: Math.max(player.hurtFx * (settings.shake ? 0.9 : 0.45), lowHp),
+    });
+  }
 
   if (game.state !== 'title') {
     hud.update({
@@ -695,20 +801,25 @@ function frame(now) {
 // ---------------------------------------------------------------- UI 연결
 
 $('start-btn').addEventListener('click', startGame);
-$('closet-btn').addEventListener('click', openCloset);
-$('closet-close').addEventListener('click', closeCloset);
+$('closet-btn')?.addEventListener('click', openCloset);
+$('closet-close')?.addEventListener('click', closeCloset);
 $('resume-btn').addEventListener('click', () => pauseGame(false));
 $('quit-btn').addEventListener('click', backToTitle);
 $('restart-btn').addEventListener('click', startGame);
 $('continue-btn').addEventListener('click', continueWalk);
 $('title-btn').addEventListener('click', backToTitle);
 $('pause-btn').addEventListener('click', () => pauseGame(true));
-$('mute-btn').addEventListener('click', () => {
-  sound.init();
-  const muted = sound.toggleMute();
-  $('mute-btn').textContent = muted ? '소리 꺼짐' : '소리 켜짐';
-});
-$('mute-btn').textContent = sound.muted ? '소리 꺼짐' : '소리 켜짐';
+$('mute-btn').addEventListener('click', toggleMute);
+hud.setMuted(sound.muted);
+$('settings-btn')?.addEventListener('click', openSettings);
+$('pause-settings-btn')?.addEventListener('click', openSettings);
+$('settings-close')?.addEventListener('click', closeSettings);
+if ($('settings')) {
+  settingsUi = bindSettings($('settings'), settings, applySetting);
+  recordsUi = initRecordsPanel({ totalZones: world.totalZones, onChange: renderBest, mobile });
+}
+pwaUi = initPwa({ onAskInstall: openSettings });
+for (const key of ['lefty', 'fps', 'shake']) applySetting(key);
 addEventListener('blur', () => pauseGame(true));
 document.addEventListener('visibilitychange', () => document.hidden && pauseGame(true));
 
@@ -735,7 +846,10 @@ function setContextLost(lost) {
   $('gl-notice')?.classList.toggle('hidden', !lost);
   $('gl-reload')?.classList.add('hidden');
   clearTimeout(reloadHintTimer);
-  for (const id of ['start-btn', 'closet-btn', 'resume-btn', 'restart-btn', 'continue-btn']) $(id).disabled = lost || !game.ready;
+  for (const id of ['start-btn', 'resume-btn', 'restart-btn', 'continue-btn']) $(id).disabled = lost || !game.ready;
+  // 옷장 버튼은 새로 생긴 요소라, 배포 직후 옛 HTML과 섞이면 없을 수 있다.
+  if ($('closet-btn')) $('closet-btn').disabled = lost || !game.ready;
+  if (lost) closeSettings();
   if (lost) {
     pauseGame(true);
     // 브라우저가 끝내 복구해 주지 않는 경우를 위해 새로고침 안내를 띄운다.
@@ -759,9 +873,18 @@ $('gl-reload')?.addEventListener('click', () => location.reload());
 
 // 밤·비·그늘이처럼 처음엔 숨겨진 물체까지 포함해 셰이더를 미리 컴파일해 둔다.
 // 그렇지 않으면 첫 밤이나 첫 그늘이 등장 순간에 컴파일로 프레임이 멈춘다.
-async function warmUp() {
+// 화질 설정으로 그림자를 켜고 끌 때도 다시 부른다. 겹쳐 돌면 숨김 목록이 꼬이므로 차례로 돈다.
+let warmChain = Promise.resolve();
+function warmUp() {
+  warmChain = warmChain.then(warmUpOnce);
+  return warmChain;
+}
+
+async function warmUpOnce() {
   updateCamera(0);
+  const first = !game.ready;
   const hidden = [];
+  game.warming = true;
   scene.traverse((o) => {
     if (!o.visible) {
       hidden.push(o);
@@ -771,13 +894,17 @@ async function warmUp() {
   try {
     // 프로그램 변형(출력 색공간·톤매핑)은 현재 렌더 타깃으로 정해지므로, 실제로 그리는 HDR 타깃 기준으로 컴파일한다.
     renderer.setRenderTarget(post.rtScene);
-    await renderer.compileAsync(scene, camera);
+    const compile = renderer.compileAsync(scene, camera);
+    // 설정 변경 때는 컴파일이 끝날 때까지 화면을 멈춰 두므로, 드라이버가 응답하지 않아도 8초 뒤에는 다시 그린다.
+    await (first ? compile : Promise.race([compile, new Promise((resolve) => setTimeout(resolve, 8000))]));
     renderer.setRenderTarget(null);
-    post.render(scene, camera, env.look, 0, { focus: 0.5, band: 0.07, blurScale: 1, hurt: 0 });
+    // 처음 한 번은 후처리 패스까지 그려 GPU 자원을 올린다. 설정 변경 때는 숨긴 물체가 화면에 비치지 않게 생략한다.
+    if (first) post.render(scene, camera, env.look, 0, { focus: 0.5, band: 0.07, blurScale: 1, hurt: 0 });
   } catch (err) {
     console.error('[warmup] 셰이더 사전 컴파일에 실패했습니다. 첫 등장 때 끊김이 있을 수 있습니다.', err);
   } finally {
     for (const o of hidden) o.visible = false;
+    game.warming = false;
   }
 }
 
