@@ -142,7 +142,8 @@ input[type="range"] { width: 100%; margin: 0; accent-color: #f4b45c; cursor: poi
 
 /* ---------- 옷장 ---------- */
 /* 인물이 보이도록 화면 전체를 덮지 않고, 패널만 오른쪽(세로 화면은 아래)에 띄운다. */
-.screen.closet { place-items: center end; padding: var(--edge-t) max(var(--edge-r), 4vw) var(--edge-b) var(--edge-l); background: linear-gradient(90deg, rgba(8, 14, 16, 0) 35%, rgba(8, 14, 16, 0.55)); pointer-events: none; }
+.screen.closet { padding: var(--edge-t) max(var(--edge-r), 4vw) var(--edge-b) var(--edge-l); background: linear-gradient(90deg, rgba(8, 14, 16, 0) 35%, rgba(8, 14, 16, 0.55)); pointer-events: none; }
+.screen.closet > .closet-panel { margin: auto 0 auto auto; }
 .closet-panel { pointer-events: auto; touch-action: pan-y; width: min(400px, 100%); max-height: 100%; overflow-y: auto; text-align: left; padding: 22px 20px 18px; display: grid; gap: 14px; }
 .closet-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .closet-head h2 { margin: 0; font-size: 22px; }
@@ -169,7 +170,8 @@ input[type="range"] { width: 100%; margin: 0; accent-color: #f4b45c; cursor: poi
   .closet-item { padding: 8px; }
 }
 @media (orientation: portrait) {
-  .screen.closet { place-items: end center; padding: 16px var(--edge-r) var(--edge-b) var(--edge-l); background: linear-gradient(180deg, rgba(8, 14, 16, 0) 40%, rgba(8, 14, 16, 0.55)); }
+  .screen.closet { padding: 16px var(--edge-r) var(--edge-b) var(--edge-l); background: linear-gradient(180deg, rgba(8, 14, 16, 0) 40%, rgba(8, 14, 16, 0.55)); }
+  .screen.closet > .closet-panel { margin: auto 0 0; }
   .closet-panel { width: 100%; max-height: 50vh; max-height: 50dvh; padding: 16px 14px 14px; gap: 10px; }
   .closet-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
 }
