@@ -386,6 +386,9 @@ function resumeGame() {
   else player.flashOn = p.flash && player.battery > 0;
   camFocus.copy(player.pos);
   hud.toast(`지난 판을 이어 간다 · ${env.day}일째, 밝힌 구역 ${world.poweredZones}/${world.totalZones}`, 'good');
+  // 첫 판의 도착 무전 도중에 탭이 닫혔다면 처음부터 다시 튼다. 장면은 끝까지 봐야 본 것으로 남고
+  // 그때 첫 기록이 열리는데, 도착 무전은 새 판을 시작할 때만 줄을 서기 때문이다.
+  queueStory('start');
   if (world.poweredZones === world.totalZones) {
     // 마지막 배전함을 고친 직후, 엔딩이 나오기 전에 저장된 판이다.
     world.restoreAll();
