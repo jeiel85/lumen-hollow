@@ -729,9 +729,9 @@ function sendHome(p) {
 
 function revealFuse(home) {
   const loot = world.hiddenFuseNear(home.x, home.z);
-  if (!loot) return;
+  // 촛불 자리가 없으면 표시하지 않는다(알려 준 것으로 쳐 버리면 그 퓨즈가 다음 단서에서 영영 빠진다).
+  if (!loot || !wisps.candle(loot, world.heightAt(loot.x, loot.z))) return;
   world.hintLoot(loot);
-  wisps.candle(loot, world.heightAt(loot.x, loot.z));
   sound.play('hint');
   hud.toast(game.hintTold
     ? '깨어난 누군가가 또 퓨즈 자리에 촛불을 켜 두었다.'

@@ -6,7 +6,7 @@ import { makeBeaconMaterial } from './world.js';
 // 촛불: 그림자를 돌려받아 깨어난 누군가가 숨은 퓨즈 자리에 켜 두는 작은 불과 금빛 기둥.
 const WISPS = 16;
 const FLASHES = 6;
-const CANDLES = 10;
+const CANDLES = 12; // 마을의 퓨즈(world.reset의 11개)를 모두 알려 줘도 모자라지 않게
 
 export class Wisps {
   constructor(scene) {
@@ -107,13 +107,15 @@ export class Wisps {
     f.s.visible = true;
   }
 
+  // 촛불을 켠다. 빈 자리가 없으면 false(그때는 단서를 표시하지 않고 다음 기회로 미룬다).
   candle(loot, y) {
-    if (this.candles.some((c) => c.loot === loot)) return;
+    if (this.candles.some((c) => c.loot === loot)) return true;
     const c = this.candles.find((q) => !q.loot);
-    if (!c) return;
+    if (!c) return false;
     c.loot = loot;
     c.g.position.set(loot.x, y, loot.z);
     c.g.visible = true;
+    return true;
   }
 
   clearCandle(loot) {
