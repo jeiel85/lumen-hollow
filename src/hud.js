@@ -9,8 +9,10 @@ export class Hud {
       zones: $('zones-label'), hp: $('hp-fill'), bat: $('bat-fill'), fuse: $('inv-fuse'), band: $('inv-band'),
       prompt: $('prompt'), promptText: $('prompt-text'), promptFill: $('prompt-fill'),
       toasts: $('toasts'), pointer: $('pointer'), pointerDist: $('pointer-dist'), batWrap: $('bat-wrap'),
-      flashState: $('flash-state'), touch: $('touch'),
+      flashState: $('flash-state'), touch: $('touch'), can: $('inv-can'), fuelWrap: $('fuel-wrap'), fuel: $('fuel-fill'),
+      keys: $('key-hints'), useBtn: document.querySelector('[data-act="use"]'),
     };
+    this._walkKeys = this.el.keys?.textContent ?? '';
     this._last = {};
   }
 
@@ -28,7 +30,7 @@ export class Hud {
     el.textContent = text;
   }
 
-  update({ day, hour, zonesOn, zonesTotal, hp, battery, fuses, bandages, flashOn }) {
+  update({ day, hour, zonesOn, zonesTotal, hp, battery, fuses, bandages, flashOn, cans, driving, fuel }) {
     const hh = Math.floor(hour);
     const mm = Math.floor((hour - hh) * 6) * 10;
     this._set('day', this.el.day, `${day}일차`);
@@ -46,6 +48,19 @@ export class Hud {
     this._set('band', this.el.band, String(bandages));
     this._set('flash', this.el.flashState, flashOn ? 'ON' : 'OFF');
     this.el.flashState.classList.toggle('on', flashOn);
+    // 배포 직후 캐시된 옛 index.html과 섞이면 새 요소가 없을 수 있다.
+    if (this.el.can) this._set('can', this.el.can, String(cans));
+    if (this.el.fuelWrap) {
+      this.el.fuelWrap.classList.toggle('hidden', !driving);
+      this.el.fuel.style.transform = `scaleX(${fuel / 100})`;
+      this.el.fuelWrap.classList.toggle('low', fuel < 15);
+    }
+  }
+
+  // 운전 중에는 조작 안내와 터치 상호작용 버튼 이름을 바꾼다.
+  setDriving(on) {
+    if (this.el.keys) this.el.keys.textContent = on ? 'W 가속 · S 브레이크·후진 · A/D 핸들 · E 길게 내리기 · 휠 줌 · Esc 일시정지' : this._walkKeys;
+    if (this.el.useBtn) this.el.useBtn.textContent = on ? '내리기' : '상호작용';
   }
 
   prompt(text, progress) {

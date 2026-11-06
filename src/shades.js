@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { LAMP_RADIUS, BOUND } from './world.js';
+import { RAM_SPEED } from './vehicle.js';
 
 // 그늘이(Shade): 밤에만 나타나는 그림자 형체. 빛에 닿으면 물러나고 오래 비추면 흩어진다.
 const MAX = 18;
+const FAR = 46; // 차로 멀리 달아나면 뒤에 남은 그늘이는 사라진다(새로 깨어날 자리를 비운다).
 
 function glowTexture() {
   const cv = document.createElement('canvas');
@@ -98,12 +100,13 @@ export class Shades {
     }
   }
 
-  // ctx: { player, world, night, nights, spawning, dt, t }
+  // ctx: { player, world, night, nights, spawning, car, driving }
   update(dt, t, ctx) {
-    const { player, world, night, nights, spawning } = ctx;
+    const { player, world, night, nights, spawning, car, driving } = ctx;
     const px = player.pos.x;
     const pz = player.pos.z;
-    const events = { hits: 0, banished: 0, nearest: Infinity, burning: 0 };
+    const events = { hits: 0, banished: 0, rammed: 0, nearest: Infinity, burning: 0 };
+    const ramming = driving && Math.abs(car.speed) >= RAM_SPEED;
 
     const target = spawning ? Math.min(5 + nights * 2, 14) : 0;
     this.spawnTimer -= dt;
@@ -125,6 +128,8 @@ export class Shades {
       if (s.state === 'rise') {
         s.fade = Math.min(1, s.fade + dt / 1.3);
         if (s.fade >= 1) s.state = 'stalk';
+      } else if (s.state === 'stalk' && d > FAR) {
+        s.state = 'die';
       } else if (s.state === 'stalk') {
         const lunge = d < 5 ? 4.6 : base;
         const wob = Math.sin(t * 0.8 + s.seed) * 0.45;
@@ -140,7 +145,7 @@ export class Shades {
         s.vx += (ux * speed - s.vx) * k;
         s.vz += (uz * speed - s.vz) * k;
 
-        const beam = player.beamStrength(s.x, s.z);
+        const beam = Math.max(player.beamStrength(s.x, s.z), car ? car.beamStrength(s.x, s.z) : 0);
         if (beam > 0) {
           s.burn += dt * (0.55 + beam * 0.75);
           s.vx -= (dx / d) * 9 * dt * beam;
@@ -151,6 +156,7 @@ export class Shades {
         }
         s.x += s.vx * dt;
         s.z += s.vz * dt;
+        if (car) car.pushOut(s, 0.3);
 
         // 켜진 가로등 불빛 안으로는 못 들어온다. 경계로 밀려나며 조금씩 탄다.
         const lit = world.lightAt(s.x, s.z);
@@ -160,11 +166,15 @@ export class Shades {
           s.z = lit.L.z + (lit.dz / n) * LAMP_RADIUS;
           s.burn += dt * 0.25;
         }
-        if (s.burn >= 1) {
+        // 빠르게 달리는 차에 부딪히면 그 자리에서 흩어진다.
+        const rammed = ramming && car.contains(s.x, s.z, 0.45);
+        if (rammed) events.rammed++;
+        const touching = driving ? car.distanceTo(s.x, s.z) < 0.45 : d < 0.85;
+        if (s.burn >= 1 || rammed) {
           s.state = 'die';
           events.banished++;
           this.banished++;
-        } else if (d < 0.85 && s.cool <= 0 && player.alive) {
+        } else if (touching && s.cool <= 0 && player.alive) {
           if (player.hurt(15, s.x, s.z)) events.hits++;
           s.cool = 1.3;
           s.vx = -(dx / d) * 5;

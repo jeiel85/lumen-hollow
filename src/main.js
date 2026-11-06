@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { World } from './world.js';
+import { World, CAR_SPAWN } from './world.js';
 import { Environment } from './env.js';
 import { Post } from './post.js';
-import { Player } from './player.js';
+import { Player, PLAYER_R } from './player.js';
 import { Shades } from './shades.js';
+import { Vehicle, MAX_FWD } from './vehicle.js';
 import { Input } from './input.js';
 import { Hud } from './hud.js';
 import { Sound } from './audio.js';
@@ -57,12 +58,14 @@ const env = new Environment(scene, { mobile });
 const post = new Post(renderer, { samples: mobile ? 2 : 4 });
 const player = new Player(scene, { mobile });
 const shades = new Shades(scene);
+const car = new Vehicle(scene);
 const input = new Input(renderer.domElement);
 const hud = new Hud();
 const sound = new Sound();
 
 const START = new THREE.Vector3(0, 0, 3.2);
 player.reset(START.x, START.z);
+car.reset(CAR_SPAWN.x, CAR_SPAWN.z, CAR_SPAWN.a);
 
 const EMPTY_LINES = ['텅 빈 서랍뿐이다.', '먼지 쌓인 영수증 몇 장.', '누군가 먼저 다녀갔다.', '쓸 만한 건 없다.', '젖은 신문 더미뿐이다.', '고장 난 라디오. 소리는 안 난다.'];
 
@@ -77,7 +80,12 @@ const game = {
   time: 0,
   zoom: 12.5,
   zoomTarget: 12.5,
+  zoomBoost: 0,
   hintFlash: false,
+  driving: false,
+  holdLock: false,
+  hintCar: false,
+  flashNoteAt: -99,
 };
 
 // 게임 시간 기준 지연 실행. 일시정지 중에는 멈추고, 새 판을 시작하면 비운다.
@@ -93,6 +101,7 @@ function runTimers() {
 }
 
 const camFocus = new THREE.Vector3(0, 0, 0);
+const camGoal = new THREE.Vector3();
 const shakeOffset = new THREE.Vector3();
 const raycaster = new THREE.Raycaster();
 const aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -114,7 +123,7 @@ addEventListener('resize', resize);
 resize();
 
 function updateCamera(dt) {
-  game.zoom += (game.zoomTarget - game.zoom) * (1 - Math.exp(-dt * 10));
+  game.zoom += (Math.min(24, game.zoomTarget + game.zoomBoost) - game.zoom) * (1 - Math.exp(-dt * 10));
   const aspect = innerWidth / innerHeight;
   viewHalf = aspect < 1 ? Math.max(game.zoom, 8.5 / aspect) : game.zoom;
   camera.left = -viewHalf * aspect;
@@ -167,6 +176,7 @@ function startGame() {
   sound.init();
   world.reset((Math.random() * 1e9) | 0);
   player.reset(START.x, START.z);
+  car.reset(CAR_SPAWN.x, CAR_SPAWN.z, CAR_SPAWN.a);
   shades.clear();
   shades.banished = 0;
   const h = Number(params.get('hour'));
@@ -175,7 +185,11 @@ function startGame() {
   env.rainyNight = true;
   env.rainLevel = 0;
   timers.length = 0;
-  Object.assign(game, { state: 'play', nights: 0, hold: 0, holdKey: null, peaceful: false, won: false, shake: 0, hintFlash: false });
+  Object.assign(game, {
+    state: 'play', nights: 0, hold: 0, holdKey: null, peaceful: false, won: false, shake: 0, hintFlash: false,
+    driving: false, holdLock: false, zoomBoost: 0, flashNoteAt: -99,
+  });
+  hud.setDriving(false);
   camFocus.copy(player.pos);
   setScreen(null);
   hud.clearToasts();
@@ -185,6 +199,7 @@ function startGame() {
   hud.toast('정전된 마을. 불이 남은 곳은 은신처뿐이다.');
   later(1.8, () => hud.toast('퓨즈를 모아 꺼진 배전함에 끼우면 그 구역에 다시 불이 들어온다.'));
   later(3.8, () => hud.toast('화살표가 가장 가까운 배전함을 가리킨다. 퓨즈 하나는 이미 갖고 있다.'));
+  later(6.4, () => !game.driving && hud.toast('은신처 앞 도로에 낡은 트럭이 서 있다. 연료가 남은 동안은 몰 수 있다.'));
 }
 
 function pauseGame(on) {
@@ -225,6 +240,7 @@ function continueWalk() {
 }
 
 function backToTitle() {
+  if (game.driving) leaveCar();
   game.state = 'title';
   hud.show(false);
   hud.showTouch(false);
@@ -271,6 +287,11 @@ function completeLoot(loot) {
       sound.play('pickup');
       hud.toast('배터리를 찾았다. 손전등 +45%', 'good');
       break;
+    case 'fuel':
+      player.cans++;
+      sound.play('pickup');
+      hud.toast('연료통을 찾았다. 트럭에 타면 부어 넣는다.', 'good');
+      break;
     case 'bandage':
       if (player.bandages < 5) {
         player.bandages++;
@@ -297,8 +318,84 @@ function restoreZone(box) {
   if (world.poweredZones === world.totalZones) later(2.2, () => endGame(true));
 }
 
+// 트럭 타기·내리기
+function enterCar() {
+  let poured = 0;
+  while (player.cans > 0 && car.fuel < 90) {
+    car.fuel = Math.min(100, car.fuel + 40);
+    player.cans--;
+    poured++;
+  }
+  if (poured) {
+    sound.play('pour');
+    hud.toast(`연료통 ${poured}개를 부었다. 연료 ${Math.round(car.fuel)}%`, 'good');
+  }
+  game.driving = true;
+  car.occupied = true;
+  player.setRiding(true);
+  player.pos.copy(car.pos);
+  hud.setDriving(true);
+  sound.play('door');
+  sound.play('carstart');
+  if (!game.hintCar) {
+    game.hintCar = true;
+    later(0.6, () => hud.toast(input.usingTouch || mobile
+      ? '스틱을 민 쪽으로 달린다. 뒤로 당기면 후진. 멈춘 뒤 내리기 버튼을 길게.'
+      : 'W 가속 · S 브레이크·후진 · A/D 핸들. 멈춘 뒤 E를 길게 눌러 내린다.'));
+    later(3.2, () => hud.toast('연료는 달릴수록 줄어든다. 퓨즈를 끼우거나 뒤지려면 내려야 한다.'));
+  }
+}
+
+function leaveCar() {
+  const spot = car.exitSpot(world);
+  game.driving = false;
+  car.occupied = false;
+  car.reverse = false;
+  player.setRiding(false);
+  player.pos.set(spot.x, world.heightAt(spot.x, spot.z), spot.z);
+  player.facing = car.a;
+  player.model.rotation.y = car.a;
+  hud.setDriving(false);
+  sound.play('door');
+}
+
+function holdProgress(dt, dur) {
+  game.hold = input.interactHeld && !game.holdLock ? game.hold + dt : 0;
+  return game.hold >= dur;
+}
+
 function interact(dt) {
-  const target = world.nearestInteractable(player.pos.x, player.pos.z, 1.8);
+  // 타고 내린 직후에는 키를 한 번 떼야 다음 길게 누르기를 받는다(누른 채로 곧바로 내리거나 뒤지지 않게).
+  if (game.holdLock && !input.interactHeld) game.holdLock = false;
+  const how = input.usingTouch || mobile ? '버튼을 길게 눌러' : 'E를 길게 눌러';
+
+  if (game.driving) {
+    if (game.holdKey !== 'exit') {
+      game.hold = 0;
+      game.holdKey = 'exit';
+    }
+    if (Math.abs(car.speed) > 2.5) {
+      game.hold = 0;
+      hud.prompt(input.interactHeld && !game.holdLock ? '속도를 줄여야 내릴 수 있다' : null, 0);
+      return;
+    }
+    const done = holdProgress(dt, 0.35);
+    hud.prompt(`${how} 내리기`, Math.min(1, game.hold / 0.35));
+    if (done) {
+      game.hold = 0;
+      game.holdLock = true;
+      leaveCar();
+    }
+    return;
+  }
+
+  let target = world.nearestInteractable(player.pos.x, player.pos.z, 1.8);
+  const carDist = car.distanceTo(player.pos.x, player.pos.z);
+  if (carDist < 1.3) {
+    const tx = target ? (target.kind === 'loot' ? target.ref.x : target.ref.ix) : 0;
+    const tz = target ? (target.kind === 'loot' ? target.ref.z : target.ref.iz) : 0;
+    if (!target || Math.hypot(tx - player.pos.x, tz - player.pos.z) > carDist) target = { kind: 'car', ref: car };
+  }
   const key = target ? target.ref : null;
   if (key !== game.holdKey) {
     game.hold = 0;
@@ -308,12 +405,27 @@ function interact(dt) {
     hud.prompt(null);
     return;
   }
-  const how = input.usingTouch || mobile ? '버튼을 길게 눌러' : 'E를 길게 눌러';
+  if (target.kind === 'car') {
+    if (car.fuel <= 0 && player.cans <= 0) {
+      game.hold = 0;
+      hud.prompt('트럭 — 연료가 바닥났다. 연료통이 필요하다', 0);
+      return;
+    }
+    const pour = player.cans > 0 && car.fuel < 90 ? ` · 연료통 ${player.cans}개 붓기` : '';
+    const done = holdProgress(dt, 0.5);
+    hud.prompt(`${how} 트럭 타기${pour}`, Math.min(1, game.hold / 0.5));
+    if (done) {
+      game.hold = 0;
+      game.holdLock = true;
+      enterCar();
+    }
+    return;
+  }
   if (target.kind === 'loot') {
     const dur = 1.0;
-    game.hold = input.interactHeld ? game.hold + dt : 0;
+    const done = holdProgress(dt, dur);
     hud.prompt(`${how} 뒤지기`, Math.min(1, game.hold / dur));
-    if (game.hold >= dur) {
+    if (done) {
       game.hold = 0;
       completeLoot(target.ref);
     }
@@ -326,9 +438,9 @@ function interact(dt) {
     return;
   }
   const dur = 1.6;
-  game.hold = input.interactHeld ? game.hold + dt : 0;
+  const done = holdProgress(dt, dur);
   hud.prompt(`${how} 퓨즈 끼우기 · ${name}`, Math.min(1, game.hold / dur));
-  if (game.hold >= dur) {
+  if (done) {
     game.hold = 0;
     restoreZone(target.ref);
   }
@@ -354,13 +466,9 @@ function onTimeEvent(ev) {
   }
 }
 
-function step(dt) {
-  runTimers();
-  if (input.consume('KeyF') || input.consume('MouseLeft') || input.consume('Touch_flash')) toggleFlash();
-  if (input.consume('KeyQ') || input.consume('Touch_band')) useBandage();
-
-  for (const ev of env.advance(dt)) onTimeEvent(ev);
-
+function walk(dt) {
+  const fromX = player.pos.x;
+  const fromZ = player.pos.z;
   const ms = input.moveScreen();
   const move = tmp.set(0, 0, 0).addScaledVector(SCREEN_RIGHT, ms.x).addScaledVector(SCREEN_DOWN, ms.y);
   let aim = null;
@@ -371,6 +479,57 @@ function step(dt) {
     if (raycaster.ray.intersectPlane(aimPlane, aimPoint)) aim = aimPoint;
   }
   player.update(dt, game.time, { x: move.x, z: move.z }, aim, world, env.night, env.rainLevel);
+  car.update(dt, null, world, env.night);
+  // 세워 둔 트럭과 정적 충돌체를 번갈아 풀어, 트럭이 밀어낸 자리가 벽 속이 되지 않게 한다.
+  // 트럭과 벽 사이 틈처럼 둘 다 만족하는 자리가 없으면 이번 이동을 취소한다.
+  for (let i = 0; i < 3 && car.pushOut(player.pos, PLAYER_R); i++) world.collide(player.pos, PLAYER_R);
+  if (car.distanceTo(player.pos.x, player.pos.z) < PLAYER_R - 1e-3) {
+    player.pos.x = fromX;
+    player.pos.z = fromZ;
+  }
+}
+
+// 키보드는 W/S 가속·A/D 핸들, 터치 스틱은 민 방향으로 차가 알아서 꺾어 간다.
+function drive(dt) {
+  const keys = input.driveKeys();
+  let ctl = keys;
+  if (!keys.any) {
+    const ms = input.moveScreen();
+    const dir = tmp.set(0, 0, 0).addScaledVector(SCREEN_RIGHT, ms.x).addScaledVector(SCREEN_DOWN, ms.y);
+    ctl = car.steerToward(dir.x, dir.z, Math.hypot(ms.x, ms.y));
+  }
+  const ev = car.update(dt, ctl, world, env.night);
+  if (ev.crash) {
+    sound.play('crash');
+    game.shake = Math.min(0.6, 0.15 + ev.crash * 0.04);
+  }
+  if (ev.stalled) {
+    sound.play('stall');
+    hud.toast('연료가 떨어졌다! 트럭이 멈춘다. 연료통을 찾아야 한다.', 'warn');
+  }
+  player.pos.copy(car.pos);
+  player.facing = car.a;
+  player.update(dt, game.time, { x: 0, z: 0 }, null, world, env.night, env.rainLevel);
+}
+
+function step(dt) {
+  runTimers();
+  const flashKey = input.consume('KeyF') || input.consume('Touch_flash');
+  const flashClick = input.consume('MouseLeft');
+  if (game.driving) {
+    if (flashKey && game.time - game.flashNoteAt > 4) {
+      game.flashNoteAt = game.time;
+      hud.toast('차 안에서는 손전등 대신 전조등이 앞을 비춘다.');
+    }
+  } else if (flashKey || flashClick) {
+    toggleFlash();
+  }
+  if (input.consume('KeyQ') || input.consume('Touch_band')) useBandage();
+
+  for (const ev of env.advance(dt)) onTimeEvent(ev);
+
+  if (game.driving) drive(dt);
+  else walk(dt);
 
   const lit = world.lightAt(player.pos.x, player.pos.z);
   if (lit) player.battery = Math.min(100, player.battery + dt * 3.5);
@@ -382,10 +541,14 @@ function step(dt) {
   }
 
   const spawning = !game.peaceful && env.night > 0.75;
-  const ev = shades.update(dt, game.time, { player, world, night: env.night, nights: game.nights, spawning });
+  const ev = shades.update(dt, game.time, { player, world, night: env.night, nights: game.nights, spawning, car, driving: game.driving });
   if (ev.hits) {
     sound.play('hurt');
     game.shake = 0.45;
+  }
+  if (ev.rammed) {
+    sound.play('crash');
+    game.shake = Math.max(game.shake, 0.3);
   }
   if (ev.banished) sound.play('banish');
   game.dread = ev.nearest < 12 ? 1 - ev.nearest / 12 : 0;
@@ -422,7 +585,12 @@ function frame(now) {
     dt = raw;
     game.time += dt;
     step(dt);
-    camFocus.lerp(player.pos, 1 - Math.exp(-dt * 6));
+    // 운전 중에는 달리는 쪽을 더 보여 주고 조금 멀리서 본다.
+    camGoal.copy(player.pos);
+    if (game.driving) camGoal.addScaledVector(car.vel, 0.45);
+    camFocus.lerp(camGoal, 1 - Math.exp(-dt * (game.driving ? 4 : 6)));
+    const boost = game.driving ? 2.5 + 2.5 * Math.min(1, Math.abs(car.speed) / MAX_FWD) : 0;
+    game.zoomBoost += (boost - game.zoomBoost) * (1 - Math.exp(-dt * 1.5));
   } else if (game.state === 'title') {
     dt = raw;
     game.time += dt;
@@ -439,6 +607,11 @@ function frame(now) {
   if (game.state !== 'title') {
     sound.setMix({ rain: env.rainLevel, night: env.night, dread: game.state === 'play' ? game.dread ?? 0 : 0 });
   }
+  // 일시정지 중에는 공회전, 그 밖(타이틀·종료 화면)에는 엔진을 끈다.
+  const engineOn = game.driving && car.running && (game.state === 'play' || game.state === 'pause');
+  sound.setEngine(game.state === 'play' && engineOn ? {
+    on: true, rpm: Math.min(1, Math.abs(car.speed) / MAX_FWD), load: car.throttle, skid: Math.min(1, Math.max(0, car.slip - 2) / 4),
+  } : { on: engineOn });
 
   const lowHp = player.hp < 30 && game.state === 'play' ? 0.25 + 0.15 * Math.sin(game.time * 5) : 0;
   post.render(scene, camera, env.look, game.time, {
@@ -450,6 +623,7 @@ function frame(now) {
     hud.update({
       day: env.day, hour: env.hour, zonesOn: world.poweredZones, zonesTotal: world.totalZones,
       hp: player.hp, battery: player.battery, fuses: player.fuses, bandages: player.bandages, flashOn: player.flashActive,
+      cans: player.cans, driving: game.driving, fuel: car.fuel,
     });
     const dead = game.state === 'play' ? world.nearestDeadBox(player.pos.x, player.pos.z) : null;
     if (dead) {
@@ -484,7 +658,7 @@ document.addEventListener('visibilitychange', () => document.hidden && pauseGame
 // ?debug: 콘솔에서 상태를 들여다보고 시뮬레이션을 고정 간격으로 돌려 보는 개발용 핸들
 if (params.has('debug')) {
   window.lumen = {
-    THREE, scene, camera, renderer, world, env, post, player, shades, game, input, startGame,
+    THREE, scene, camera, renderer, world, env, post, player, shades, car, game, input, hud, startGame,
     step(sec) {
       let t = last;
       for (let i = 0, n = Math.round(sec / 0.05); i < n; i++) frame((t += 50));
