@@ -276,6 +276,19 @@ export class Sound {
         this._burst(t, 0.05, { freq: 1800, q: 2, gain: 0.1 });
         this._tone(220, t + 0.03, 0.35, { gain: 0.05, type: 'triangle', slide: 1.5 });
         break;
+      case 'radio':
+        // 무전기 스퀠치: 짧은 잡음과 삑
+        this._burst(t, 0.22, { freq: 1800, q: 1.2, gain: 0.1, sweep: 0.7 });
+        this._tone(1250, t + 0.02, 0.07, { gain: 0.04, type: 'square' });
+        this._burst(t + 0.26, 0.08, { freq: 2400, q: 2, gain: 0.05 });
+        break;
+      case 'page':
+        this._burst(t, 0.28, { freq: 3200, q: 0.8, gain: 0.07, type: 'highpass', sweep: 0.45 });
+        break;
+      case 'beacon':
+        this._burst(t, 1.2, { freq: 120, q: 0.6, gain: 0.18, type: 'lowpass', sweep: 3 });
+        [261.6, 392, 523.3, 784].forEach((f, i) => this._tone(f, t + 0.3 + i * 0.22, 3.2, { gain: 0.06, type: 'triangle' }));
+        break;
       case 'win':
         [523.3, 659.3, 784, 1046.5, 1318.5].forEach((f, i) => this._tone(f, t + i * 0.12, 2.2, { gain: 0.07, type: 'triangle' }));
         break;

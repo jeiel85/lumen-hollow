@@ -13,9 +13,48 @@ export class Hud {
       keys: $('key-hints'), useBtn: document.querySelector('[data-act="use"]'), mute: $('mute-btn'), fps: $('fps'),
       flashBtn: document.querySelector('[data-act="flash"]'), power: $('power-label'), powerBtn: $('power-btn'),
       loadWrap: $('load-wrap'), load: $('load-fill'), loadLabel: $('load-label'),
+      storyPointer: $('story-pointer'), storyPointerDist: $('story-pointer-dist'),
+      drop: $('drop-btn'), place: $('place'), placeSub: $('place-sub'), placeNote: $('place-note-text'),
     };
     this._walkKeys = this.el.keys?.textContent ?? '';
+    this._driving = false;
+    this._online = false;
     this._last = {};
+  }
+
+  // 배포 직후 옛 index.html과 섞이면 공유 보급품 요소가 없을 수 있다. 그때는 기능을 숨긴 채로 둔다.
+  get hasOnlineUi() {
+    return Boolean(this.el.drop && this.el.place);
+  }
+
+  _applyKeys() {
+    if (!this.el.keys) return;
+    this.el.keys.textContent = this._driving
+      ? 'W 가속 · S 브레이크·후진 · A/D 핸들 · F 작업등 · E 길게 내리기 · Tab 배전반 · Esc 일시정지'
+      : this._walkKeys + (this._online ? ' · G 보급품 남기기' : '');
+  }
+
+  // 다른 생존자와 연결된 판에서만 '보급품 남기기'를 보인다.
+  setOnline(on) {
+    this._online = on && this.hasOnlineUi;
+    this.el.drop?.classList.toggle('hidden', !this._online);
+    this._applyKeys();
+  }
+
+  // opts: { counts: {kind: 표시 문자열}, can: {kind: bool}, note, sub, busy }
+  showPlace({ counts, can, note, sub, busy }) {
+    const p = this.el.place;
+    if (!p) return;
+    p.classList.remove('hidden');
+    p.classList.toggle('busy', Boolean(busy));
+    for (const btn of p.querySelectorAll('[data-kind]')) btn.disabled = !can[btn.dataset.kind];
+    for (const b of p.querySelectorAll('[data-count]')) this._set(`pc_${b.dataset.count}`, b, counts[b.dataset.count]);
+    this._set('pnote', this.el.placeNote, note);
+    this._set('psub', this.el.placeSub, sub);
+  }
+
+  hidePlace() {
+    this.el.place?.classList.add('hidden');
   }
 
   show(on) {
@@ -93,7 +132,8 @@ export class Hud {
 
   // 운전 중에는 조작 안내와 터치 상호작용 버튼 이름을 바꾼다.
   setDriving(on) {
-    if (this.el.keys) this.el.keys.textContent = on ? 'W 가속 · S 브레이크·후진 · A/D 핸들 · F 작업등 · E 길게 내리기 · Tab 배전반 · Esc 일시정지' : this._walkKeys;
+    this._driving = on;
+    this._applyKeys();
     if (this.el.useBtn) this.el.useBtn.textContent = on ? '내리기' : '상호작용';
     if (this.el.flashBtn) this.el.flashBtn.textContent = on ? '작업등' : '손전등';
   }
@@ -125,7 +165,15 @@ export class Hud {
 
   // 화면 밖 목표를 가리키는 화살표. sx, sy는 화면 픽셀 좌표.
   pointer(sx, sy, dist, visible) {
-    const p = this.el.pointer;
+    this._pointer(this.el.pointer, this.el.pointerDist, 'pdist', sx, sy, dist, visible);
+  }
+
+  // 아직 안 읽은 이야기 기록을 가리키는 푸른 화살표. 배포 직후 옛 index.html과 섞이면 요소가 없을 수 있다.
+  storyPointer(sx, sy, dist, visible) {
+    if (this.el.storyPointer) this._pointer(this.el.storyPointer, this.el.storyPointerDist, 'sdist', sx, sy, dist, visible);
+  }
+
+  _pointer(p, distEl, key, sx, sy, dist, visible) {
     if (!visible) {
       p.classList.add('hidden');
       return;
@@ -143,6 +191,6 @@ export class Hud {
     p.classList.remove('hidden');
     p.style.transform = `translate(${x}px, ${y}px)`;
     p.firstElementChild.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
-    this._set('pdist', this.el.pointerDist, `${Math.round(dist)}m`);
+    this._set(key, distEl, `${Math.round(dist)}m`);
   }
 }
