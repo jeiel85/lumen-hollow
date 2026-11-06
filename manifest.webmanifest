@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "Lumen Hollow — 빛으로 버티는 밤",
+  "short_name": "Lumen Hollow",
+  "description": "정전된 작은 마을에서 낮에는 퓨즈를 모으고, 밤에는 손전등과 가로등 불빛으로 그림자 형체를 버티는 아이소메트릭 생존 게임.",
+  "lang": "ko",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#0b1416",
+  "theme_color": "#0e1a1d",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "docs/night.jpg", "sizes": "1600x900", "type": "image/jpeg", "form_factor": "wide", "label": "비 오는 밤, 가로등 불빛 아래의 약국 거리" },
+    { "src": "docs/truck.jpg", "sizes": "1600x900", "type": "image/jpeg", "form_factor": "wide", "label": "트럭 전조등이 그늘이를 비춘다" },
+    { "src": "docs/mobile.jpg", "sizes": "780x1688", "type": "image/jpeg", "form_factor": "narrow", "label": "휴대폰 세로 화면에서 터치로 플레이" }
+  ]
+}
