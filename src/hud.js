@@ -11,6 +11,8 @@ export class Hud {
       toasts: $('toasts'), pointer: $('pointer'), pointerDist: $('pointer-dist'), batWrap: $('bat-wrap'),
       flashState: $('flash-state'), touch: $('touch'), can: $('inv-can'), fuelWrap: $('fuel-wrap'), fuel: $('fuel-fill'),
       keys: $('key-hints'), useBtn: document.querySelector('[data-act="use"]'), mute: $('mute-btn'), fps: $('fps'),
+      flashBtn: document.querySelector('[data-act="flash"]'), power: $('power-label'), powerBtn: $('power-btn'),
+      loadWrap: $('load-wrap'), load: $('load-fill'), loadLabel: $('load-label'),
       storyPointer: $('story-pointer'), storyPointerDist: $('story-pointer-dist'),
       drop: $('drop-btn'), place: $('place'), placeSub: $('place-sub'), placeNote: $('place-note-text'),
     };
@@ -28,7 +30,7 @@ export class Hud {
   _applyKeys() {
     if (!this.el.keys) return;
     this.el.keys.textContent = this._driving
-      ? 'W 가속 · S 브레이크·후진 · A/D 핸들 · E 길게 내리기 · 휠 줌 · Esc 일시정지'
+      ? 'W 가속 · S 브레이크·후진 · A/D 핸들 · F 작업등 · E 길게 내리기 · Tab 배전반 · Esc 일시정지'
       : this._walkKeys + (this._online ? ' · G 보급품 남기기' : '');
   }
 
@@ -86,7 +88,7 @@ export class Hud {
     el.textContent = text;
   }
 
-  update({ day, hour, zonesOn, zonesTotal, hp, battery, fuses, bandages, flashOn, cans, driving, fuel }) {
+  update({ day, hour, zonesOn, zonesTotal, hp, battery, fuses, bandages, flashOn, cans, driving, fuel, powerUsed, powerCap, tripped, load }) {
     const hh = Math.floor(hour);
     const mm = Math.floor((hour - hh) * 6) * 10;
     this._set('day', this.el.day, `${day}일차`);
@@ -111,6 +113,21 @@ export class Hud {
       this.el.fuel.style.transform = `scaleX(${fuel / 100})`;
       this.el.fuelWrap.classList.toggle('low', fuel < 15);
     }
+    // 배전: 변전소 출력 사용량, 차단된 구역이 있으면 버튼을 붉게. 근처 빛의 부하 막대는 밤에 부하가 오를 때만.
+    if (this.el.power) {
+      this._set('power', this.el.power, `${powerUsed} / ${powerCap}`);
+      this.el.powerBtn.classList.toggle('alert', tripped > 0);
+    }
+    if (this.el.loadWrap) {
+      this.el.loadWrap.classList.toggle('hidden', !load);
+      if (load) {
+        this._set('loadLabel', this.el.loadLabel, load.tripped ? '차단됨' : '가로등 부하');
+        this.el.loadWrap.title = load.name;
+        this.el.load.style.transform = `scaleX(${load.tripped ? 1 : Math.min(1, load.load)})`;
+        this.el.loadWrap.classList.toggle('tripped', load.tripped);
+        this.el.loadWrap.classList.toggle('low', !load.tripped && load.load > 0.6);
+      }
+    }
   }
 
   // 운전 중에는 조작 안내와 터치 상호작용 버튼 이름을 바꾼다.
@@ -118,6 +135,7 @@ export class Hud {
     this._driving = on;
     this._applyKeys();
     if (this.el.useBtn) this.el.useBtn.textContent = on ? '내리기' : '상호작용';
+    if (this.el.flashBtn) this.el.flashBtn.textContent = on ? '작업등' : '손전등';
   }
 
   prompt(text, progress) {
