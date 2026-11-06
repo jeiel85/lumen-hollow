@@ -108,7 +108,7 @@ ES 모듈이라 `file://`로는 열리지 않습니다. 저장소 폴더에서 �
 python -m http.server 8000
 ```
 
-브라우저에서 `http://localhost:8000` 을 엽니다.
+브라우저에서 `http://localhost:8000` 을 엽니다. 로컬에서는 공유 보급품이 운영 서버에 연결되지 않아(운영 서버는 배포 주소만 허용) 혼자 하는 판으로 진행됩니다. 온라인 기능을 시험하려면 [server/README.md](server/README.md)의 로컬 서버를 띄우고 `?api=`로 연결합니다.
 
 ### URL 파라미터
 
