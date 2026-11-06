@@ -9,11 +9,13 @@ const MODULES = [
   'src/main.js', 'src/audio.js', 'src/caches.js', 'src/dialogue.js', 'src/env.js', 'src/geometry.js', 'src/grid.js', 'src/hud.js',
   'src/input.js', 'src/online.js', 'src/player.js', 'src/post.js', 'src/pwa.js', 'src/records.js', 'src/rng.js',
   'src/runsave.js', 'src/script.js', 'src/settings.js', 'src/shades.js', 'src/slots.js', 'src/storage.js', 'src/story.js',
-  'src/vehicle.js', 'src/wardrobe.js', 'src/world.js',
+  'src/vehicle.js', 'src/wardrobe.js', 'src/wisps.js', 'src/world.js',
 ];
 const VERSIONED = ['style.css', ...MODULES].map((p) => `${p}?v=${BUILD}`);
-const FIXED = [
-  'vendor/three/three.module.js?v=r187', 'vendor/three/three.core.js?v=r187',
+const VENDOR = ['vendor/three/three.module.js?v=r187', 'vendor/three/three.core.js?v=r187'];
+// 버전 쿼리가 없는 파일. 내용이 바뀌어도 주소가 같아서, 그냥 받으면 HTTP 캐시(Pages 10분)에 남은 옛 파일이
+// 새 빌드 캐시에 들어가 다음 배포 때까지 남는다(manifest id를 고쳐도 Chrome이 옛 id를 보던 문제). 그래서 새로 받는다.
+const UNVERSIONED = [
   'favicon.svg', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png',
   'icons/apple-touch-icon.png',
 ];
@@ -28,7 +30,7 @@ self.addEventListener('install', (event) => {
     if (!(await page.clone().text()).includes(`?v=${BUILD}`)) throw new Error('페이지와 서비스 워커의 빌드가 다릅니다.');
     const cache = await caches.open(CACHE);
     await cache.put('./', page);
-    await cache.addAll([...VERSIONED, ...FIXED]);
+    await cache.addAll([...VERSIONED, ...VENDOR, ...UNVERSIONED.map((p) => new Request(p, { cache: 'reload' }))]);
     await self.skipWaiting();
   })());
 });

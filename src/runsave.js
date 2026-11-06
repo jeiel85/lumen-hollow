@@ -14,9 +14,10 @@ const MAX_LEN = 16384;
 const ITEM_CODE = { empty: '.', fuse: 'f', battery: 'b', bandage: 'h', fuel: 'c' };
 const CODE_ITEM = Object.fromEntries(Object.entries(ITEM_CODE).map(([item, code]) => [code, item]));
 const SEARCHED = '_';
+const HINTED_FUSE = 'F'; // 깨어난 사람이 촛불을 켜 둔(알려 준) 퓨즈 자리
 
 // 한 번 본 안내. 저장 이름 → game의 키. 모르는 이름은 읽을 때 버린다.
-const HINTS = { flash: 'hintFlash', car: 'hintCar', thanks: 'hintThanks', lamp: 'hintLamp', load: 'hintLoad' };
+const HINTS = { flash: 'hintFlash', car: 'hintCar', thanks: 'hintThanks', lamp: 'hintLamp', load: 'hintLoad', told: 'hintTold' };
 
 const r3 = (v) => Math.round(v * 1000) / 1000;
 const num = (v, lo, hi) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
@@ -43,7 +44,8 @@ export function layoutPrint(world) {
 export function captureRun({ world, player, car, env, game, shades }) {
   let loot = '';
   for (const l of world.loot) {
-    const code = l.searched ? SEARCHED : ITEM_CODE[l.item];
+    if (l.hinted && !l.searched && l.item !== 'fuse') throw new Error(`퓨즈가 아닌 자리에 촛불 단서가 있습니다: ${l.item}`);
+    const code = l.searched ? SEARCHED : l.hinted ? HINTED_FUSE : ITEM_CODE[l.item];
     if (!code) throw new Error(`저장 형식에 없는 물건입니다: ${l.item}`);
     loot += code;
   }
@@ -62,7 +64,7 @@ export function captureRun({ world, player, car, env, game, shades }) {
     },
     car: { x: r3(car.pos.x), z: r3(car.pos.z), a: r3(car.a), fuel: r3(car.fuel), driving: game.driving, lamp: car.lamp, lampLoad: r3(world.truckLamp.load) },
     run: {
-      nights: game.nights, banished: shades.banished, cacheTaken: game.cacheTaken,
+      nights: game.nights, banished: shades.banished, returned: game.returned, cacheTaken: game.cacheTaken,
       hints: Object.keys(HINTS).filter((k) => game[HINTS[k]]),
     },
   };
@@ -107,7 +109,7 @@ function validate(raw, world) {
   const { loot, zones, env, player: p, car, run } = raw;
   if (!num(raw.savedAt, 0, Number.MAX_SAFE_INTEGER)) return null;
   if (typeof loot !== 'string' || loot.length !== world.loot.length) return null;
-  for (const ch of loot) if (ch !== SEARCHED && !CODE_ITEM[ch]) return null;
+  for (const ch of loot) if (ch !== SEARCHED && ch !== HINTED_FUSE && !CODE_ITEM[ch]) return null;
 
   if (!Array.isArray(zones) || zones.length > world.totalZones) return null;
   const outZones = [];
@@ -129,7 +131,7 @@ function validate(raw, world) {
   if (!int(p.fuses, 0, 99) || !int(p.bandages, 0, 5) || !int(p.cans, 0, 99)) return null;
   if (!obj(car) || !num(car.x, -BOUND, BOUND) || !num(car.z, -BOUND, BOUND) || !num(car.a, -1e4, 1e4)) return null;
   if (!num(car.fuel, 0, 100) || !bool(car.driving) || !bool(car.lamp) || !num(car.lampLoad, 0, 1)) return null;
-  if (!obj(run) || !int(run.nights, 0, 9999) || !int(run.banished, 0, 1e7) || !int(run.cacheTaken, 0, RUN_TAKE_LIMIT)) return null;
+  if (!obj(run) || !int(run.nights, 0, 9999) || !int(run.banished, 0, 1e7) || !int(run.returned, 0, 1e7) || !int(run.cacheTaken, 0, RUN_TAKE_LIMIT)) return null;
   if (!Array.isArray(run.hints) || run.hints.length > 50) return null;
 
   return {
@@ -140,7 +142,7 @@ function validate(raw, world) {
     player: { x: p.x, z: p.z, facing: p.facing, hp: p.hp, battery: p.battery, fuses: p.fuses, bandages: p.bandages, cans: p.cans, flash: p.flash },
     car: { x: car.x, z: car.z, a: car.a, fuel: car.fuel, driving: car.driving, lamp: car.lamp, lampLoad: car.lampLoad },
     run: {
-      nights: run.nights, banished: run.banished, cacheTaken: run.cacheTaken,
+      nights: run.nights, banished: run.banished, returned: run.returned, cacheTaken: run.cacheTaken,
       hints: run.hints.filter((k) => typeof k === 'string' && HINTS[k]).map((k) => HINTS[k]),
     },
   };
@@ -155,6 +157,9 @@ export function restoreWorld(world, run) {
     if (ch === SEARCHED) {
       l.item = 'empty';
       world.markSearched(l);
+    } else if (ch === HINTED_FUSE) {
+      l.item = 'fuse';
+      world.hintLoot(l); // 촛불 모양은 main이 wisps로 다시 켠다
     } else {
       l.item = CODE_ITEM[ch];
     }

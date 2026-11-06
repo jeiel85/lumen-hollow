@@ -20,14 +20,17 @@ const C = {
   grassOuter: 0x7d8d5b, road: 0x5a6062, line: 0xe4d9bc, crosswalk: 0xe2dfd4,
   sidewalk: 0xbcb8ad, grass: 0x92a066, dirt: 0xa7855c, gravel: 0xa8a292, paving: 0xc3bba9, path: 0xb89f78,
   foundation: 0x8c867b,
-  houseWalls: [0xeadfc8, 0xcfd9c3, 0xbccfd3, 0xe3bda4, 0xf1eadb, 0xd8c7a6, 0xadc3b0, 0xe7cfa0],
-  roofs: [0x7b5b4b, 0x5d6970, 0x8b5046, 0x6d6152, 0x50604f, 0x9a6a4a],
+  // 읍내 주택: 붉은 벽돌·미색 미장, 함석지붕은 파랑·초록·빨강
+  houseWalls: [0xeadfc8, 0xa65a48, 0xd9d4c8, 0xb8684f, 0xe6dcc4, 0x9d5544, 0xc9c2b0, 0xe0cfa8],
+  roofs: [0x3f6f9e, 0x4c8a68, 0xa8483a, 0x3d7f86, 0x5d6f95, 0x8d5236],
   shopWalls: [0xd9ccb2, 0xc7b699, 0xb9c6c0, 0xdab9a1, 0xa3b7ab, 0xcfc4b6],
   roofFlat: 0x8a857a, trim: 0xf1ede2, glass: 0x3d4c55, door: 0x4b3a32, wood: 0x8f6c4e, brick: 0x9a5546,
+  slab: 0xcfc9bb, tank: [0x3f8a5a, 0x3a6fa8, 0x4f9a7a], jar: 0x6a3f2c, concrete: 0x9b9a92, wire: 0x1f2326,
+  center: 0xd8ae3a, paddy: 0x6d8f87, rice: [0x8fb04c, 0x9cc057, 0x84a845],
   pine: [0x56704a, 0x63784a, 0x4b6243, 0x77874c], leaf: [0x6f8b50, 0x8b9b54, 0x5e7c56, 0x9fa25a], trunk: 0x6b4e3a,
-  barn: 0xb3523d, fence: 0x8e7259, crop: [0x7e9046, 0x8fa04c, 0x6f8a42], hay: 0xd2b46b,
+  barn: 0xc4c2b8, fence: 0x8e7259, crop: [0x7e9046, 0x8fa04c, 0x6f8a42], hay: 0xd2b46b,
   cars: [0x8f6b5a, 0x6c8791, 0xc8b88e, 0x7c8a69, 0xa45c4c, 0xd9d3c5, 0x5a6b7d], tyre: 0x2b2b2d,
-  tower: 0xa9c6b6, metal: 0x6c7377, dark: 0x2f3437, awning: [0xb5554a, 0x4f7a6e, 0xd0a14a, 0x5d6f95],
+  tower: 0xbdb7a8, metal: 0x6c7377, dark: 0x2f3437, awning: [0xb5554a, 0x4f7a6e, 0xd0a14a, 0x5d6f95],
   bench: 0x7d5e44, water: 0x58777e, pole: 0x3c4245, boxBody: 0x5f7464, sign: 0x2c3236,
 };
 
@@ -66,6 +69,45 @@ export function makeBeaconMaterial(color) {
     fragmentShader: 'uniform float uOpacity; uniform vec3 uColor; varying vec2 vUv; void main(){ float a = pow(clamp(1.0 - vUv.y, 0.0, 1.0), 2.2) * uOpacity; gl_FragColor = vec4(uColor, a); }',
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   });
+}
+
+// 한글 간판. [글귀, 바탕, 글자색]. 약국·다이너는 이야기에 나오는 가게라 따로 고정한다.
+const SIGNS = [
+  ['약국', '#2f7d5a', '#ffffff'], ['다이너', '#b34d5a', '#fff3e6'],
+  ['슈퍼', '#c8372d', '#ffffff'], ['철물점', '#2d5f9a', '#ffffff'], ['세탁소', '#ffffff', '#2d5f9a'],
+  ['다방', '#6a3b2a', '#ffe7b8'], ['미용실', '#ffffff', '#c8372d'], ['분식', '#f2c230', '#2a1c10'],
+  ['문구사', '#3f8a5a', '#ffffff'], ['정육점', '#ffffff', '#b8241f'], ['식당', '#c8372d', '#fff3c4'],
+  ['전파사', '#2d4f7a', '#ffe48a'], ['양품점', '#ffffff', '#3a3a3a'], ['부동산', '#1f6b8a', '#ffffff'],
+  ['사진관', '#ffffff', '#1f4f7a'], ['방앗간', '#f0e2c0', '#8a3a1c'], ['이발소', '#ffffff', '#c8372d'],
+  ['꽃집', '#f6d7e0', '#a8325a'], ['수선집', '#e9e3d4', '#3a4a5a'], ['반찬가게', '#f2c230', '#3a2a10'],
+];
+const SIGN_COLS = 2;
+const SIGN_ROWS = 16;
+
+// 간판 글귀를 한 장의 캔버스에 모은다. 서버 테스트(Node)처럼 글자를 못 그리는 환경에서는 바탕색만 칠한다.
+function makeSignAtlas() {
+  const cw = 256, ch = 64;
+  const cv = document.createElement('canvas');
+  cv.width = cw * SIGN_COLS;
+  cv.height = ch * SIGN_ROWS;
+  const g = cv.getContext('2d');
+  SIGNS.forEach(([text, bg, fg], i) => {
+    const x = (i % SIGN_COLS) * cw;
+    const y = Math.floor(i / SIGN_COLS) * ch;
+    g.fillStyle = bg;
+    g.fillRect(x, y, cw, ch);
+    if (typeof g.fillText !== 'function') return;
+    g.fillStyle = fg;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    const size = text.length > 3 ? 36 : 44;
+    g.font = `800 ${size}px "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", "Noto Sans CJK KR", sans-serif`;
+    g.fillText(text, x + cw / 2, y + ch / 2 + 2, cw - 24);
+  });
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
 }
 
 function hash(n) {
@@ -113,12 +155,19 @@ export class World {
     this.truckLamp = { extra: true, x: 0, z: 0, on: false, level: 0, glow: 0, load: 0, r: TRUCK_LAMP_RADIUS };
     this.events = [];
     this.anchors = this._findAnchors();
+    // 장식 전용 난수. 마을 생성 난수(rng)의 순서를 바꾸면 뒤질 곳·가로수 자리가 바뀌어
+    // 공유 보급품 슬롯 목록(서버와의 약속)과 이야기 기록 자리가 어긋나므로, 새 장식은 모두 이것으로 고른다.
+    this.deco = new Rng(1926);
+    this.signQuads = {}; // 구역별 간판 글귀 사각형(마감 때 구역마다 메시 하나로 합친다)
+    this.homes = []; // 사람이 잠들어 있는 집의 현관(돌려보낸 그림자가 날아가는 곳)
+    this.wireSparks = {}; // 구역별 점등 불꽃이 흐를 전선 조각
     const rng = new Rng(20261105);
     this._ground();
     this._roads(rng);
     for (let row = 0; row < 5; row++) for (let col = 0; col < 5; col++) this._block(row, col, rng);
     this._forest(rng);
     this._cars(rng);
+    this._utility();
     this._finalize(mobile);
     this.reset(1);
   }
@@ -145,12 +194,17 @@ export class World {
 
   _roads(rng) {
     const b = this.sb;
-    const nearCross = (t) => ROADS.some((r) => Math.abs(t - r) < 6);
+    // 중앙선: 교차로 사이마다 노란 두 줄 실선
+    const stops = [-EDGE + 1, ...ROADS.flatMap((r) => [r - 6, r + 6]), EDGE - 1].sort((p, q) => p - q);
     for (const rc of ROADS) {
-      for (let t = -EDGE + 3; t < EDGE - 2; t += 4) {
-        if (nearCross(t)) continue;
-        b.add(geo.box(), rc, 0.02, t, 0.18, 0.02, 1.8, C.line);
-        b.add(geo.box(), t, 0.02, rc, 1.8, 0.02, 0.18, C.line);
+      for (let i = 0; i + 1 < stops.length; i += 2) {
+        const a = stops[i], e = stops[i + 1];
+        if (e - a < 1) continue;
+        const mid = (a + e) / 2, len = e - a;
+        for (const o of [-0.14, 0.14]) {
+          b.add(geo.box(), rc + o, 0.021, mid, 0.1, 0.02, len, C.center);
+          b.add(geo.box(), mid, 0.021, rc + o, len, 0.02, 0.1, C.center);
+        }
       }
     }
     for (const rx of ROADS) {
@@ -298,14 +352,28 @@ export class World {
     f.add(b, geo.box(), 0, y0 + wallH / 2, 0, w, wallH, d, wall);
     f.add(b, geo.box(), 0, top - 0.06, 0, w + 0.08, 0.12, d + 0.08, C.trim);
 
+    // 평지붕 양옥(옥상 난간·물탱크·장독)과 함석 박공지붕을 섞는다. 고르는 건 장식 난수로,
+    // 마을 난수는 박공지붕일 때와 똑같이 뽑아 순서를 지킨다.
+    const flat = !o.gable && this.deco.chance(0.45);
     const rh = rng.range(1.5, 2.1);
-    const hw = d / 2 + 0.45;
-    const L = Math.hypot(hw, rh) + 0.1;
-    const th = Math.atan2(rh, hw);
-    f.add(b, geo.gable(), 0, top + rh / 2, 0, d, rh, w, wall, Math.PI / 2);
-    f.add(b, geo.box(), 0, top + rh / 2 + 0.05, hw / 2, w + 0.7, 0.14, L, roof, 0, th);
-    f.add(b, geo.box(), 0, top + rh / 2 + 0.05, -hw / 2, w + 0.7, 0.14, L, roof, 0, -th);
-    if (rng.chance(0.45)) f.add(b, geo.box(), w * 0.28, top + rh * 0.7, -d * 0.18, 0.55, 1.5, 0.55, C.brick);
+    const chimney = rng.chance(0.45);
+    if (flat) {
+      this._flatRoof(f, w, d, top, wall);
+    } else {
+      const hw = d / 2 + 0.45;
+      const L = Math.hypot(hw, rh) + 0.1;
+      const th = Math.atan2(rh, hw);
+      f.add(b, geo.gable(), 0, top + rh / 2, 0, d, rh, w, wall, Math.PI / 2);
+      f.add(b, geo.box(), 0, top + rh / 2 + 0.05, hw / 2, w + 0.7, 0.14, L, roof, 0, th);
+      f.add(b, geo.box(), 0, top + rh / 2 + 0.05, -hw / 2, w + 0.7, 0.14, L, roof, 0, -th);
+      // 함석 골: 지붕 면을 따라 옅은 줄
+      for (let k = -2; k <= 2; k++) {
+        for (const sgn of [1, -1]) {
+          f.add(b, geo.box(), (k * (w + 0.7)) / 5.2, top + rh / 2 + 0.13, (sgn * hw) / 2, 0.06, 0.03, L * 0.98, _col.set(roof).offsetHSL(0, 0, 0.06), 0, sgn * th);
+        }
+      }
+      if (chimney) f.add(b, geo.box(), w * 0.28, top + rh * 0.7, -d * 0.18, 0.55, 1.5, 0.55, C.brick);
+    }
 
     const doorX = o.doorX ?? rng.range(-w * 0.2, w * 0.2);
     f.add(b, geo.box(), doorX, y0 + 1.0, d / 2 + 0.02, 1.15, 2.1, 0.06, C.trim);
@@ -321,7 +389,34 @@ export class World {
     }
     this.colliders.push(f.aabb(0, 0, w + 0.24, d + 0.24));
     if (o.loot !== false) this._addLoot(f.px(doorX, d / 2 + 2.0), f.pz(doorX, d / 2 + 2.0), ctx);
+    // 은신처(loot: false)는 주인공의 집이라 빼고, 나머지 집 현관 위 창가를 기억해 둔다.
+    if (o.loot !== false) this.homes.push({ x: f.px(doorX, d / 2 + 0.3), y: y0 + 2.2, z: f.pz(doorX, d / 2 + 0.3), zone });
     return { f, w, d, doorX, top };
+  }
+
+  // 옥상: 슬래브, 낮은 난간, 물탱크(받침 위 원통), 장독 몇 개
+  _flatRoof(f, w, d, top, wall) {
+    const b = this.sb;
+    const dr = this.deco;
+    f.add(b, geo.box(), 0, top + 0.08, 0, w + 0.3, 0.16, d + 0.3, C.slab);
+    const ph = 0.55;
+    f.add(b, geo.box(), 0, top + 0.16 + ph / 2, d / 2 + 0.08, w + 0.3, ph, 0.14, wall);
+    f.add(b, geo.box(), 0, top + 0.16 + ph / 2, -d / 2 - 0.08, w + 0.3, ph, 0.14, wall);
+    f.add(b, geo.box(), w / 2 + 0.08, top + 0.16 + ph / 2, 0, 0.14, ph, d + 0.3, wall);
+    f.add(b, geo.box(), -w / 2 - 0.08, top + 0.16 + ph / 2, 0, 0.14, ph, d + 0.3, wall);
+    const tx = dr.pick([-1, 1]) * (w / 2 - 1.0);
+    const tz = -d / 2 + 1.0;
+    f.add(b, geo.box(), tx, top + 0.45, tz, 1.3, 0.5, 1.3, C.dark);
+    f.add(b, geo.cyl(12), tx, top + 1.35, tz, 1.25, 1.3, 1.25, dr.pick(C.tank));
+    f.add(b, geo.cyl(12), tx, top + 2.04, tz, 0.5, 0.1, 0.5, 0x2c3a33);
+    if (dr.chance(0.6)) {
+      for (let i = 0; i < 3; i++) {
+        const jx = -tx * 0.5 + (i - 1) * 0.55;
+        const jz = d / 2 - 0.9;
+        f.add(b, geo.sphere(8, 6), jx, top + 0.42, jz, 0.5, 0.55, 0.5, C.jar);
+        f.add(b, geo.cyl(8), jx, top + 0.72, jz, 0.34, 0.06, 0.34, 0x4a2c1f);
+      }
+    }
   }
 
   _houses(ctx) {
@@ -373,6 +468,11 @@ export class World {
       f.add(b, geo.box(), ux, top + 0.45, uz, 1.3, 0.8, 1.0, C.metal);
       f.add(b, geo.cyl(8), ux + 0.3, top + 1.0, uz, 0.4, 0.3, 0.4, C.dark);
     }
+    if (this.deco.chance(0.6)) {
+      const tx = this.deco.pick([-1, 1]) * (w / 2 - 1.2);
+      f.add(b, geo.box(), tx, top + 0.3, -d / 2 + 1.2, 1.4, 0.3, 1.4, C.dark);
+      f.add(b, geo.cyl(12), tx, top + 1.15, -d / 2 + 1.2, 1.35, 1.4, 1.35, this.deco.pick(C.tank));
+    }
 
     const doorX = o.doorX ?? rng.range(-w * 0.22, w * 0.22);
     f.add(b, geo.box(), doorX, y0 + 1.15, d / 2 + 0.03, 1.5, 2.35, 0.06, C.trim);
@@ -397,7 +497,13 @@ export class World {
     for (let s = 0; s < 5; s++) {
       f.add(b, geo.box(), doorX * 0.4 - awW / 2 + awW * (s + 0.5) / 5, y0 + 2.79, d / 2 + 0.65, awW / 10, 0.11, 1.41, C.trim, 0, 0.32);
     }
-    f.add(b, geo.box(), doorX * 0.4, y0 + 3.4, d / 2 + 0.08, Math.min(w - 2, 5), 0.62, 0.1, o.signColor ?? tint(rng.pick(C.awning), rng, 0.08));
+    // 간판: 바탕판 + 한글 글귀. 바탕판 색은 마을 난수 순서를 지키려 뽑기만 하고 글귀 바탕색을 쓴다.
+    const signW = Math.min(w - 2, 5);
+    const oldSign = o.signColor ?? tint(rng.pick(C.awning), rng, 0.08);
+    const si = o.signText != null ? SIGNS.findIndex((x) => x[0] === o.signText) : 2 + Math.floor(this.deco.next() * (SIGNS.length - 2));
+    const sign = SIGNS[si] ? new THREE.Color(SIGNS[si][1]) : oldSign;
+    f.add(b, geo.box(), doorX * 0.4, y0 + 3.5, d / 2 + 0.08, signW, 0.9, 0.1, sign);
+    if (si >= 0) this._signQuad(zone, f, doorX * 0.4, y0 + 3.5, d / 2 + 0.135, Math.min(signW - 0.2, 3.2), 0.8, si);
 
     if (floors > 1) {
       this._windows(f, zone, w, d, floors, y0, fh, 1.8, doorX, rng, { ww: 1.1, wh: 1.3, yFrac: 0.5, doorClear: 0, lit: 0.55, firstFloor: 1, skip: 0.1 });
@@ -424,7 +530,7 @@ export class World {
     const { cx, cz, rng, zone } = ctx;
     const neonColors = [new THREE.Color(0.2, 0.8, 1.0), new THREE.Color(1.0, 0.3, 0.25), new THREE.Color(1.0, 0.7, 0.2)];
     if (variant === 'pharmacy') {
-      const s = this._shop(cx, cz + 4.6, 0, ctx, { w: 13, d: 7.6, floors: 2, wall: 0xe4e6dc, awning: 0x4f8a6e, signColor: 0x6fb28f, doorX: -1.5 });
+      const s = this._shop(cx, cz + 4.6, 0, ctx, { w: 13, d: 7.6, floors: 2, wall: 0xe4e6dc, awning: 0x4f8a6e, signColor: 0x6fb28f, doorX: -1.5, signText: '약국' });
       const { f, w, d, y0 } = s;
       const lx = w / 2 - 0.6;
       const ly = y0 + 4.3;
@@ -437,7 +543,7 @@ export class World {
       ];
       this._neon(zone, parts, new THREE.Color(0.15, 1.0, 0.45), { x: f.px(lx + 0.8, lz), y: ly - 0.4, z: f.pz(lx + 0.8, lz) }, 22);
     } else if (variant === 'diner') {
-      const s = this._shop(cx, cz + 4.6, 0, ctx, { w: 15, d: 7.4, floors: 1, wall: 0xe8dcc4, awning: 0xb34d5a, signColor: 0xc96a76, doorX: 2.5 });
+      const s = this._shop(cx, cz + 4.6, 0, ctx, { w: 15, d: 7.4, floors: 1, wall: 0xe8dcc4, awning: 0xb34d5a, signColor: 0xc96a76, doorX: 2.5, signText: '다이너' });
       const { f, w, d, top } = s;
       const pink = new THREE.Color(1.0, 0.28, 0.55);
       this._neon(zone, [{ x: f.px(0, d / 2 + 0.16), y: top - 0.3, z: f.pz(0, d / 2 + 0.16), sx: w - 0.4, sy: 0.08, sz: 0.06, ry: f.a }], pink, { x: f.px(-3, d / 2 + 1.2), y: top - 0.6, z: f.pz(-3, d / 2 + 1.2) }, 10);
@@ -466,6 +572,17 @@ export class World {
     this._shop(cx, cz - 4.8, Math.PI, ctx, { d: rng.range(6.5, 7.6), openSign: null, darkFront: rng.chance(0.4) });
     if (rng.chance(0.7)) this._roundTree(cx + rng.pick([-8.6, 8.6]), cz - 0.2, 0.75, rng);
     if (variant === null && rng.chance(0.5)) this._addLoot(cx + rng.range(-6, 6), cz - 0.1, ctx);
+  }
+
+  // 간판 글귀 사각형(정면 +z). 마감 때 구역마다 메시 하나로 합쳐, 그 구역에 불이 들어오면 밤에 빛난다.
+  _signQuad(zone, f, lx, ly, lz, w, h, idx) {
+    const u0 = (idx % SIGN_COLS) / SIGN_COLS;
+    const v1 = 1 - Math.floor(idx / SIGN_COLS) / SIGN_ROWS;
+    const u1 = u0 + 1 / SIGN_COLS;
+    const v0 = v1 - 1 / SIGN_ROWS;
+    const pts = [[-w / 2, -h / 2, u0, v0], [w / 2, -h / 2, u1, v0], [w / 2, h / 2, u1, v1], [-w / 2, h / 2, u0, v1]];
+    const q = pts.map(([x, y, u, v]) => ({ x: f.px(lx + x, lz), y: ly + y, z: f.pz(lx + x, lz), u, v }));
+    (this.signQuads[zone] ??= []).push({ q, nx: Math.sin(f.a), nz: Math.cos(f.a) });
   }
 
   _neon(zone, parts, color, light, power) {
@@ -600,22 +717,31 @@ export class World {
     const b = this.sb;
     this._fenceRing(cx, cz, 9.6);
     const z0 = withBarn ? 1.6 : -8.2;
+    // 헛간 없는 농장은 물 댄 논(벼), 헛간 농장은 밭. 마을 난수 순서는 그대로 두고 색만 바꾼다.
+    const paddy = !withBarn;
+    if (paddy) b.add(geo.box(), cx, LOT_Y + 0.04, cz, 18.6, 0.06, 18.6, C.paddy);
     for (let z = z0; z <= 8.3; z += 1.25) {
-      b.add(geo.box(), cx, LOT_Y + 0.05, cz + z, 17.5, 0.1, 0.55, 0x8f7050);
+      if (!paddy) b.add(geo.box(), cx, LOT_Y + 0.05, cz + z, 17.5, 0.1, 0.55, 0x8f7050);
       for (let x = -8.4; x <= 8.4; x += 0.9) {
         if (Math.abs(x) < 1.4) continue;
-        const c = tint(rng.pick(C.crop), rng, 0.05);
-        b.add(geo.cone(5), cx + x + rng.range(-0.1, 0.1), LOT_Y + 0.38, cz + z, 0.42, rng.range(0.5, 0.75), 0.42, c, rng.range(0, 3));
+        const c = tint(rng.pick(paddy ? C.rice : C.crop), rng, 0.05);
+        // 마을 난수는 원래 호출 순서(흔들림 → 키 → 방향) 그대로 뽑는다.
+        const jx = rng.range(-0.1, 0.1);
+        const hgt = rng.range(0.5, 0.75);
+        const rot = rng.range(0, 3);
+        b.add(geo.cone(5), cx + x + jx, LOT_Y + (paddy ? 0.3 : 0.38), cz + z, paddy ? 0.3 : 0.42, paddy ? hgt * 0.8 : hgt, paddy ? 0.3 : 0.42, c, rot);
       }
     }
+    // 논두렁: 가운데 통로 양옆 흙둑
+    if (paddy) for (const s of [-1, 1]) b.add(geo.box(), cx + s * 1.05, LOT_Y + 0.1, cz, 0.5, 0.14, 18.6, 0x8f7a58);
     if (withBarn) {
       const f = new Frame(cx - 2.5, cz - 4.2, 0);
       const w = 10, d = 7.2, h = 5.0, top = LOT_Y + h;
       f.add(b, geo.box(), 0, LOT_Y + h / 2, 0, w, h, d, C.barn);
       const rh = 3.0, hw = d / 2 + 0.5, L = Math.hypot(hw, rh) + 0.1, th = Math.atan2(rh, hw);
       f.add(b, geo.gable(), 0, top + rh / 2, 0, d, rh, w, C.barn, Math.PI / 2);
-      f.add(b, geo.box(), 0, top + rh / 2 + 0.06, hw / 2, w + 0.6, 0.16, L, 0x6a4a3e, 0, th);
-      f.add(b, geo.box(), 0, top + rh / 2 + 0.06, -hw / 2, w + 0.6, 0.16, L, 0x6a4a3e, 0, -th);
+      f.add(b, geo.box(), 0, top + rh / 2 + 0.06, hw / 2, w + 0.6, 0.16, L, 0x3f6f9e, 0, th);
+      f.add(b, geo.box(), 0, top + rh / 2 + 0.06, -hw / 2, w + 0.6, 0.16, L, 0x3f6f9e, 0, -th);
       f.add(b, geo.box(), 0, LOT_Y + 1.6, d / 2 + 0.04, 3.4, 3.2, 0.08, 0xefe8da);
       f.add(b, geo.box(), 0, LOT_Y + 1.6, d / 2 + 0.07, 3.0, 2.9, 0.06, 0x7c3a2d);
       f.add(b, geo.box(), 0, LOT_Y + 1.6, d / 2 + 0.1, 0.16, 3.9, 0.04, 0xefe8da, 0, 0, 0.83);
@@ -696,7 +822,7 @@ export class World {
   _home(ctx) {
     const { cx, cz, rng } = ctx;
     const b = this.sb;
-    this._house(cx, cz - 2.5, 0, ctx, { w: 7.2, d: 5.6, floors: 1, wall: 0xe9d6b4, roof: 0x7d5a48, doorX: 0, lit: 1, loot: false });
+    this._house(cx, cz - 2.5, 0, ctx, { w: 7.2, d: 5.6, floors: 1, wall: 0xe9d6b4, roof: 0x3f6f9e, doorX: 0, lit: 1, loot: false, gable: true });
     // 정원, 장작, 발전기, 모닥불
     for (const s of [-1, 1]) {
       b.add(geo.box(), cx + s * 6.5, LOT_Y + 0.15, cz - 3, 2.6, 0.3, 4.6, 0x7a5a42);
@@ -783,6 +909,72 @@ export class World {
     }
   }
 
+  // 전봇대와 전선: 안쪽 도로마다 한쪽 인도(블록 변 가운데)에 전봇대를 세우고 전선을 잇는다.
+  // 장식 난수만 쓰고, 충돌체는 보급품 슬롯(인도 중심선에서 ±1.5m 간격)에서 1m 넘게 떨어진 자리에만 둔다.
+  _utility() {
+    const b = this.sb;
+    const dr = this.deco;
+    const centers = [-64, -32, 0, 32, 64];
+    const HV = 7.15; // 고압선 높이
+    const lines = [];
+    for (const rc of ROADS.slice(1, 5)) {
+      const off = rc + 4.6;
+      lines.push(centers.map((t) => ({ x: off, z: t, along: 'z' })));
+      lines.push(centers.map((t) => ({ x: t, z: off, along: 'x' })));
+    }
+    const zoneOf = (x, z) => this.zoneAt(x, z);
+    for (const poles of lines) {
+      for (const P of poles) {
+        const across = P.along === 'z' ? [1, 0] : [0, 1];
+        b.add(geo.cyl(8, 0.36), P.x, 3.8, P.z, 0.3, 7.6, 0.3, C.concrete);
+        b.add(geo.cyl(8), P.x, 1.0, P.z, 0.33, 0.7, 0.33, 0xd6b03a); // 노란 전주 표지
+        b.add(geo.box(), P.x, HV - 0.12, P.z, across[0] ? 1.8 : 0.12, 0.12, across[1] ? 1.8 : 0.12, 0x4a4e50);
+        for (const k of [-0.75, 0, 0.75]) b.add(geo.cyl(6), P.x + across[0] * k, HV - 0.02, P.z + across[1] * k, 0.1, 0.18, 0.1, 0xd8d4c8);
+        if (dr.chance(0.45)) {
+          const tx = P.x + across[0] * 0.38, tz = P.z + across[1] * 0.38;
+          b.add(geo.cyl(10), tx, 5.55, tz, 0.55, 0.9, 0.55, 0x8c9294); // 변압기
+          b.add(geo.cyl(10), tx, 6.05, tz, 0.6, 0.1, 0.6, 0x6c7274);
+        }
+        this.colliders.push({ t: 1, x: P.x, z: P.z, r: 0.17, pole: true });
+      }
+      for (let i = 0; i + 1 < poles.length; i++) {
+        const A = poles[i], B = poles[i + 1];
+        const across = A.along === 'z' ? [1, 0] : [0, 1];
+        // 고압선 세 가닥(불꽃이 흐르는 선)과 아래쪽 통신선 두 가닥
+        for (const [k, y0, sag, spark] of [[-0.75, HV, 0.9, true], [0, HV, 0.9, true], [0.75, HV, 0.9, true], [-0.2, 5.3, 0.6, false], [0.15, 5.05, 0.7, false]]) {
+          const ax = A.x + across[0] * k, az = A.z + across[1] * k;
+          const bx = B.x + across[0] * k, bz = B.z + across[1] * k;
+          this._wire(ax, az, bx, bz, y0, sag, spark ? (t) => zoneOf(t < 0.5 ? A.x : B.x, t < 0.5 ? A.z : B.z) : null);
+        }
+      }
+    }
+  }
+
+  // 처지는 전선 한 가닥: 포물선을 8토막 상자로. spark(t)가 있으면 토막마다 그 구역 불꽃 조각에도 넣는다.
+  _wire(ax, az, bx, bz, y, sag, spark) {
+    const n = 8;
+    const P = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      P.push([ax + (bx - ax) * t, y - 4 * sag * t * (1 - t), az + (bz - az) * t]);
+    }
+    for (let i = 0; i < n; i++) {
+      const [x0, y0, z0] = P[i];
+      const [x1, y1, z1] = P[i + 1];
+      const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+      const h = Math.hypot(dx, dz);
+      const len = Math.hypot(h, dy);
+      const ry = Math.atan2(dx, dz);
+      const rx = Math.atan2(-dy, h);
+      const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, mz = (z0 + z1) / 2;
+      this.sb.add(geo.box(), mx, my, mz, 0.05, 0.05, len + 0.02, C.wire, ry, rx);
+      if (spark) {
+        const zid = spark((i + 0.5) / n);
+        if (zid) (this.wireSparks[zid] ??= new Builder()).add(geo.box(), mx, my, mz, 0.11, 0.11, len + 0.02, 0xffffff, ry, rx);
+      }
+    }
+  }
+
   _finalize(mobile) {
     const staticMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92, metalness: 0 });
     this.staticMat = staticMat;
@@ -812,6 +1004,53 @@ export class World {
       this.root.add(wm);
       z.win = null;
     }
+
+    // 간판: 구역마다 글귀 사각형을 메시 하나로. 낮엔 색이 보이고, 불 들어온 구역은 밤에 뒤에서 켠 것처럼 빛난다.
+    const atlas = makeSignAtlas();
+    for (const [zid, quads] of Object.entries(this.signQuads)) {
+      const pos = [], nor = [], uv = [], idx = [];
+      for (const { q, nx, nz } of quads) {
+        const base = pos.length / 3;
+        for (const v of q) {
+          pos.push(v.x, v.y, v.z);
+          nor.push(nx, 0, nz);
+          uv.push(v.u, v.v);
+        }
+        idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      g.setIndex(idx);
+      const mat = new THREE.MeshStandardMaterial({ map: atlas, emissiveMap: atlas, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.55 });
+      const mesh = new THREE.Mesh(g, mat);
+      mesh.frustumCulled = false;
+      mesh.receiveShadow = true;
+      this.root.add(mesh);
+      this.zones[zid].signMat = mat;
+    }
+    this.signQuads = null;
+
+    // 전선 불꽃: 구역에 불이 들어오는 순간 배전함에서 전선을 따라 퍼져 나가는 빛. 구역마다 따로 그린다.
+    for (const [zid, sb] of Object.entries(this.wireSparks)) {
+      const z = this.zones[zid];
+      const origin = this.breakerOf(zid) ?? { x: 0, z: 0 };
+      const mat = new THREE.ShaderMaterial({
+        uniforms: { uT: { value: 0 }, uA: { value: 0 }, uO: { value: new THREE.Vector2(origin.x, origin.z) } },
+        vertexShader: 'uniform vec2 uO; varying float vD; void main(){ vD = distance(position.xz, uO); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: 'uniform float uT; uniform float uA; varying float vD; void main(){ float k = (vD - uT) / 3.0; float a = exp(-k * k) * uA; gl_FragColor = vec4(vec3(1.0, 0.86, 0.55) * 3.2, a); }',
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      });
+      const mesh = new THREE.Mesh(sb.build(), mat);
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 5;
+      mesh.visible = false;
+      this.root.add(mesh);
+      z.spark = { mesh, mat };
+      z.pulse = -1;
+    }
+    this.wireSparks = null;
 
     // 가로등 머리와 바닥 빛 웅덩이 (인스턴싱)
     const n = this.lamps.length;
@@ -865,28 +1104,33 @@ export class World {
     gg.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
     this.glintOn = new THREE.BufferAttribute(new Float32Array(ln).fill(1), 1);
     gg.setAttribute('aOn', this.glintOn);
+    // 깨어난 주민이 촛불로 알려 준 퓨즈 자리는 금빛으로 크게 반짝인다.
+    this.glintHint = new THREE.BufferAttribute(new Float32Array(ln), 1);
+    gg.setAttribute('aHint', this.glintHint);
     this.glintMat = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 }, uPx: { value: 30 }, uNight: { value: 0 } },
       vertexShader: `
-        attribute float aSeed; attribute float aOn;
+        attribute float aSeed; attribute float aOn; attribute float aHint;
+        varying float vH;
         uniform float uTime; uniform float uPx;
         varying float vA;
         void main(){
           vec3 p = position; p.y += sin(uTime * 2.0 + aSeed) * 0.08;
           float tw = 0.65 + 0.35 * sin(uTime * 3.1 + aSeed * 2.3);
           vA = aOn * tw;
-          gl_PointSize = aOn * uPx * 0.9 * (0.8 + 0.2 * tw);
+          vH = aHint;
+          gl_PointSize = aOn * uPx * 0.9 * (0.8 + 0.2 * tw) * (1.0 + aHint * 0.7);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }`,
       fragmentShader: `
-        uniform float uNight; varying float vA;
+        uniform float uNight; varying float vA; varying float vH;
         void main(){
           vec2 q = gl_PointCoord - 0.5;
           float core = exp(-dot(q, q) * 90.0);
           float rays = max(0.0, 1.0 - abs(q.x) * 14.0) * max(0.0, 1.0 - abs(q.y) * 2.2)
                      + max(0.0, 1.0 - abs(q.y) * 14.0) * max(0.0, 1.0 - abs(q.x) * 2.2);
           float a = (core + rays * 0.6) * vA;
-          gl_FragColor = vec4(vec3(1.0, 0.9, 0.65) * mix(1.4, 2.6, uNight), a);
+          gl_FragColor = vec4(mix(vec3(1.0, 0.9, 0.65), vec3(1.0, 0.62, 0.2), vH) * mix(1.4, 2.6, uNight) * (1.0 + vH * 0.4), a);
         }`,
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
@@ -921,6 +1165,7 @@ export class World {
       z.tripped = false;
       z.level = z.powered ? 1 : 0;
       z.glow = z.level;
+      z.pulse = -1;
     }
     Object.assign(this.truckLamp, { on: false, level: 0, glow: 0, load: 0 });
     this.events.length = 0;
@@ -938,7 +1183,9 @@ export class World {
     for (let i = 0; i < n; i++) {
       this.loot[i].item = items[i];
       this.loot[i].searched = false;
+      this.loot[i].hinted = false;
       this.glintOn.array[i] = 1;
+      this.glintHint.array[i] = 0;
     }
     // 은신처 옆 블록에 퓨즈가 하나는 있도록 보장
     const near = this.loot.filter((l) => l.near);
@@ -948,6 +1195,38 @@ export class World {
       if (donor) [donor.item, tgt.item] = [tgt.item, donor.item];
     }
     this.glintOn.needsUpdate = true;
+    this.glintHint.needsUpdate = true;
+  }
+
+  // 돌려보낸 그림자가 찾아갈 집: 가장 가까운 집 현관 창가
+  nearestHome(x, z) {
+    let best = null;
+    let bd = Infinity;
+    for (const h of this.homes) {
+      const d = (h.x - x) ** 2 + (h.z - z) ** 2;
+      if (d < bd) { bd = d; best = h; }
+    }
+    return best;
+  }
+
+  // 아직 아무도 찾지 않았고 알려 주지도 않은 퓨즈 가운데 (x, z)에서 가장 가까운 것
+  hiddenFuseNear(x, z) {
+    let best = null;
+    let bd = Infinity;
+    for (const l of this.loot) {
+      if (l.item !== 'fuse' || l.searched || l.hinted) continue;
+      const d = (l.x - x) ** 2 + (l.z - z) ** 2;
+      if (d < bd) { bd = d; best = l; }
+    }
+    return best;
+  }
+
+  hintLoot(loot) {
+    const i = this.loot.indexOf(loot);
+    if (i < 0) return;
+    loot.hinted = true;
+    this.glintHint.array[i] = 1;
+    this.glintHint.needsUpdate = true;
   }
 
   get totalZones() {
@@ -996,6 +1275,7 @@ export class World {
     z.load = 0;
     z.tripped = false;
     z.on = this.onCount < this.capacity;
+    if (z.on) z.pulse = 0;
     return { on: z.on };
   }
 
@@ -1003,6 +1283,7 @@ export class World {
   restoreAll() {
     for (const z of Object.values(this.zones)) {
       if (!z.powered) continue;
+      if (!z.on || z.tripped) z.pulse = 0;
       z.on = true;
       z.tripped = false;
       z.load = 0;
@@ -1017,6 +1298,7 @@ export class World {
     if (on && this.onCount >= this.capacity) return false;
     // 부하와 차단 상태는 그대로 둔다. 껐다 켜는 것으로 차단기를 원격으로 올리거나 부하를 비울 수 없게.
     z.on = on;
+    if (on && !z.tripped) z.pulse = 0;
     return true;
   }
 
@@ -1041,6 +1323,7 @@ export class World {
     if (!z || !z.tripped) return false;
     z.tripped = false;
     z.load = 0.35; // 올리자마자 다시 내려가지 않게 조금 여유를 둔다
+    if (z.on) z.pulse = 0;
     return true;
   }
 
@@ -1228,6 +1511,18 @@ export class World {
       if (lit && z.load > 0.5 && hash(Math.floor(t * 14) + z.seed * 3.1) < (z.load - 0.5) * 1.1) flick *= 0.3;
       z.glow = z.level * flick;
       if (z.mat) z.mat.emissiveIntensity = 1.25 * night * z.glow;
+      if (z.signMat) z.signMat.emissiveIntensity = 0.06 + 1.5 * night * z.glow;
+      if (z.spark) {
+        const on = z.pulse >= 0 && z.pulse < 3.2;
+        z.spark.mesh.visible = on;
+        if (on) {
+          z.pulse += dt;
+          z.spark.mat.uniforms.uT.value = z.pulse * 26;
+          z.spark.mat.uniforms.uA.value = Math.min(1, z.pulse * 4) * Math.min(1, (3.2 - z.pulse) * 1.5);
+        } else if (z.pulse >= 3.2) {
+          z.pulse = -1;
+        }
+      }
     }
     const T = this.truckLamp;
     T.load = Math.max(0, T.load - dt * LOAD_DECAY);

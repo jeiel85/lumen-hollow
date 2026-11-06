@@ -56,7 +56,8 @@ export function initPwa({ onAskInstall, onInstalled }) {
     } else if (isIOS) {
       status.textContent = '공유 버튼(네모에 위쪽 화살표)을 누르고 "홈 화면에 추가"를 고르세요. 홈 화면 앱은 Safari와 기록을 따로 보관하니, 옮길 때는 아래 기록 내보내기·가져오기를 쓰세요.';
     } else {
-      status.textContent = '이 브라우저는 설치 버튼을 주지 않아요. 브라우저 메뉴의 "앱 설치"나 "홈 화면에 추가"를 찾아보세요(Chrome·Edge·삼성 인터넷 지원).';
+      // Chrome·Edge도 이미 설치된 앱이면 설치 제안을 주지 않는다. "지원하지 않는다"고 단정하지 않는다.
+      status.textContent = '브라우저가 지금은 설치를 제안하지 않았어요. 이미 설치했다면 바탕화면·앱 목록의 Lumen Hollow로 여세요. 아니라면 브라우저 메뉴에서 "앱 설치"나 "홈 화면에 추가"를 찾아보세요(Chrome·Edge·삼성 인터넷 지원).';
     }
   }
 

@@ -6,7 +6,9 @@ workers_dev = true
 
 [vars]
 # CORS 허용 출처(쉼표 구분). 남용 방지 수단이 아니라 브라우저 호출 허용 목록이다.
-ALLOWED_ORIGINS = "https://jeiel85.github.io,http://localhost:8000,http://127.0.0.1:8000"
+# 운영에는 배포 주소만 둔다. 로컬에서 돌린 게임이 운영 기록(성공 지표)을 오염시키지 않게 하기 위해서다.
+# 로컬 개발용 출처는 .dev.vars의 ALLOWED_ORIGINS가 이 값을 덮어쓴다(.dev.vars.example 참고).
+ALLOWED_ORIGINS = "https://jeiel85.github.io"
 
 [[d1_databases]]
 binding = "DB"

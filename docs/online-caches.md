@@ -223,7 +223,7 @@ CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 | `DELETE /v1/me` | 내 온라인 기록 지우기 | `204` | `503` |
 
 - 응답에는 `owner`나 다른 사람의 해시를 절대 넣지 않는다. 내가 둔 보급품인지는 클라이언트가 자기가 받은 `id`를 `localStorage`에 기억해 판단한다.
-- CORS는 `https://jeiel85.github.io`와 `http://localhost:8000`만 허용한다. 다만 `Origin`은 브라우저 밖에서 얼마든지 위조할 수 있으므로 **남용 방지 수단이 아니다.**
+- CORS는 운영에서 `https://jeiel85.github.io`만 허용한다. localhost는 로컬 서버(`.dev.vars`)에서만 허용해, 로컬 게임이 운영 기록을 남기지 않게 한다. 다만 `Origin`은 브라우저 밖에서 얼마든지 위조할 수 있으므로 **남용 방지 수단이 아니다.**
 - 클라이언트는 모르는 `kind`와 필드를 무시한다. 옛 클라이언트가 새 서버를 만나도 깨지지 않게 하기 위해서다.
 
 ## 9. 익명 식별

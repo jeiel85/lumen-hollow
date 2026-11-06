@@ -13,6 +13,7 @@ import { loadBest, recordRun, hasRecords, describeBest, initRecordsPanel } from 
 import { initPwa } from './pwa.js';
 import { Wardrobe, OutfitDrops, Closet, itemLabel, objParticle } from './wardrobe.js';
 import { Switchboard } from './grid.js';
+import { Wisps } from './wisps.js';
 import { Caches } from './caches.js';
 import { Online, NOTES, KIND_NAMES, RUN_TAKE_LIMIT, BATTERY_PACK, BATTERY_PACK_MIN, MAX_MINE, PLACE_RADIUS, CACHE_REACH } from './online.js';
 import { Story, DOCS, sceneById } from './story.js';
@@ -69,6 +70,7 @@ const post = new Post(renderer, { samples: QUALITY[settings.quality].samples });
 const player = new Player(scene, { mobile });
 const shades = new Shades(scene);
 const car = new Vehicle(scene);
+const wisps = new Wisps(scene);
 const input = new Input(renderer.domElement);
 const hud = new Hud();
 const sound = new Sound();
@@ -108,6 +110,8 @@ const game = {
   hintCar: false,
   hintLamp: false,
   hintLoad: false,
+  returned: 0, // 이번 판에 집으로 돌려보낸 그림자 수(깨어남 단서 주기)
+  hintTold: false,
   clock: 0, // 화면 연출용 시계. 이야기 장면 중에도 흐른다(게임 시간 game.time은 멈춘다).
   // 공유 보급품: run은 판마다 늘어, 이전 판에 보낸 요청의 응답을 버리는 데 쓴다.
   run: 0,
@@ -257,6 +261,9 @@ function beginRun() {
   sound.init();
   shades.clear();
   shades.banished = 0;
+  // 지난 판의 날아가던 빛과 촛불 단서를 치운다(뒤질 곳 내용이 바뀌므로 남으면 엉뚱한 자리를 가리킨다).
+  // 이어하기는 저장된 촛불을 이 뒤에 다시 켠다.
+  wisps.clear();
   timers.length = 0;
   storyQueue.length = 0;
   storyCam.on = false;
@@ -264,7 +271,7 @@ function beginRun() {
   story.resetRun();
   Object.assign(game, {
     state: 'play', nights: 0, hold: 0, holdKey: null, peaceful: false, won: false, shake: 0, hintFlash: false,
-    driving: false, holdLock: false, zoomBoost: 0, hintLoad: false,
+    driving: false, holdLock: false, zoomBoost: 0, hintLoad: false, returned: 0, hintTold: false,
     run: game.run + 1, startedAt: game.time, onlineLive: false, onlinePaused: false, cacheTaken: 0, cacheBusy: false,
     savedAt: game.time,
   });
@@ -379,7 +386,10 @@ function resumeGame() {
   env.rainLevel = e.rain;
   beginRun();
   game.nights = run.nights;
+  game.returned = run.returned;
   game.cacheTaken = run.cacheTaken;
+  // 저장된 촛불 단서(알려 준 퓨즈 자리)를 다시 켠다. beginRun이 지난 촛불을 치운 뒤라야 한다.
+  for (const l of world.loot) if (l.hinted) wisps.candle(l, world.heightAt(l.x, l.z));
   shades.banished = run.banished;
   for (const key of run.hints) game[key] = true;
   if (c.driving) seatInCar();
@@ -489,6 +499,7 @@ function backToTitle() {
   if (game.driving) leaveCar();
   car.lamp = false;
   world.setTruckLamp(car.pos.x, car.pos.z, false);
+  wisps.clear();
   storyQueue.length = 0;
   game.state = 'title';
   game.run++; // 아직 오지 않은 보급품 응답은 버린다
@@ -774,6 +785,7 @@ function useBandage() {
 
 function completeLoot(loot) {
   world.markSearched(loot);
+  if (loot.hinted) wisps.clearCandle(loot);
   switch (loot.item) {
     case 'fuse':
       player.fuses++;
@@ -831,6 +843,36 @@ function restoreZone(box) {
   if (world.capacity > capBefore) later(3.0, () => hud.toast(`변전소 출력이 올랐다. 이제 ${world.capacity}곳까지 함께 켤 수 있다.`, 'good'));
   later(2.4, () => queueStory({ zones: world.poweredZones }));
   saveRun();
+}
+
+// ---------------------------------------------------------------- 돌아가는 그림자
+// 흩어진 그늘이는 잠든 주인에게 돌아간다(이야기 '돌아가는 그림자'). 빛이 가장 가까운 집으로 날아가 창가가 잠깐 밝아지고,
+// 여섯을 돌려보낼 때마다 깨어난 누군가가 아직 숨은 퓨즈 자리에 촛불(금빛 기둥)을 켜 둔다. 밤에 맞서 싸운 보상이다.
+const RETURNS_PER_HINT = 6;
+
+function sendHome(p) {
+  game.returned++;
+  const home = world.nearestHome(p.x, p.z);
+  if (!home) return;
+  const reveal = game.returned % RETURNS_PER_HINT === 0;
+  const run = game.run;
+  wisps.spawn(p, home, () => {
+    if (run !== game.run) return;
+    wisps.flash(home);
+    if (reveal) revealFuse(home);
+  });
+}
+
+function revealFuse(home) {
+  const loot = world.hiddenFuseNear(home.x, home.z);
+  // 촛불 자리가 없으면 표시하지 않는다(알려 준 것으로 쳐 버리면 그 퓨즈가 다음 단서에서 영영 빠진다).
+  if (!loot || !wisps.candle(loot, world.heightAt(loot.x, loot.z))) return;
+  world.hintLoot(loot);
+  sound.play('hint');
+  hud.toast(game.hintTold
+    ? '깨어난 누군가가 또 퓨즈 자리에 촛불을 켜 두었다.'
+    : '그림자를 돌려받은 누군가가 깨어나, 퓨즈가 있는 곳에 촛불을 켜 두었다. 금빛 기둥을 찾아가 보자.', 'good');
+  game.hintTold = true;
 }
 
 // 과부하로 차단기가 내려간 구역을 배전함(은신처는 발전기)에서 다시 올린다.
@@ -1485,6 +1527,7 @@ function step(dt) {
     game.shake = Math.max(game.shake, 0.3);
   }
   if (ev.banished) sound.play('banish');
+  for (const p of ev.returned) sendHome(p);
   game.dread = ev.nearest < 12 ? 1 - ev.nearest / 12 : 0;
   const gridEvents = world.takeEvents();
   if (gridEvents) for (const e of gridEvents) onGridEvent(e);
@@ -1588,6 +1631,7 @@ function frame(now) {
   updateCamera(raw);
   env.update(dt, camFocus, pxPerUnit);
   world.update(dt, game.clock, env.night, camFocus, pxPerUnit);
+  wisps.update(dt, game.clock, env.night);
   story.update(dt, game.clock, env.night, pxPerUnit);
   caches.update(game.clock, pxPerUnit, env.night);
   world.setWetness(env.rainLevel);
@@ -1703,7 +1747,7 @@ addEventListener('pagehide', saveRun);
 // ?debug: 콘솔에서 상태를 들여다보고 시뮬레이션을 고정 간격으로 돌려 보는 개발용 핸들
 if (params.has('debug')) {
   window.lumen = {
-    THREE, scene, camera, renderer, world, env, post, player, shades, car, game, input, hud, startGame,
+    THREE, scene, camera, renderer, world, env, post, player, shades, car, wisps, game, input, hud, startGame,
     saveRun, resumeGame, readRun: () => readRun(world), backToTitle, pauseGame,
     wardrobe, drops, closet, openCloset, closeCloset, board, openGrid, closeGrid, online, caches,
     story, dialogue, storyQueue, playScene, openDoc, queueStory,
