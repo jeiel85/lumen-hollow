@@ -47,6 +47,7 @@
       "./src/shades.js": "./src/shades.js?v=__BUILD__",
       "./src/storage.js": "./src/storage.js?v=__BUILD__",
       "./src/vehicle.js": "./src/vehicle.js?v=__BUILD__",
+      "./src/wardrobe.js": "./src/wardrobe.js?v=__BUILD__",
       "./src/world.js": "./src/world.js?v=__BUILD__"
     }
   }
@@ -96,6 +97,7 @@
         <p class="tagline">정전된 작은 마을. 밤이 오면 어둠 속에서 무언가가 다가온다.<br>낮에는 퓨즈를 모으고, 꺼진 구역에 하나씩 다시 불을 밝혀라.</p>
         <button id="start-btn" class="btn" type="button" disabled>불러오는 중…</button>
         <div class="title-links">
+          <button id="closet-btn" class="chip" type="button" disabled>옷장</button>
           <button id="settings-btn" class="chip" type="button">설정</button>
           <button id="install-btn" class="chip hidden" type="button">앱으로 설치</button>
         </div>
@@ -106,7 +108,18 @@
         <li><b>밤</b> 그늘이는 빛을 싫어한다. 켜진 가로등 아래는 안전하고 손전등으로 쫓아낼 수 있다</li>
         <li><b>트럭</b> 은신처 앞 낡은 트럭은 연료가 있는 동안 달린다. 전조등도 그늘이를 태운다</li>
         <li><b>목표</b> 배전함 8곳에 퓨즈를 끼워 마을 전체에 다시 불을 켠다</li>
+        <li><b>옷장</b> 마을에 떨어진 옷가지 꾸러미를 주우면 영원히 내 것. 처음 화면에서 갈아입는다</li>
       </ul>
+    </div>
+  </section>
+
+  <section id="closet" class="screen closet hidden" aria-label="옷장">
+    <div class="card closet-panel">
+      <div class="closet-head"><h2>옷장</h2><span id="closet-count" class="closet-count"></span></div>
+      <div id="closet-tabs" class="closet-tabs" role="group" aria-label="부위"></div>
+      <div id="closet-grid" class="closet-grid"></div>
+      <p class="closet-note">잠긴 옷가지는 마을 어딘가에 빛나는 꾸러미로 떨어져 있다. 한 번 주우면 영원히 내 것이 된다.</p>
+      <button id="closet-close" class="btn" type="button">이대로 입기</button>
     </div>
   </section>
 

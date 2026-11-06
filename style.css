@@ -140,6 +140,42 @@ input[type="range"] { width: 100%; margin: 0; accent-color: #f4b45c; cursor: poi
 .seg input:focus-visible + span { outline: 2px solid var(--warm); outline-offset: -2px; }
 @media not all and (any-pointer: coarse) { .touch-only { display: none; } }
 
+/* ---------- 옷장 ---------- */
+/* 인물이 보이도록 화면 전체를 덮지 않고, 패널만 오른쪽(세로 화면은 아래)에 띄운다. */
+.screen.closet { padding: var(--edge-t) max(var(--edge-r), 4vw) var(--edge-b) var(--edge-l); background: linear-gradient(90deg, rgba(8, 14, 16, 0) 35%, rgba(8, 14, 16, 0.55)); pointer-events: none; }
+.screen.closet > .closet-panel { margin: auto 0 auto auto; }
+.closet-panel { pointer-events: auto; touch-action: pan-y; width: min(400px, 100%); max-height: 100%; overflow-y: auto; text-align: left; padding: 22px 20px 18px; display: grid; gap: 14px; }
+.closet-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.closet-head h2 { margin: 0; font-size: 22px; }
+.closet-count { font-size: 12px; color: var(--warm); }
+.closet-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.closet-tabs .chip { font-size: 13px; padding: 7px 14px; }
+.closet-tabs .chip.on { color: #1c1408; background: var(--warm); border-color: transparent; }
+.closet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.closet-item { cursor: pointer; display: grid; justify-items: start; gap: 4px; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); color: var(--ink); text-align: left; font-size: 13px; }
+.closet-item:hover:not(:disabled) { background: rgba(255, 255, 255, 0.09); }
+.closet-item.on { border-color: var(--warm); box-shadow: inset 0 0 0 1px var(--warm); }
+.closet-item.locked { cursor: default; opacity: 0.5; }
+.closet-item .swatch { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25); }
+.closet-item .swatch.empty { background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(255, 255, 255, 0.2) 4px 5px); }
+.closet-item.locked .swatch { filter: grayscale(0.6) brightness(0.7); }
+.closet-item .note { min-height: 1em; font-size: 11px; color: var(--dim); }
+.closet-item.on .note { color: var(--warm); }
+.closet-note { margin: 0; font-size: 12px; line-height: 1.55; color: var(--dim); }
+/* 목록이 길어 패널이 스크롤돼도 닫기 버튼은 늘 보이게 바닥에 붙인다. */
+.closet-panel .btn { justify-self: center; position: sticky; bottom: 0; }
+@media (max-height: 520px) {
+  .closet-note { display: none; }
+  .closet-panel { padding: 14px 14px 12px; gap: 10px; }
+  .closet-item { padding: 8px; }
+}
+@media (orientation: portrait) {
+  .screen.closet { padding: 16px var(--edge-r) var(--edge-b) var(--edge-l); background: linear-gradient(180deg, rgba(8, 14, 16, 0) 40%, rgba(8, 14, 16, 0.55)); }
+  .screen.closet > .closet-panel { margin: auto 0 0; }
+  .closet-panel { width: 100%; max-height: 50vh; max-height: 50dvh; padding: 16px 14px 14px; gap: 10px; }
+  .closet-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+}
+
 /* ---------- 터치 ---------- */
 .touch { position: fixed; inset: 0; pointer-events: none; }
 .stick-zone { position: absolute; left: 0; bottom: 0; width: 50%; height: 62%; pointer-events: auto; touch-action: none; }
