@@ -8,7 +8,7 @@ const CACHE = `lumen-${BUILD}`;
 const MODULES = [
   'src/main.js', 'src/audio.js', 'src/env.js', 'src/geometry.js', 'src/hud.js', 'src/input.js', 'src/player.js',
   'src/post.js', 'src/pwa.js', 'src/records.js', 'src/rng.js', 'src/settings.js', 'src/shades.js', 'src/storage.js',
-  'src/vehicle.js', 'src/world.js',
+  'src/vehicle.js', 'src/world.js', 'src/story.js', 'src/script.js', 'src/dialogue.js',
 ];
 const VERSIONED = ['style.css', ...MODULES].map((p) => `${p}?v=${BUILD}`);
 const FIXED = [

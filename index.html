@@ -34,6 +34,7 @@
       "three": "./vendor/three/three.module.js?v=r187",
       "./vendor/three/three.core.js": "./vendor/three/three.core.js?v=r187",
       "./src/audio.js": "./src/audio.js?v=__BUILD__",
+      "./src/dialogue.js": "./src/dialogue.js?v=__BUILD__",
       "./src/env.js": "./src/env.js?v=__BUILD__",
       "./src/geometry.js": "./src/geometry.js?v=__BUILD__",
       "./src/hud.js": "./src/hud.js?v=__BUILD__",
@@ -43,9 +44,11 @@
       "./src/pwa.js": "./src/pwa.js?v=__BUILD__",
       "./src/records.js": "./src/records.js?v=__BUILD__",
       "./src/rng.js": "./src/rng.js?v=__BUILD__",
+      "./src/script.js": "./src/script.js?v=__BUILD__",
       "./src/settings.js": "./src/settings.js?v=__BUILD__",
       "./src/shades.js": "./src/shades.js?v=__BUILD__",
       "./src/storage.js": "./src/storage.js?v=__BUILD__",
+      "./src/story.js": "./src/story.js?v=__BUILD__",
       "./src/vehicle.js": "./src/vehicle.js?v=__BUILD__",
       "./src/world.js": "./src/world.js?v=__BUILD__"
     }
@@ -77,6 +80,7 @@
     <div id="prompt" class="prompt hidden"><span id="prompt-text"></span><div class="prompt-bar"><div id="prompt-fill"></div></div></div>
     <div id="toasts" class="toasts" aria-live="polite"></div>
     <div id="pointer" class="pointer hidden"><div class="arrow"></div><span id="pointer-dist">0m</span></div>
+    <div id="story-pointer" class="pointer story hidden" aria-hidden="true"><div class="arrow"></div><span id="story-pointer-dist">0m</span></div>
   </div>
 
   <div id="touch" class="touch hidden">
@@ -93,9 +97,10 @@
       <div class="title-main">
         <p class="eyebrow">ISOMETRIC SURVIVAL · PROTOTYPE</p>
         <h1>Lumen Hollow</h1>
-        <p class="tagline">정전된 작은 마을. 밤이 오면 어둠 속에서 무언가가 다가온다.<br>낮에는 퓨즈를 모으고, 꺼진 구역에 하나씩 다시 불을 밝혀라.</p>
+        <p class="tagline">그날 밤, 세상의 불이 꺼졌다. 어둠 속에서 무언가가 다가온다.<br>낮에는 퓨즈를 모으고, 꺼진 구역에 하나씩 다시 불을 밝혀라.</p>
         <button id="start-btn" class="btn" type="button" disabled>불러오는 중…</button>
         <div class="title-links">
+          <button id="journal-btn" class="chip" type="button">수첩</button>
           <button id="settings-btn" class="chip" type="button">설정</button>
           <button id="install-btn" class="chip hidden" type="button">앱으로 설치</button>
         </div>
@@ -106,6 +111,7 @@
         <li><b>밤</b> 그늘이는 빛을 싫어한다. 켜진 가로등 아래는 안전하고 손전등으로 쫓아낼 수 있다</li>
         <li><b>트럭</b> 은신처 앞 낡은 트럭은 연료가 있는 동안 달린다. 전조등도 그늘이를 태운다</li>
         <li><b>목표</b> 배전함 8곳에 퓨즈를 끼워 마을 전체에 다시 불을 켠다</li>
+        <li><b>이야기</b> 할머니의 무전과 푸른 빛기둥이 가리키는 생존자의 기록을 따라가면, 어둠이 어디서 시작됐는지 드러난다</li>
       </ul>
     </div>
   </section>
@@ -114,6 +120,7 @@
     <div class="card small">
       <h2>일시정지</h2>
       <button id="resume-btn" class="btn" type="button">계속하기</button>
+      <button id="pause-journal-btn" class="btn ghost" type="button">수첩</button>
       <button id="pause-settings-btn" class="btn ghost" type="button">설정</button>
       <button id="quit-btn" class="btn ghost" type="button">처음 화면으로</button>
     </div>
@@ -179,6 +186,50 @@
           <p id="records-msg" class="hint" role="status" aria-live="polite"></p>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section id="journal" class="screen hidden" aria-labelledby="journal-title">
+    <div class="card journal-card">
+      <div class="settings-head">
+        <h2 id="journal-title" tabindex="-1">수첩</h2>
+        <button id="journal-close" class="chip" type="button">닫기</button>
+      </div>
+      <p id="journal-progress" class="hint"></p>
+      <div class="journal-grid">
+        <div class="group"><h3>마을에 남은 기록</h3><ol id="journal-clues" class="journal-list"></ol></div>
+        <div class="group"><h3>무전</h3><ol id="journal-scenes" class="journal-list"></ol></div>
+      </div>
+      <div class="row-btns journal-foot">
+        <button id="journal-reset" class="chip danger" type="button">이야기 처음부터</button>
+        <span id="journal-reset-hint" class="hint"></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="story" class="story-layer hidden" aria-label="이야기 장면">
+    <div class="letterbox top"></div>
+    <div class="letterbox bottom"></div>
+    <div id="story-fade" class="story-fade"></div>
+    <button id="story-skip" class="chip story-skip" type="button">건너뛰기</button>
+    <div id="story-box" class="story-box hidden">
+      <div id="story-who" class="story-who"><span class="radio-wave" aria-hidden="true"><i></i><i></i><i></i></span><span id="story-name"></span></div>
+      <p id="story-text" class="story-text" aria-hidden="true"></p>
+      <p id="story-live" class="sr-only" aria-live="polite"></p>
+      <span id="story-next" class="story-next" aria-hidden="true">▼</span>
+    </div>
+  </section>
+
+  <section id="doc" class="screen doc hidden" role="dialog" aria-modal="true" aria-labelledby="doc-title">
+    <div class="doc-wrap">
+      <article id="doc-paper" class="paper">
+        <p id="doc-where" class="paper-where"></p>
+        <h2 id="doc-title"></h2>
+        <div id="doc-body" class="paper-body"></div>
+        <p id="doc-hand" class="paper-hand"></p>
+      </article>
+      <p id="doc-note" class="doc-note"></p>
+      <button id="doc-close" class="btn" type="button">닫기</button>
     </div>
   </section>
 

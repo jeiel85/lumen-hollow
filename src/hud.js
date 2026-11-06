@@ -11,6 +11,7 @@ export class Hud {
       toasts: $('toasts'), pointer: $('pointer'), pointerDist: $('pointer-dist'), batWrap: $('bat-wrap'),
       flashState: $('flash-state'), touch: $('touch'), can: $('inv-can'), fuelWrap: $('fuel-wrap'), fuel: $('fuel-fill'),
       keys: $('key-hints'), useBtn: document.querySelector('[data-act="use"]'), mute: $('mute-btn'), fps: $('fps'),
+      storyPointer: $('story-pointer'), storyPointerDist: $('story-pointer-dist'),
     };
     this._walkKeys = this.el.keys?.textContent ?? '';
     this._last = {};
@@ -107,7 +108,15 @@ export class Hud {
 
   // 화면 밖 목표를 가리키는 화살표. sx, sy는 화면 픽셀 좌표.
   pointer(sx, sy, dist, visible) {
-    const p = this.el.pointer;
+    this._pointer(this.el.pointer, this.el.pointerDist, 'pdist', sx, sy, dist, visible);
+  }
+
+  // 아직 안 읽은 이야기 기록을 가리키는 푸른 화살표. 배포 직후 옛 index.html과 섞이면 요소가 없을 수 있다.
+  storyPointer(sx, sy, dist, visible) {
+    if (this.el.storyPointer) this._pointer(this.el.storyPointer, this.el.storyPointerDist, 'sdist', sx, sy, dist, visible);
+  }
+
+  _pointer(p, distEl, key, sx, sy, dist, visible) {
     if (!visible) {
       p.classList.add('hidden');
       return;
@@ -125,6 +134,6 @@ export class Hud {
     p.classList.remove('hidden');
     p.style.transform = `translate(${x}px, ${y}px)`;
     p.firstElementChild.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
-    this._set('pdist', this.el.pointerDist, `${Math.round(dist)}m`);
+    this._set(key, distEl, `${Math.round(dist)}m`);
   }
 }
