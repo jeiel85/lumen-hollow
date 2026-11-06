@@ -386,7 +386,8 @@ function enterStory() {
 }
 
 function leaveStory() {
-  game.state = 'play';
+  // 장면 중에 판이 끝났으면(끝 화면) 그대로 둔다.
+  if (game.state === 'story') game.state = 'play';
   if (storyCam.on || storyCam.zoom !== null) {
     // 멀리 갔던 카메라는 dialogue가 화면을 가린 동안 플레이어에게 바로 돌아온다.
     storyCam.on = false;
@@ -401,6 +402,9 @@ function leaveStory() {
   input.endFrame();
   game.holdLock = true;
   game.hold = 0;
+  // 장면 중에 그래픽 컨텍스트를 잃었으면 setContextLost의 일시정지가 'story' 상태라 걸리지 않았다.
+  // 복구된 뒤 플레이어가 직접 이어서 하도록 여기서 일시정지한다.
+  if (game.contextLost) pauseGame(true);
 }
 
 function playScene(id, after) {
@@ -1250,7 +1254,8 @@ function step(dt) {
   if (ev.banished) sound.play('banish');
   game.dread = ev.nearest < 12 ? 1 - ev.nearest / 12 : 0;
 
-  interact(dt);
+  // 이번 프레임에 쓰러졌으면 상호작용(기록 읽기·장면 시작)을 하지 않고 바로 끝 화면으로 간다.
+  if (player.alive) interact(dt);
 
   drops.update(dt, game.time, env.night);
   const found = drops.take(player.pos.x, player.pos.z, game.driving ? 1.8 : 1.0);
