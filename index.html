@@ -13,6 +13,16 @@
   <meta property="og:url" content="https://jeiel85.github.io/lumen-hollow/">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Lumen Hollow">
+  <script>
+    // 설치 제안 이벤트는 모듈(three.js 약 2MB)을 다 받기 전에 올 수 있어 미리 붙잡아 둔다. src/pwa.js가 이어받는다.
+    addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); window.__lumenInstall = e; });
+  </script>
   <link rel="stylesheet" href="style.css?v=__BUILD__">
   <!--
     캐시 무효화: GitHub Pages는 모든 파일을 10분 캐시한다. 배포 워크플로가 __BUILD__를 커밋 SHA로 바꿔
@@ -30,10 +40,14 @@
       "./src/input.js": "./src/input.js?v=__BUILD__",
       "./src/player.js": "./src/player.js?v=__BUILD__",
       "./src/post.js": "./src/post.js?v=__BUILD__",
+      "./src/pwa.js": "./src/pwa.js?v=__BUILD__",
+      "./src/records.js": "./src/records.js?v=__BUILD__",
       "./src/rng.js": "./src/rng.js?v=__BUILD__",
+      "./src/settings.js": "./src/settings.js?v=__BUILD__",
       "./src/shades.js": "./src/shades.js?v=__BUILD__",
       "./src/storage.js": "./src/storage.js?v=__BUILD__",
       "./src/vehicle.js": "./src/vehicle.js?v=__BUILD__",
+      "./src/wardrobe.js": "./src/wardrobe.js?v=__BUILD__",
       "./src/world.js": "./src/world.js?v=__BUILD__"
     }
   }
@@ -44,13 +58,14 @@
 
   <div id="hud" class="hud hidden">
     <div class="hud-top">
-      <div class="pill clock"><span id="phase-icon" class="ico">☀</span><span id="day-label">1일차</span><span id="time-label" class="mono">07:30</span><span id="phase-label" class="dim">아침</span></div>
-      <div class="pill zones" title="불이 들어온 구역"><span class="bulb"></span><span>구역</span><span id="zones-label" class="mono">1 / 9</span></div>
+      <div class="pill clock"><span id="phase-icon" class="ico">☀</span><span id="day-label">1일차</span><span id="time-label" class="mono">07:30</span><span id="phase-label" class="dim wide-only">아침</span></div>
+      <div class="pill zones" title="불이 들어온 구역"><span class="bulb"></span><span class="wide-only">구역</span><span id="zones-label" class="mono">1 / 9</span></div>
       <div class="hud-buttons">
-        <button id="mute-btn" class="chip" type="button">소리 켜짐</button>
+        <button id="mute-btn" class="chip icon-chip" type="button" aria-label="소리 끄기"><svg class="spk" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.6L12 6v12l-4.4-3.5H4z" fill="currentColor"/><path class="waves" d="M15.5 9a4.2 4.2 0 0 1 0 6M17.8 6.6a7.6 7.6 0 0 1 0 10.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path class="slash" d="M15.5 9.5l5 5M20.5 9.5l-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="chip-text">소리 켜짐</span></button>
         <button id="pause-btn" class="chip" type="button" aria-label="일시정지">II</button>
       </div>
     </div>
+    <div id="fps" class="fps mono hidden" aria-hidden="true"></div>
     <div class="hud-bottom">
       <div class="stats">
         <div class="bar hp"><span class="label">체력</span><div class="track"><div id="hp-fill" class="fill"></div></div></div>
@@ -75,18 +90,36 @@
   </div>
 
   <section id="title" class="screen">
-    <div class="card">
-      <p class="eyebrow">ISOMETRIC SURVIVAL · PROTOTYPE</p>
-      <h1>Lumen Hollow</h1>
-      <p class="tagline">정전된 작은 마을. 밤이 오면 어둠 속에서 무언가가 다가온다.<br>낮에는 퓨즈를 모으고, 꺼진 구역에 하나씩 다시 불을 밝혀라.</p>
-      <button id="start-btn" class="btn" type="button" disabled>불러오는 중…</button>
+    <div class="card title-card">
+      <div class="title-main">
+        <p class="eyebrow">ISOMETRIC SURVIVAL · PROTOTYPE</p>
+        <h1>Lumen Hollow</h1>
+        <p class="tagline">정전된 작은 마을. 밤이 오면 어둠 속에서 무언가가 다가온다.<br>낮에는 퓨즈를 모으고, 꺼진 구역에 하나씩 다시 불을 밝혀라.</p>
+        <button id="start-btn" class="btn" type="button" disabled>불러오는 중…</button>
+        <div class="title-links">
+          <button id="closet-btn" class="chip" type="button" disabled>옷장</button>
+          <button id="settings-btn" class="chip" type="button">설정</button>
+          <button id="install-btn" class="chip hidden" type="button">앱으로 설치</button>
+        </div>
+        <p id="best" class="best"></p>
+      </div>
       <ul class="howto">
         <li><b>낮</b> 마을을 돌며 반짝이는 곳을 뒤져 퓨즈·배터리·붕대를 모은다</li>
         <li><b>밤</b> 그늘이는 빛을 싫어한다. 켜진 가로등 아래는 안전하고 손전등으로 쫓아낼 수 있다</li>
         <li><b>트럭</b> 은신처 앞 낡은 트럭은 연료가 있는 동안 달린다. 전조등도 그늘이를 태운다</li>
         <li><b>목표</b> 배전함 8곳에 퓨즈를 끼워 마을 전체에 다시 불을 켠다</li>
+        <li><b>옷장</b> 마을에 떨어진 옷가지 꾸러미를 주우면 영원히 내 것. 처음 화면에서 갈아입는다</li>
       </ul>
-      <p id="best" class="best"></p>
+    </div>
+  </section>
+
+  <section id="closet" class="screen closet hidden" aria-label="옷장">
+    <div class="card closet-panel">
+      <div class="closet-head"><h2>옷장</h2><span id="closet-count" class="closet-count"></span></div>
+      <div id="closet-tabs" class="closet-tabs" role="group" aria-label="부위"></div>
+      <div id="closet-grid" class="closet-grid"></div>
+      <p class="closet-note">잠긴 옷가지는 마을 어딘가에 빛나는 꾸러미로 떨어져 있다. 한 번 주우면 영원히 내 것이 된다.</p>
+      <button id="closet-close" class="btn" type="button">이대로 입기</button>
     </div>
   </section>
 
@@ -94,6 +127,7 @@
     <div class="card small">
       <h2>일시정지</h2>
       <button id="resume-btn" class="btn" type="button">계속하기</button>
+      <button id="pause-settings-btn" class="btn ghost" type="button">설정</button>
       <button id="quit-btn" class="btn ghost" type="button">처음 화면으로</button>
     </div>
   </section>
@@ -105,6 +139,59 @@
       <button id="continue-btn" class="btn hidden" type="button">불 켜진 마을 산책하기</button>
       <button id="restart-btn" class="btn" type="button">다시 하기</button>
       <button id="title-btn" class="btn ghost" type="button">처음 화면으로</button>
+    </div>
+  </section>
+
+  <section id="settings" class="screen hidden" aria-labelledby="settings-title">
+    <div class="card settings-card">
+      <div class="settings-head">
+        <h2 id="settings-title" tabindex="-1">설정</h2>
+        <button id="settings-close" class="chip" type="button">닫기</button>
+      </div>
+      <div class="settings-grid">
+        <div class="group" role="group" aria-labelledby="g-sound">
+          <h3 id="g-sound">소리</h3>
+          <label class="row slider"><span>전체 음량</span><input type="range" min="0" max="100" step="5" data-setting="volume" data-scale="100"><output data-out="volume"></output></label>
+          <label class="row slider"><span>환경음 <small>비·밤 소리</small></span><input type="range" min="0" max="100" step="5" data-setting="ambience" data-scale="100"><output data-out="ambience"></output></label>
+        </div>
+        <div class="group" role="group" aria-labelledby="g-view">
+          <h3 id="g-view">화면</h3>
+          <div class="row"><span id="q-label">화질</span>
+            <div class="seg" role="radiogroup" aria-labelledby="q-label">
+              <label><input type="radio" name="quality" value="low" data-setting="quality"><span>낮음</span></label>
+              <label><input type="radio" name="quality" value="mid" data-setting="quality"><span>보통</span></label>
+              <label><input type="radio" name="quality" value="high" data-setting="quality"><span>높음</span></label>
+            </div>
+          </div>
+          <p class="hint">낮음은 그림자를 끄고 해상도를 낮춰 오래된 휴대폰에서도 부드럽게 돌아가요.</p>
+          <label class="row"><span>미니어처 흐림 <small>화면 위아래 초점 흐림</small></span><input type="checkbox" class="switch" role="switch" data-setting="tilt"></label>
+          <label class="row"><span>흔들림·붉은 점멸 <small>피격·체력 경고 효과</small></span><input type="checkbox" class="switch" role="switch" data-setting="shake"></label>
+          <label class="row"><span>FPS 표시</span><input type="checkbox" class="switch" role="switch" data-setting="fps"></label>
+          <div id="fullscreen-row" class="row hidden"><span>전체 화면</span><button id="fullscreen-btn" class="chip" type="button" aria-pressed="false">켜기</button></div>
+        </div>
+        <div class="group" role="group" aria-labelledby="g-control">
+          <h3 id="g-control">조작</h3>
+          <label class="row slider"><span>카메라 거리</span><input type="range" min="8" max="22" step="0.5" data-setting="zoom"><output data-out="zoom"></output></label>
+          <label class="row touch-only"><span>왼손 모드 <small>스틱과 버튼 자리 바꾸기</small></span><input type="checkbox" class="switch" role="switch" data-setting="lefty"></label>
+        </div>
+        <div class="group" role="group" aria-labelledby="g-app">
+          <h3 id="g-app">앱 설치</h3>
+          <p id="app-status" class="hint"></p>
+          <div class="row-btns"><button id="app-install" class="chip hidden" type="button">설치하기</button></div>
+        </div>
+        <div id="records-panel" class="group" role="group" aria-labelledby="g-records">
+          <h3 id="g-records">기록</h3>
+          <p id="records-best" class="hint strong"></p>
+          <p id="records-store" class="hint"></p>
+          <div class="row-btns">
+            <button id="records-export" class="chip" type="button">내보내기</button>
+            <button id="records-import" class="chip" type="button">가져오기</button>
+            <button id="records-clear" class="chip danger" type="button">지우기</button>
+          </div>
+          <input id="records-file" type="file" accept=".json,application/json" hidden>
+          <p id="records-msg" class="hint" role="status" aria-live="polite"></p>
+        </div>
+      </div>
     </div>
   </section>
 

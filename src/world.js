@@ -51,6 +51,17 @@ const WARM = new THREE.Color(1.0, 0.72, 0.42);
 const _col = new THREE.Color();
 const _mat4 = new THREE.Matrix4();
 
+// 신호 기둥: 위로 갈수록 옅어지는 가산 원통(uv.y 0→1). 배전함과 옷가지 꾸러미가 같은 셰이더를 써서
+// 프로그램을 공유한다(시작 때 미리 컴파일되므로 꾸러미가 처음 나타날 때 멈추지 않는다).
+export function makeBeaconMaterial(color) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uOpacity: { value: 0 }, uColor: { value: new THREE.Color(color) } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: 'uniform float uOpacity; uniform vec3 uColor; varying vec2 vUv; void main(){ float a = pow(clamp(1.0 - vUv.y, 0.0, 1.0), 2.2) * uOpacity; gl_FragColor = vec4(uColor, a); }',
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  });
+}
+
 function hash(n) {
   const s = Math.sin(n * 127.1) * 43758.5453;
   return s - Math.floor(s);
@@ -812,12 +823,7 @@ export class World {
     // 배전함 상태등과 신호 기둥
     const lightGeo = new THREE.SphereGeometry(0.11, 8, 6);
     const beaconGeo = new THREE.CylinderGeometry(0.3, 0.3, 18, 12, 1, true).translate(0, 9, 0);
-    this.beaconMat = new THREE.ShaderMaterial({
-      uniforms: { uOpacity: { value: 0 }, uColor: { value: new THREE.Color(1.0, 0.35, 0.25) } },
-      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-      fragmentShader: 'uniform float uOpacity; uniform vec3 uColor; varying vec2 vUv; void main(){ float a = pow(clamp(1.0 - vUv.y, 0.0, 1.0), 2.2) * uOpacity; gl_FragColor = vec4(uColor, a); }',
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-    });
+    this.beaconMat = makeBeaconMaterial(new THREE.Color(1.0, 0.35, 0.25));
     for (const fb of this.fuseBoxes) {
       fb.light = new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
       fb.light.position.set(fb.x, 1.92, fb.z);
