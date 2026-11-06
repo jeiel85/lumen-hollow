@@ -1,0 +1,3 @@
+# 로컬 개발용 비밀값. 이 파일을 .dev.vars로 복사해 값을 바꾼다(.dev.vars는 git에 올리지 않는다).
+# 운영 값은 `npx wrangler secret put IP_HASH_SECRET`으로 따로 넣는다.
+IP_HASH_SECRET=local-dev-only-change-me

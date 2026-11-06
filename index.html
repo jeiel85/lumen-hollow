@@ -34,10 +34,12 @@
       "three": "./vendor/three/three.module.js?v=r187",
       "./vendor/three/three.core.js": "./vendor/three/three.core.js?v=r187",
       "./src/audio.js": "./src/audio.js?v=__BUILD__",
+      "./src/caches.js": "./src/caches.js?v=__BUILD__",
       "./src/env.js": "./src/env.js?v=__BUILD__",
       "./src/geometry.js": "./src/geometry.js?v=__BUILD__",
       "./src/hud.js": "./src/hud.js?v=__BUILD__",
       "./src/input.js": "./src/input.js?v=__BUILD__",
+      "./src/online.js": "./src/online.js?v=__BUILD__",
       "./src/player.js": "./src/player.js?v=__BUILD__",
       "./src/post.js": "./src/post.js?v=__BUILD__",
       "./src/pwa.js": "./src/pwa.js?v=__BUILD__",
@@ -45,6 +47,7 @@
       "./src/rng.js": "./src/rng.js?v=__BUILD__",
       "./src/settings.js": "./src/settings.js?v=__BUILD__",
       "./src/shades.js": "./src/shades.js?v=__BUILD__",
+      "./src/slots.js": "./src/slots.js?v=__BUILD__",
       "./src/storage.js": "./src/storage.js?v=__BUILD__",
       "./src/vehicle.js": "./src/vehicle.js?v=__BUILD__",
       "./src/wardrobe.js": "./src/wardrobe.js?v=__BUILD__",
@@ -61,6 +64,7 @@
       <div class="pill clock"><span id="phase-icon" class="ico">☀</span><span id="day-label">1일차</span><span id="time-label" class="mono">07:30</span><span id="phase-label" class="dim wide-only">아침</span></div>
       <div class="pill zones" title="불이 들어온 구역"><span class="bulb"></span><span class="wide-only">구역</span><span id="zones-label" class="mono">1 / 9</span></div>
       <div class="hud-buttons">
+        <button id="drop-btn" class="chip drop hidden" type="button">보급품 남기기</button>
         <button id="mute-btn" class="chip icon-chip" type="button" aria-label="소리 끄기"><svg class="spk" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.6L12 6v12l-4.4-3.5H4z" fill="currentColor"/><path class="waves" d="M15.5 9a4.2 4.2 0 0 1 0 6M17.8 6.6a7.6 7.6 0 0 1 0 10.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path class="slash" d="M15.5 9.5l5 5M20.5 9.5l-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="chip-text">소리 켜짐</span></button>
         <button id="pause-btn" class="chip" type="button" aria-label="일시정지">II</button>
       </div>
@@ -78,6 +82,18 @@
     <div id="prompt" class="prompt hidden"><span id="prompt-text"></span><div class="prompt-bar"><div id="prompt-fill"></div></div></div>
     <div id="toasts" class="toasts" aria-live="polite"></div>
     <div id="pointer" class="pointer hidden"><div class="arrow"></div><span id="pointer-dist">0m</span></div>
+    <div id="place" class="place hidden" role="dialog" aria-label="보급품 남기기">
+      <p class="place-title">다른 생존자에게 남기기 <span id="place-sub" class="dim"></span></p>
+      <div class="place-items">
+        <button type="button" data-kind="bandage"><span class="key">1</span>붕대 <b data-count="bandage"></b></button>
+        <button type="button" data-kind="fuel"><span class="key">2</span>연료통 <b data-count="fuel"></b></button>
+        <button type="button" data-kind="battery"><span class="key">3</span>배터리 팩 <b data-count="battery"></b></button>
+      </div>
+      <div class="place-row">
+        <button id="place-note" class="chip" type="button"><span class="key">N</span>문구 · <span id="place-note-text"></span></button>
+        <button id="place-cancel" class="chip" type="button"><span class="key">G</span>닫기</button>
+      </div>
+    </div>
   </div>
 
   <div id="touch" class="touch hidden">
@@ -102,6 +118,14 @@
           <button id="install-btn" class="chip hidden" type="button">앱으로 설치</button>
         </div>
         <p id="best" class="best"></p>
+        <div id="online" class="online hidden">
+          <p id="online-summary" class="online-summary"></p>
+          <div class="online-row">
+            <button id="online-toggle" class="chip" type="button" aria-pressed="true">온라인 보급품 켜짐</button>
+            <button id="online-forget" class="chip" type="button">내 온라인 기록 지우기</button>
+          </div>
+          <p class="online-note">다른 생존자가 남긴 보급품을 주고받아요. 무작위 ID와 보급품 위치만 서버에 저장하고, 이름·글·IP 원문은 저장하지 않아요.</p>
+        </div>
       </div>
       <ul class="howto">
         <li><b>낮</b> 마을을 돌며 반짝이는 곳을 뒤져 퓨즈·배터리·붕대를 모은다</li>
