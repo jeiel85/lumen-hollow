@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Lumen Hollow 운영</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="dashboard.css">
+  <script type="module" src="dashboard.js"></script>
+</head>
+<body>
+  <header class="top">
+    <h1>Lumen Hollow 운영</h1>
+    <div id="top-actions" class="top-actions" hidden>
+      <span id="fetched" class="muted"></span>
+      <button id="refresh" type="button">새로고침</button>
+      <button id="logout" type="button" class="ghost">로그아웃</button>
+    </div>
+  </header>
+
+  <main>
+    <noscript><p class="error">이 페이지는 JavaScript가 있어야 동작합니다.</p></noscript>
+
+    <section id="login" class="card login" hidden>
+      <h2>관리자 토큰</h2>
+      <p class="muted">Worker 비밀값 <code>ADMIN_TOKEN</code>에 넣은 값을 붙여 넣으세요. 토큰은 이 브라우저에만 두고, 서버로는 조회할 때만 보냅니다.</p>
+      <form id="login-form" novalidate>
+        <label for="token">토큰</label>
+        <input id="token" name="token" type="password" autocomplete="current-password" spellcheck="false" autocapitalize="off" required minlength="32">
+        <label class="check"><input id="remember" type="checkbox"> 이 기기에서 기억하기</label>
+        <button type="submit">들어가기</button>
+        <p id="login-error" class="error" role="alert"></p>
+      </form>
+    </section>
+
+    <p id="board-error" class="error banner" role="alert" hidden></p>
+
+    <div id="board" hidden>
+      <section class="block" aria-labelledby="h-status">
+        <h2 id="h-status">지금 상태</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>서비스</h3>
+            <p id="st-enabled" class="state"></p>
+            <p class="muted small">끄고 켜기는 <code>server/admin.sql</code>의 킬 스위치로 합니다.</p>
+          </article>
+          <article class="card">
+            <h3>살아 있는 보급품</h3>
+            <p class="figure"><span id="st-live"></span><span id="st-live-max" class="unit"></span></p>
+            <div id="st-live-meter" class="meter" role="meter" aria-valuemin="0"><span></span></div>
+            <p id="st-kinds" class="muted small"></p>
+          </article>
+          <article class="card">
+            <h3>정리 작업(매일 03:17 UTC)</h3>
+            <p id="st-cron" class="state"></p>
+            <p id="st-cron-note" class="muted small"></p>
+          </article>
+        </div>
+      </section>
+
+      <section class="block" aria-labelledby="h-decision">
+        <h2 id="h-decision">14일 판단</h2>
+        <article class="card">
+          <p id="dc-when" class="muted"></p>
+          <div id="dc-days" class="meter" role="meter" aria-valuemin="0" aria-valuemax="14" aria-label="출시 후 지난 날"><span></span></div>
+          <p id="dc-verdict" class="verdict"></p>
+          <ul id="dc-criteria" class="criteria"></ul>
+          <p class="muted small">기준은 <code>docs/online-caches.md</code> 14.2절의 출발값입니다. 첫 주 접속 플레이어 수를 보고 비율 기준으로 다시 맞춥니다.</p>
+        </article>
+      </section>
+
+      <section class="block" aria-labelledby="h-abuse">
+        <h2 id="h-abuse">남용 살펴보기</h2>
+        <div class="grid two">
+          <article class="card">
+            <h3>최근 24시간 많이 둔 소유자</h3>
+            <p class="muted small">소유자는 플레이어 ID의 해시입니다. 일괄 정리는 <code>admin.sql</code>의 '한 소유자의 보급품을 모두 내린다'에 이 값을 넣습니다.</p>
+            <table class="list">
+              <thead><tr><th scope="col">소유자 해시</th><th scope="col" class="num">둔 수</th></tr></thead>
+              <tbody id="ab-owners"></tbody>
+            </table>
+          </article>
+          <article class="card">
+            <h3>오늘(UTC) 하루 한도 사용</h3>
+            <p class="muted small">IP 키는 그날 비밀값으로 만든 HMAC의 앞 8자입니다. 원문 IP는 서버에 없습니다.</p>
+            <table class="list">
+              <thead><tr><th scope="col">종류</th><th scope="col">IP 키</th><th scope="col" class="num">사용 / 한도</th></tr></thead>
+              <tbody id="ab-rate"></tbody>
+            </table>
+          </article>
+        </div>
+      </section>
+
+      <section class="block" aria-labelledby="h-period">
+        <h2 id="h-period">기간 지표</h2>
+        <div class="filters" role="group" aria-label="기간">
+          <button type="button" data-range="1d" aria-pressed="false">최근 24시간</button>
+          <button type="button" data-range="7d" aria-pressed="false">최근 7일</button>
+          <button type="button" data-range="launch" aria-pressed="true">출시 이후</button>
+        </div>
+        <div id="scoped" class="scoped">
+          <div id="kpis" class="kpis"></div>
+          <p class="muted small">접속 플레이어는 온라인 보급품을 켠 채 게임을 연 서로 다른 ID입니다. 온라인을 끈 사람은 세지 않고, 하루(UTC) 단위로 기록돼 기간 시작 날 전체가 들어갑니다.</p>
+          <h3 class="sub">일별 추이 <span class="muted">(UTC 날짜, 한국 시간 오전 9시에 바뀝니다)</span></h3>
+          <div id="charts" class="charts"></div>
+          <details class="table-view">
+            <summary>표로 보기</summary>
+            <table class="list">
+              <thead><tr><th scope="col">날짜</th><th scope="col" class="num">접속</th><th scope="col" class="num">둔 보급품</th><th scope="col" class="num">사용</th><th scope="col" class="num">고마워요</th></tr></thead>
+              <tbody id="daily-table"></tbody>
+            </table>
+          </details>
+        </div>
+      </section>
+
+      <footer class="foot">
+        <p id="cost" class="muted small"></p>
+        <p class="muted small">읽기 전용 화면입니다. 킬 스위치·일괄 정리·복구는 <code>server/README.md</code>의 '운영'을 따릅니다.</p>
+      </footer>
+    </div>
+  </main>
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+</body>
+</html>

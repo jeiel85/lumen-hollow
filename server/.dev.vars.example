@@ -3,3 +3,7 @@
 IP_HASH_SECRET=local-dev-only-change-me
 # 로컬 개발에서만 허용하는 출처(wrangler.toml의 운영 값을 덮어쓴다)
 ALLOWED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000
+# 운영 대시보드(wrangler.admin.toml) 로컬 개발용 토큰. 32자 이상이어야 한다. 운영 값은 README '운영 대시보드' 참고
+ADMIN_TOKEN=local-dev-admin-token-change-me-0123456789
+# 로컬에서 14일 판단 화면을 여러 날로 보고 싶을 때 출시 시각을 바꾼다(운영 값은 wrangler.admin.toml)
+# LAUNCH_AT=2026-11-03T00:00:00Z

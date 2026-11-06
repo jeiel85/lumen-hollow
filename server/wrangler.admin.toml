@@ -1,0 +1,27 @@
+# Lumen Hollow 운영 대시보드(읽기 전용). 결정: DECISIONS.md D-003. 배포 순서는 server/README.md '운영 대시보드' 참고.
+# 게임 Worker(wrangler.toml)와 따로 배포한다: npx wrangler deploy -c wrangler.admin.toml
+name = "lumen-hollow-admin"
+main = "src/admin.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+# 버전마다 생기는 미리보기 주소는 쓰지 않는다. 열린 주소를 workers.dev 하나로 줄인다.
+preview_urls = false
+
+# 페이지(HTML·JS·CSS)는 정적 자산으로 낸다. 정적 자산 요청은 Workers 요청 한도에 들지 않는다.
+# 자산에 없는 경로(/api/summary)만 Worker 코드가 받는다.
+[assets]
+directory = "./dashboard"
+
+[vars]
+# 공유 보급품 출시 시각(PR #13 머지). 14일 판단(docs/online-caches.md 14.2절)의 시작점이다.
+LAUNCH_AT = "2026-11-06T05:35:17Z"
+
+# 게임과 같은 운영 D1. 이 Worker는 읽기만 한다. 로컬 개발(--local)은 이 값을 쓰지 않는다.
+[[d1_databases]]
+binding = "DB"
+database_name = "lumen-hollow-caches"
+database_id = "e0949202-1be3-4d95-ab6d-b0af5f18e1c0"
+
+# 저장 로그는 게임 Worker와 같은 이유(2026-12-01 요금 체계 변경)로 끈다. 실시간 로그는 npx wrangler tail -c wrangler.admin.toml
+[observability]
+enabled = false

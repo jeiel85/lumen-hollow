@@ -2,6 +2,43 @@
 
 되돌리기 어렵거나 나중에 이유를 다시 찾게 될 결정만 적습니다. 최신 항목이 위에 옵니다.
 
+## 2026-11-06 · D-003 운영 대시보드: 별도 Worker + 비밀 토큰, 읽기 전용
+
+- 상태: **결정됨 — 대안 B**. 사용자가 로컬 리포트(대안 D) 대신 웹 페이지를 골랐고, 인증 방식은 비용 원칙(D-001)에 따라 B로 정했다.
+- 코드: `server/src/admin.js`, `server/dashboard/`, `server/wrangler.admin.toml`
+
+### 맥락
+
+공유 보급품은 출시 14일 뒤(2026-11-20) 성공 지표([docs/online-caches.md](docs/online-caches.md) 14절)로 계속·재검토·중단을 정한다. 지금까지는 지표를 보려면 [server/admin.sql](server/admin.sql)의 문장을 하나씩 `wrangler d1 execute`로 실행해야 했다. 웹 페이지로 보려면 인증이 필요하다. 인증 방식은 공개된 곳에 관리 기능을 여는 일이라 되돌리기 어렵다.
+
+### 대안
+
+| | 방식 | 비용·전제 | 위험·대가 |
+|---|---|---|---|
+| A | Cloudflare Access(Zero Trust Free)를 Worker 앞에 둔다 | Zero Trust는 Free 플랜도 결제 수단 등록을 요구한다는 보고가 많다(커뮤니티 답변, 공식 문서로는 확인하지 못함) | 코드에 비밀값이 없고 이메일 일회용 코드로 들어간다. 대신 결제 수단 등록이 비용 원칙과 어긋나고, 설정이 대시보드에만 있어 저장소로 재현되지 않는다 |
+| **B** | **별도 Worker가 페이지와 API를 함께 내고, API는 Bearer 토큰(Worker 비밀값)으로 막는다** | 결제 수단이 필요 없다. 정적 자산 요청은 무료·무제한이고, API 요청은 Workers Free 하루 10만 건을 게임과 함께 쓴다 | 토큰이 새면 지표를 볼 수 있다(읽기 전용이라 바꾸지는 못한다). 토큰을 사람이 관리해야 한다 |
+| C | 게임 Worker에 `/admin` 경로를 더한다 | 배포가 하나로 끝난다 | 공개 게임 API에 관리 코드와 비밀값이 섞이고, 관리 코드의 오류가 게임 API를 멈출 수 있다 |
+| D | wrangler로 도는 로컬 리포트 | 새 공격 지점이 없다 | 이 PC 밖(휴대폰 등)에서는 못 본다 |
+
+### 결정
+
+- **읽기 전용**이다. 킬 스위치·일괄 정리 같은 쓰기 기능은 넣지 않고, 계속 `admin.sql`로 한다. 쓰기를 넣으면 토큰이 샜을 때의 피해가 '지표 열람'에서 '서비스 조작'으로 커지므로, 그때 인증을 다시 정한다(쓰기 전용 토큰을 따로 두거나 A로 옮긴다).
+- 토큰은 32바이트 무작위 값(base64url 43자)이고, Worker 비밀값 `ADMIN_TOKEN`에 둔다. 값이 없거나 32자보다 짧으면 API는 503을 돌려준다(닫힌 채로 실패한다). 비교는 양쪽의 SHA-256 다이제스트를 바이트마다 끝까지 비교해 걸리는 시간으로 값을 짐작할 수 없게 한다.
+- 브라우저는 토큰을 기본으로 sessionStorage에 둔다(탭을 닫으면 지워짐). "이 기기에서 기억하기"를 고를 때만 localStorage에 둔다.
+- 페이지와 API는 같은 출처에서 낸다. CORS를 열지 않고, CSP로 외부·인라인 스크립트와 폼 전송을 막는다. 검색 엔진 색인은 `noindex`로 막는다.
+- 게임 Worker(`lumen-hollow-caches`)와 공개 API `/v1`은 바꾸지 않는다. 같은 D1을 읽기만 한다.
+- 비용: 조회 한 번에 읽은 D1 행 수를 화면에 보여 준다(무료 한도는 하루 500만 행). `caches`의 시각 열에는 색인이 없어 조회마다 표를 훑는다. 데이터가 커져 이 수가 부담이 되면 그때 색인을 더한다.
+
+### 되돌리기 비용
+
+- Worker 하나만 지우면 된다(`npx wrangler delete -c wrangler.admin.toml`). 게임과 데이터 형식에는 흔적이 남지 않는다.
+- 토큰을 바꾸려면 `npx wrangler secret put ADMIN_TOKEN -c wrangler.admin.toml`로 새 값을 넣는다. 그 즉시 기존 브라우저 로그인은 모두 무효가 된다.
+
+### 출처 (2026-11-06 확인)
+
+- Cloudflare: [Static Assets Billing and Limitations](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/), [Workers Pricing](https://developers.cloudflare.com/workers/platform/pricing/), [workers.dev](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)
+- Zero Trust 결제 수단: [Cloudflare Community](https://community.cloudflare.com/t/choose-the-zero-trust-free-plan-with-no-payment-method/471877)(공식 문서가 아니다)
+
 ## 2026-11-06 · 앱 식별자(manifest `id`): `/lumen-hollow/`
 
 **배경**: PC Chrome에서 설치 버튼이 나오지 않았다. `manifest.webmanifest`의 `"id": "./"`는 manifest 위치가 아니라 **start_url의 출처**(`https://jeiel85.github.io`)를 기준으로 풀려 `https://jeiel85.github.io/`가 된다. 같은 출처의 다른 프로젝트(스트리트 타입 파이트 등 8개)도 `"id": "./"`라서 Chrome은 이들을 모두 같은 앱으로 본다. 그중 하나가 설치돼 있으면 Lumen Hollow를 "이미 설치됨"으로 보고 `beforeinstallprompt`도 주소창 설치 아이콘도 주지 않았고, 설치된 다른 앱의 start_url을 Lumen Hollow로 덮어쓰기까지 했다(사용자 Chrome 동기화 기록에서 확인). Chrome DevTools `Page.getAppId`도 `/lumen-hollow/`를 권한다.
