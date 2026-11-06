@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { makeBeam, addXray, PLAYER_R } from './player.js';
 import { BOUND } from './world.js';
 
-// 은신처 앞에 세워 둔 낡은 픽업트럭. 연료가 있으면 몰 수 있고, 밤에는 전조등이 그늘이를 태운다.
+// 은신처 앞에 세워 둔 낡은 1톤 트럭(앞이 납작한 캡오버). 연료가 있으면 몰 수 있고, 밤에는 전조등이 그늘이를 태운다.
 // 좌표 규약은 플레이어와 같다: 방향각 a의 정면 = (sin a, cos a), a가 커지면 왼쪽으로 돈다.
 
 const HALF_W = 0.95;
@@ -54,7 +54,8 @@ export class Vehicle {
       this.mats.push(m);
       return m;
     };
-    const paint = mat(0x5f9183);
+    const paint = mat(0x8fb6cf); // 하늘색 1톤 트럭
+    const alum = mat(0xc9cfd1); // 짐칸 문짝
     const cream = mat(0xe6dbc1);
     const dark = mat(0x33383b);
     const rust = mat(0x9c6a4c);
@@ -71,17 +72,21 @@ export class Vehicle {
       return me;
     };
 
-    // 차체: 앞쪽 엔진룸, 가운데 운전석, 뒤쪽 짐칸
-    box(1.9, 0.5, 4.2, paint, 0, 0.66, 0);
-    box(1.84, 0.16, 1.3, paint, 0, 0.98, 1.42);
-    box(1.8, 0.3, 1.5, paint, 0, 1.06, 0.05);
-    box(1.72, 0.44, 1.4, glass, 0, 1.43, 0.05);
-    box(1.8, 0.09, 1.5, cream, 0, 1.69, 0.05);
-    for (const s of [-1, 1]) box(0.1, 0.36, 1.55, paint, s * 0.9, 1.08, -1.32);
-    box(1.9, 0.36, 0.1, paint, 0, 1.08, -2.1);
-    box(1.94, 0.2, 0.16, dark, 0, 0.5, 2.14);
+    // 차체: 운전석이 앞바퀴 위에 올라앉은 캡오버, 뒤쪽은 낮은 알루미늄 문짝 짐칸
+    box(1.7, 0.25, 4.1, dark, 0, 0.55, 0); // 차대
+    box(1.9, 0.1, 2.9, mat(0xa9b0b2), 0, 0.92, -0.72); // 짐칸 바닥
+    for (const s of [-1, 1]) box(0.06, 0.42, 2.9, alum, s * 0.93, 1.18, -0.72);
+    box(1.9, 0.42, 0.06, alum, 0, 1.18, -2.15);
+    box(1.9, 0.95, 0.08, dark, 0, 1.42, 0.68); // 운전석 뒤 보호대
+    box(1.86, 1.0, 1.42, paint, 0, 1.15, 1.44); // 운전석 아래
+    box(1.8, 0.46, 1.2, glass, 0, 1.86, 1.47); // 옆 유리
+    box(1.62, 0.5, 0.05, glass, 0, 1.84, 2.14); // 앞 유리
+    for (const s of [-1, 1]) box(0.1, 0.5, 0.12, paint, s * 0.88, 1.86, 2.1); // 앞 기둥
+    box(1.86, 0.1, 1.42, paint, 0, 2.14, 1.44); // 지붕
+    box(1.86, 0.08, 1.44, cream, 0, 1.52, 1.44); // 띠
+    box(1.94, 0.2, 0.16, dark, 0, 0.5, 2.18);
     box(1.94, 0.2, 0.16, dark, 0, 0.5, -2.14);
-    box(0.9, 0.06, 0.04, cream, 0, 0.98, 2.12);
+    box(1.1, 0.16, 0.04, cream, 0, 0.98, 2.16); // 그릴
     // 짐칸의 연료통과 녹슨 상자
     box(0.34, 0.44, 0.5, can, 0.42, 1.13, -1.6);
     box(0.62, 0.34, 0.58, rust, -0.36, 1.08, -1.1);
@@ -95,8 +100,8 @@ export class Vehicle {
     this.headMat = new THREE.MeshBasicMaterial({ color: 0x8a8a80 });
     this.tailMat = new THREE.MeshBasicMaterial({ color: 0x4a1410 });
     for (const s of [-1, 1]) {
-      box(0.34, 0.18, 0.05, this.headMat, s * 0.62, 0.78, 2.11);
-      box(0.24, 0.16, 0.05, this.tailMat, s * 0.74, 0.86, -2.16);
+      box(0.34, 0.18, 0.05, this.headMat, s * 0.62, 0.78, 2.17);
+      box(0.24, 0.16, 0.05, this.tailMat, s * 0.74, 0.86, -2.19);
     }
 
     this.wheels = [];
@@ -127,7 +132,7 @@ export class Vehicle {
     this.beams = [];
     for (const s of [-1, 1]) {
       const beam = makeBeam(10, 0.3);
-      beam.position.set(s * 0.62, 0.78, 2.14);
+      beam.position.set(s * 0.62, 0.78, 2.19);
       beam.rotation.x = 0.06;
       beam.rotation.y = -s * 0.04;
       this.model.add(beam);
