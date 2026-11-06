@@ -39,6 +39,8 @@ jobs:
               missing=1
             fi
           done
+          # manifest id는 출처(jeiel85.github.io) 기준으로 풀린다. "./"이면 같은 출처의 다른 앱과 겹쳐 Chrome이 이미 설치된 앱으로 본다.
+          grep -q '"id": "/lumen-hollow/"' manifest.webmanifest || { echo '::error file=manifest.webmanifest::manifest id는 "/lumen-hollow/"여야 합니다(DECISIONS.md 참고).'; missing=1; }
           for f in manifest.webmanifest icons/icon-192.png icons/icon-512.png icons/maskable-512.png icons/apple-touch-icon.png docs/mobile.jpg; do
             [ -f "$f" ] || { echo "::error::$f 가 없습니다(PWA 설치·오프라인 캐시에 필요)."; missing=1; }
           done
