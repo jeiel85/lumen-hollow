@@ -11,9 +11,8 @@ ALLOWED_ORIGINS = "https://jeiel85.github.io,http://localhost:8000,http://127.0.
 [[d1_databases]]
 binding = "DB"
 database_name = "lumen-hollow-caches"
-# 배포 전에 `npx wrangler d1 create lumen-hollow-caches`가 알려 주는 ID로 바꾼다(server/README.md 2단계).
-# 로컬 개발(--local)은 이 값을 쓰지 않는다.
-database_id = "00000000-0000-0000-0000-000000000000"
+# 운영 D1(2026-11-06 생성, 위치 APAC). 로컬 개발(--local)은 이 값을 쓰지 않는다.
+database_id = "e0949202-1be3-4d95-ab6d-b0af5f18e1c0"
 
 # 분당 요청 한도(IP 해시 기준, 근사치이며 Cloudflare 위치마다 따로 센다). 하루 한도는 D1(rate_daily)이 엄격하게 센다.
 # namespace_id는 이 계정 안에서 카운터를 구분하는 임의의 정수다.

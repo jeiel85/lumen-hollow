@@ -5,7 +5,7 @@
 ## 2026-11-06 · D-001 공유 보급품 백엔드
 
 - 상태: **결정됨 — 대안 B (Cloudflare Workers + D1)** (2026-11-06, 사용자가 제안을 채택)
-- 남은 확인: 사용할 Cloudflare 계정(배포 전에 필요). 계정을 쓸 수 없으면 이 결정을 다시 연다
+- 배포: 2026-11-06 `https://lumen-hollow-caches.jeiel85.workers.dev`, D1 위치 APAC. 분당 레이트 리밋 바인딩도 이 계정에서 거절 없이 배포됐다
 - 관련 설계: [docs/online-caches.md](docs/online-caches.md)
 
 ### 맥락

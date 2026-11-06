@@ -7,7 +7,7 @@ import { SLOT_LAYOUT, SLOT_COUNT } from './slots.js';
 
 // 배포한 Worker 주소(끝에 / 없이). 비어 있으면 온라인 보급품 전체가 꺼진다: 요청도, 화면 요소도 없다.
 // 배포 절차는 server/README.md.
-export const ONLINE_API = '';
+export const ONLINE_API = 'https://lumen-hollow-caches.jeiel85.workers.dev';
 
 // 서버 rules.js의 noteCount와 개수를 맞춘다. 번호가 저장되므로 순서를 바꾸지 말고 끝에만 추가한다.
 export const NOTES = ['', '같이 버텨요', '여기서 잠깐 쉬어 가요', '밤이 길어요, 조심해요', '곧 불이 켜질 거예요', '먼저 지나간 사람이', '아껴 쓰세요', '트럭에 기름 넣고 가요'];
