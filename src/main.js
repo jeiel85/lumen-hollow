@@ -9,6 +9,7 @@ import { Input } from './input.js';
 import { Hud } from './hud.js';
 import { Sound } from './audio.js';
 import { load, save } from './storage.js';
+import { Wardrobe, OutfitDrops, Closet, itemLabel, objParticle } from './wardrobe.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -62,6 +63,11 @@ const car = new Vehicle(scene);
 const input = new Input(renderer.domElement);
 const hud = new Hud();
 const sound = new Sound();
+
+const wardrobe = new Wardrobe();
+player.setOutfit(wardrobe.wear);
+const drops = new OutfitDrops(scene);
+const closet = new Closet(wardrobe, () => player.setOutfit(wardrobe.wear));
 
 const START = new THREE.Vector3(0, 0, 3.2);
 player.reset(START.x, START.z);
@@ -168,7 +174,38 @@ function renderBest() {
 // ---------------------------------------------------------------- 게임 흐름
 
 function setScreen(id) {
-  for (const s of ['title', 'pause', 'end']) $(s).classList.toggle('hidden', s !== id);
+  for (const s of ['title', 'pause', 'end', 'closet']) $(s).classList.toggle('hidden', s !== id);
+}
+
+// 옷장: 처음 화면에서 주인공을 은신처 앞에 세워 놓고 가까이서 돌려 보며 갈아입힌다.
+function openCloset() {
+  if (!game.ready || game.contextLost || game.state !== 'title') return;
+  game.state = 'closet';
+  game.titleHour = env.hour;
+  env.setHour(12); // 색이 왜곡되지 않는 한낮 빛에서 고른다
+  env.rainLevel = 0;
+  player.reset(START.x, START.z);
+  player.pos.y = world.heightAt(START.x, START.z);
+  closet.open();
+  setScreen('closet');
+}
+
+function closeCloset() {
+  if (game.state !== 'closet') return;
+  game.state = 'title';
+  env.setHour(game.titleHour);
+  setScreen('title');
+}
+
+const WEAR_VERB = { coat: '입어', hat: '써', glasses: '써', pack: '메' };
+
+function foundOutfit(item) {
+  wardrobe.unlock(item.id);
+  wardrobe.put(item.id);
+  player.setOutfit(wardrobe.wear);
+  sound.play('pickup');
+  const label = itemLabel(item);
+  hud.toast(`${label}${objParticle(label)} 주웠다! 바로 ${WEAR_VERB[item.slot]} 봤다. 처음 화면 '옷장'에서 언제든 바꿀 수 있다.`, 'good');
 }
 
 function startGame() {
@@ -200,6 +237,10 @@ function startGame() {
   later(1.8, () => hud.toast('퓨즈를 모아 꺼진 배전함에 끼우면 그 구역에 다시 불이 들어온다.'));
   later(3.8, () => hud.toast('화살표가 가장 가까운 배전함을 가리킨다. 퓨즈 하나는 이미 갖고 있다.'));
   later(6.4, () => !game.driving && hud.toast('은신처 앞 도로에 낡은 트럭이 서 있다. 연료가 남은 동안은 몰 수 있다.'));
+  // 아직 옷가지를 하나도 줍지 않았을 때만 존재를 알려 준다.
+  if (drops.spawn(world, wardrobe, START) && wardrobe.foundCount === 0) {
+    later(9.5, () => hud.toast('누군가 두고 간 옷가지 꾸러미가 마을 어딘가에서 빛나고 있다. 주우면 옷장에 영원히 남는다.'));
+  }
 }
 
 function pauseGame(on) {
@@ -246,6 +287,7 @@ function backToTitle() {
   hud.showTouch(false);
   hud.prompt(null);
   shades.clear();
+  drops.clear();
   renderBest();
   setScreen('title');
 }
@@ -555,6 +597,10 @@ function step(dt) {
 
   interact(dt);
 
+  drops.update(dt, game.time, env.night);
+  const found = drops.take(player.pos.x, player.pos.z, game.driving ? 1.8 : 1.0);
+  if (found) foundOutfit(found);
+
   if (!player.alive) endGame(false);
 }
 
@@ -572,6 +618,7 @@ function frame(now) {
   if (input.consume('Escape') || input.consume('KeyP')) {
     if (game.state === 'play') pauseGame(true);
     else if (game.state === 'pause') pauseGame(false);
+    else if (game.state === 'closet') closeCloset();
   }
   if (input.consume('KeyM')) {
     sound.init();
@@ -597,6 +644,12 @@ function frame(now) {
     env.setHour(env.hour + dt * 0.9);
     const t = game.time;
     camFocus.set(Math.sin(t * 0.05) * 22, 0, Math.cos(t * 0.037) * 18 - 4);
+  } else if (game.state === 'closet') {
+    dt = raw;
+    game.time += dt;
+    player.idlePose(game.time);
+    closet.update(raw, player);
+    camFocus.copy(player.pos); // 그림자·광원 선택 기준을 주인공 주변으로
   }
   game.shake = Math.max(0, game.shake - raw * 1.6);
 
@@ -614,8 +667,10 @@ function frame(now) {
   } : { on: engineOn });
 
   const lowHp = player.hp < 30 && game.state === 'play' ? 0.25 + 0.15 * Math.sin(game.time * 5) : 0;
-  post.render(scene, camera, env.look, game.time, {
-    focus: 0.5, band: 0.07, blurScale: game.state === 'title' ? 1.25 : 1.0,
+  // 옷장은 전용 근접 카메라로 그리고, 인물이 화면 가운데가 아닐 수 있어 틸트시프트 흐림을 끈다.
+  const inCloset = game.state === 'closet';
+  post.render(scene, inCloset ? closet.camera : camera, env.look, game.time, {
+    focus: 0.5, band: 0.07, blurScale: game.state === 'title' ? 1.25 : inCloset ? 0 : 1.0,
     hurt: Math.max(player.hurtFx * 0.9, lowHp),
   });
 
@@ -640,6 +695,8 @@ function frame(now) {
 // ---------------------------------------------------------------- UI 연결
 
 $('start-btn').addEventListener('click', startGame);
+$('closet-btn').addEventListener('click', openCloset);
+$('closet-close').addEventListener('click', closeCloset);
 $('resume-btn').addEventListener('click', () => pauseGame(false));
 $('quit-btn').addEventListener('click', backToTitle);
 $('restart-btn').addEventListener('click', startGame);
@@ -659,6 +716,7 @@ document.addEventListener('visibilitychange', () => document.hidden && pauseGame
 if (params.has('debug')) {
   window.lumen = {
     THREE, scene, camera, renderer, world, env, post, player, shades, car, game, input, hud, startGame,
+    wardrobe, drops, closet, openCloset, closeCloset,
     step(sec) {
       let t = last;
       for (let i = 0, n = Math.round(sec / 0.05); i < n; i++) frame((t += 50));
@@ -677,7 +735,7 @@ function setContextLost(lost) {
   $('gl-notice')?.classList.toggle('hidden', !lost);
   $('gl-reload')?.classList.add('hidden');
   clearTimeout(reloadHintTimer);
-  for (const id of ['start-btn', 'resume-btn', 'restart-btn', 'continue-btn']) $(id).disabled = lost || !game.ready;
+  for (const id of ['start-btn', 'closet-btn', 'resume-btn', 'restart-btn', 'continue-btn']) $(id).disabled = lost || !game.ready;
   if (lost) {
     pauseGame(true);
     // 브라우저가 끝내 복구해 주지 않는 경우를 위해 새로고침 안내를 띄운다.
