@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeBeam, addXray } from './player.js';
+import { makeBeam, addXray, PLAYER_R } from './player.js';
 import { BOUND } from './world.js';
 
 // 은신처 앞에 세워 둔 낡은 픽업트럭. 연료가 있으면 몰 수 있고, 밤에는 전조등이 그늘이를 태운다.
@@ -217,11 +217,11 @@ export class Vehicle {
     for (const [lx, lz] of tries) {
       this._world(lx, lz, _a);
       _b.copy(_a);
-      world.collide(_b, 0.36);
+      world.collide(_b, PLAYER_R);
       if (_b.distanceTo(_a) < 0.05 && !this.contains(_b.x, _b.z, 0.3)) return { x: _b.x, z: _b.z };
     }
     this._world(tries[0][0], tries[0][1], _a);
-    world.collide(_a, 0.36);
+    world.collide(_a, PLAYER_R);
     return { x: _a.x, z: _a.z };
   }
 

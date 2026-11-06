@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 export const SPEED = 5.2;
+export const PLAYER_R = 0.36; // 충돌 반지름
 export const FLASH_RANGE = 13;
 const FLASH_ANGLE = 0.42;
 const BEAM_LEN = 10;
@@ -201,7 +202,7 @@ export class Player {
     this.vel.z += (move.z * SPEED - this.vel.z) * k;
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
-    world.collide(this.pos, 0.36);
+    world.collide(this.pos, PLAYER_R);
     const gy = world.heightAt(this.pos.x, this.pos.z);
     this.pos.y += (gy - this.pos.y) * (1 - Math.exp(-dt * 20));
 

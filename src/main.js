@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { World, CAR_SPAWN } from './world.js';
 import { Environment } from './env.js';
 import { Post } from './post.js';
-import { Player } from './player.js';
+import { Player, PLAYER_R } from './player.js';
 import { Shades } from './shades.js';
 import { Vehicle, MAX_FWD } from './vehicle.js';
 import { Input } from './input.js';
@@ -467,6 +467,8 @@ function onTimeEvent(ev) {
 }
 
 function walk(dt) {
+  const fromX = player.pos.x;
+  const fromZ = player.pos.z;
   const ms = input.moveScreen();
   const move = tmp.set(0, 0, 0).addScaledVector(SCREEN_RIGHT, ms.x).addScaledVector(SCREEN_DOWN, ms.y);
   let aim = null;
@@ -478,7 +480,13 @@ function walk(dt) {
   }
   player.update(dt, game.time, { x: move.x, z: move.z }, aim, world, env.night, env.rainLevel);
   car.update(dt, null, world, env.night);
-  car.pushOut(player.pos, 0.36);
+  // 세워 둔 트럭과 정적 충돌체를 번갈아 풀어, 트럭이 밀어낸 자리가 벽 속이 되지 않게 한다.
+  // 트럭과 벽 사이 틈처럼 둘 다 만족하는 자리가 없으면 이번 이동을 취소한다.
+  for (let i = 0; i < 3 && car.pushOut(player.pos, PLAYER_R); i++) world.collide(player.pos, PLAYER_R);
+  if (car.distanceTo(player.pos.x, player.pos.z) < PLAYER_R - 1e-3) {
+    player.pos.x = fromX;
+    player.pos.z = fromZ;
+  }
 }
 
 // 키보드는 W/S 가속·A/D 핸들, 터치 스틱은 민 방향으로 차가 알아서 꺾어 간다.
