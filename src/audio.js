@@ -272,6 +272,10 @@ export class Sound {
         this._burst(t, 0.07, { freq: 900, q: 1.5, gain: 0.22 });
         this._tone(60, t + 0.06, 0.9, { gain: 0.1, type: 'sawtooth', slide: 2 });
         break;
+      case 'hint': // 깨어난 누군가가 켠 촛불: 맑은 종소리 두 번
+        this._tone(1046.5, t, 0.9, { gain: 0.06, type: 'triangle' });
+        this._tone(1568, t + 0.16, 1.2, { gain: 0.05, type: 'triangle' });
+        break;
       case 'lamp': // 작업등 스위치
         this._burst(t, 0.05, { freq: 1800, q: 2, gain: 0.1 });
         this._tone(220, t + 0.03, 0.35, { gain: 0.05, type: 'triangle', slide: 1.5 });

@@ -9,7 +9,7 @@ const MODULES = [
   'src/main.js', 'src/audio.js', 'src/caches.js', 'src/dialogue.js', 'src/env.js', 'src/geometry.js', 'src/grid.js', 'src/hud.js',
   'src/input.js', 'src/online.js', 'src/player.js', 'src/post.js', 'src/pwa.js', 'src/records.js', 'src/rng.js',
   'src/script.js', 'src/settings.js', 'src/shades.js', 'src/slots.js', 'src/storage.js', 'src/story.js',
-  'src/vehicle.js', 'src/wardrobe.js', 'src/world.js',
+  'src/vehicle.js', 'src/wardrobe.js', 'src/wisps.js', 'src/world.js',
 ];
 const VERSIONED = ['style.css', ...MODULES].map((p) => `${p}?v=${BUILD}`);
 const VENDOR = ['vendor/three/three.module.js?v=r187', 'vendor/three/three.core.js?v=r187'];
