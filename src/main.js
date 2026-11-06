@@ -580,8 +580,11 @@ async function takeCache(c) {
   game.cacheTaken++;
   grantShared(KIND_NAMES[r.data?.kind] ? r.data.kind : c.kind);
   c.charges = r.data?.charges ?? c.charges - 1;
-  if (c.charges <= 0) caches.remove(c.id);
-  if (!game.hintThanks) {
+  // 마지막 하나를 꺼냈어도 빈 상자는 이 판에 남겨 둔다. 서버는 소진된 상자에도 고마워요를 받으므로,
+  // 바로 지우면 마지막 사람만 고마움을 전할 길이 없어진다. 고마워요를 보내면 그때 치운다.
+  if (c.charges <= 0) {
+    later(1.6, () => hud.toast('마지막 하나였다. 상자 앞에서 다시 길게 누르면 남긴 사람에게 고마워요를 보낼 수 있다.'));
+  } else if (!game.hintThanks) {
     game.hintThanks = true;
     later(1.6, () => hud.toast('상자 앞에서 다시 길게 누르면 남긴 사람에게 고마워요를 보낼 수 있다.'));
   }
@@ -599,7 +602,12 @@ async function sendThanks(c) {
   }
   c.thanks = r.data?.thanks ?? c.thanks + 1;
   sound.play('click');
-  hud.toast('고마워요를 보냈다. 이 보급품이 마을에 조금 더 오래 남는다.', 'good');
+  if (c.charges <= 0) {
+    caches.remove(c.id);
+    hud.toast('고마워요를 보냈다. 빈 상자는 치웠다.', 'good');
+  } else {
+    hud.toast('고마워요를 보냈다. 이 보급품이 마을에 조금 더 오래 남는다.', 'good');
+  }
 }
 
 function cacheInteract(dt, c, how) {
@@ -614,12 +622,18 @@ function cacheInteract(dt, c, how) {
     hud.prompt(`내가 남긴 ${name} · ${c.charges}번 남음`, 0);
     return;
   }
-  if (online.usedRecently(c.id)) {
-    if (online.hasThanked(c.id)) {
-      game.hold = 0;
-      hud.prompt(`고마워요를 보낸 ${name} 상자`, 0);
-      return;
-    }
+  const used = online.usedRecently(c.id);
+  if (used && online.hasThanked(c.id)) {
+    game.hold = 0;
+    hud.prompt(`고마워요를 보낸 ${name} 상자`, 0);
+    return;
+  }
+  if (!used && c.charges <= 0) {
+    game.hold = 0;
+    hud.prompt(`빈 ${name} 상자`, 0);
+    return;
+  }
+  if (used) {
     const done = holdProgress(dt, 0.6);
     hud.prompt(`${how} 고마워요 보내기`, Math.min(1, game.hold / 0.6));
     if (done) {

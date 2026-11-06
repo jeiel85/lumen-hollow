@@ -13,9 +13,9 @@ const FREE = [...Array(600).keys()].filter((s) => !BLOCKED_SLOTS.includes(s));
 
 const pid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
-function setup({ rules = RULES, limiter = () => true, env: extra = {} } = {}) {
+function setup({ rules = RULES, limiter = () => true, env: extra = {}, latency = false } = {}) {
   const clock = { t: Date.UTC(2026, 10, 6, 12) };
-  const db = createD1();
+  const db = createD1({ latency });
   const app = createApp({ now: () => clock.t, rules });
   const rl = { limit: async ({ key }) => ({ success: limiter(key) }) };
   const env = { DB: db, IP_HASH_SECRET: 'test-secret', ALLOWED_ORIGINS: `${ORIGIN},http://localhost:8000`, RL_READ: rl, RL_WRITE: rl, ...extra };
@@ -156,6 +156,21 @@ test('만료된 보급품과 없는 ID는 쓸 수 없다', async () => {
   assert.equal((await s.call('POST', `/v1/caches/${id}/use`, { player: pid(2) })).status, 410);
   assert.equal((await s.call('POST', '/v1/caches/c_aaaaaaaaaaaaaaaaaaaaaaaaaa/use', { player: pid(2) })).status, 404);
   assert.equal((await s.call('POST', '/v1/caches/zzz/use', { player: pid(2) })).status, 404);
+});
+
+test('하루 IP 한도 직전에 동시에 온 요청도 한도만큼만 통과한다(확인과 소모가 한 트랜잭션)', async () => {
+  const s = setup({ rules: { ...RULES, maxPlacesPerIpPerDay: 1, maxUsesPerIpPerDay: 1 }, latency: true });
+  const placed = await Promise.all([1, 2, 3].map((n) => s.placeAs(n, FREE[n])));
+  assert.deepEqual(placed.map((r) => r.status).sort(), [201, 429, 429]);
+  assert.ok(placed.filter((r) => r.status === 429).every((r) => r.body.error === 'ip_daily'));
+  assert.equal(s.db.raw.prepare("SELECT count FROM rate_daily WHERE action = 'place'").get().count, 1);
+
+  const ids = [];
+  for (let n = 10; n < 13; n++) ids.push((await s.placeAs(n, FREE[n], 'bandage', { ip: `198.51.100.${n}` })).body.cache.id);
+  const used = await Promise.all(ids.map((id) => s.call('POST', `/v1/caches/${id}/use`, { player: pid(50) })));
+  assert.deepEqual(used.map((r) => r.status).sort(), [200, 429, 429]);
+  const total = s.db.raw.prepare('SELECT sum(?1 - charges) AS n FROM caches WHERE id IN (?2, ?3, ?4)').get(RULES.charges, ...ids).n;
+  assert.equal(total, 1, '횟수도 한 번만 줄었다');
 });
 
 test('IP당 하루 사용 한도', async () => {

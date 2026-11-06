@@ -48,6 +48,8 @@ export class Online {
     this.base = resolveBase(params);
     this.pid = null;
     this.log = this._loadLog();
+    // 설정은 메모리에 들고 있고 저장은 최선만 다한다. 저장소를 못 쓰는 환경에서도 이 페이지 동안은 끄기가 지켜진다.
+    this.pref = load(K.pref) !== 'off';
   }
 
   // 서버 주소가 있는가 (없으면 기능 전체를 숨긴다)
@@ -57,10 +59,11 @@ export class Online {
 
   // 플레이어가 끄지 않았는가
   get enabled() {
-    return this.available && load(K.pref) !== 'off';
+    return this.available && this.pref;
   }
 
   setEnabled(on) {
+    this.pref = Boolean(on);
     save(K.pref, on ? 'on' : 'off');
   }
 

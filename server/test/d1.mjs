@@ -5,7 +5,9 @@ import { readFileSync } from 'node:fs';
 
 const SCHEMA = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8');
 
-export function createD1() {
+// latency: 실제 D1처럼 각 호출이 다음 틱에 응답하게 한다(동시 요청이 서로 끼어드는 상황을 재현할 때).
+export function createD1({ latency = false } = {}) {
+  const tick = () => (latency ? new Promise((r) => setImmediate(r)) : null);
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
@@ -29,14 +31,17 @@ export function createD1() {
     }
 
     async first() {
+      await tick();
       return this._exec().results[0] ?? null;
     }
 
     async all() {
+      await tick();
       return this._exec();
     }
 
     async run() {
+      await tick();
       return this._exec();
     }
   }
@@ -45,6 +50,7 @@ export function createD1() {
     raw: db,
     prepare: (sql) => new Stmt(sql),
     async batch(stmts) {
+      await tick();
       db.exec('BEGIN');
       try {
         const out = stmts.map((s) => s._exec());

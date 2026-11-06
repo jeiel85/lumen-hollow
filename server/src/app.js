@@ -114,15 +114,17 @@ export function createApp({ now = () => Date.now(), rules = RULES } = {}) {
     if (!success) throw new HttpError(429, 'rate');
   }
 
-  async function dailyCount(db, day, key, action) {
-    const row = await db.prepare('SELECT count FROM rate_daily WHERE day = ?1 AND key = ?2 AND action = ?3').bind(day, key, action).first();
-    return row?.count ?? 0;
-  }
+  // 하루 한도 카운터: 쓰기와 같은 batch(트랜잭션) 안에서 확인하고 소모한다. 따로 읽고 나중에 올리면
+  // 한도 직전에 동시에 온 요청들이 같은 낮은 값을 읽고 모두 통과한다.
+  const usedToday = (dayParam, keyParam, action) =>
+    `coalesce((SELECT count FROM rate_daily WHERE day = ${dayParam} AND key = ${keyParam} AND action = '${action}'), 0)`;
 
-  function bump(db, day, key, action) {
+  // 바로 앞 문장이 행을 바꿨을 때만(changes() = 1) 카운터를 1 올린다.
+  function bumpIfChanged(db, day, key, action) {
     return db.prepare(
-      'INSERT INTO rate_daily (day, key, action, count) VALUES (?1, ?2, ?3, 1) ON CONFLICT (day, key, action) DO UPDATE SET count = count + 1',
-    ).bind(day, key, action);
+      `INSERT INTO rate_daily (day, key, action, count) SELECT ?1, ?2, '${action}', 1 WHERE changes() = 1
+       ON CONFLICT (day, key, action) DO UPDATE SET count = count + 1`,
+    ).bind(day, key);
   }
 
   async function player(request) {
@@ -160,11 +162,9 @@ export function createApp({ now = () => Date.now(), rules = RULES } = {}) {
     if (!Number.isInteger(note) || note < 0 || note >= rules.noteCount) throw new HttpError(400, 'bad_note');
     const db = env.DB;
     const day = utcDay(t);
-    if ((await dailyCount(db, day, ip, 'place')) >= rules.maxPlacesPerIpPerDay) throw new HttpError(429, 'ip_daily');
-
     const id = newId();
     const expires = t + rules.lifetimeMs;
-    const [, , check] = await db.batch([
+    const [, , , check] = await db.batch([
       // 같은 슬롯의 만료된 보급품을 먼저 정리해 자리를 비운다.
       db.prepare(
         "UPDATE caches SET removed_at = expires_at, removed_by = 'expired' WHERE layout = ?1 AND slot = ?2 AND removed_at IS NULL AND expires_at <= ?3",
@@ -174,21 +174,25 @@ export function createApp({ now = () => Date.now(), rules = RULES } = {}) {
          SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8, ?9
          WHERE NOT EXISTS (SELECT 1 FROM caches WHERE layout = ?2 AND slot = ?3 AND removed_at IS NULL)
            AND (SELECT count(*) FROM caches WHERE owner = ?6 AND removed_at IS NULL AND expires_at > ?8) < ?10
-           AND (SELECT count(*) FROM caches WHERE layout = ?2 AND removed_at IS NULL AND expires_at > ?8) < ?11`,
-      ).bind(id, LAYOUT, slot, kind, note, user, rules.charges, t, expires, rules.maxActivePerPlayer, rules.maxActiveTotal),
+           AND (SELECT count(*) FROM caches WHERE layout = ?2 AND removed_at IS NULL AND expires_at > ?8) < ?11
+           AND ${usedToday('?12', '?13', 'place')} < ?14`,
+      ).bind(id, LAYOUT, slot, kind, note, user, rules.charges, t, expires, rules.maxActivePerPlayer, rules.maxActiveTotal,
+        day, ip, rules.maxPlacesPerIpPerDay),
+      bumpIfChanged(db, day, ip, 'place'),
       db.prepare(
         `SELECT (SELECT count(*) FROM caches WHERE id = ?1) AS ok,
                 (SELECT count(*) FROM caches WHERE layout = ?2 AND slot = ?3 AND removed_at IS NULL) AS slot_live,
-                (SELECT count(*) FROM caches WHERE owner = ?4 AND removed_at IS NULL AND expires_at > ?5) AS mine`,
-      ).bind(id, LAYOUT, slot, user, t),
+                (SELECT count(*) FROM caches WHERE owner = ?4 AND removed_at IS NULL AND expires_at > ?5) AS mine,
+                ${usedToday('?6', '?7', 'place')} AS today`,
+      ).bind(id, LAYOUT, slot, user, t, day, ip),
     ]);
     const c = check.results[0];
     if (!c.ok) {
+      if (c.today >= rules.maxPlacesPerIpPerDay) throw new HttpError(429, 'ip_daily');
       if (c.slot_live) throw new HttpError(409, 'slot_taken');
       if (c.mine >= rules.maxActivePerPlayer) throw new HttpError(429, 'player_limit');
       throw new HttpError(429, 'town_full');
     }
-    await bump(db, day, ip, 'place').run();
     listMemo.at = -Infinity;
     return { cache: { id, slot, kind, note, charges: rules.charges, thanks: 0, expiresAt: expires } };
   }
@@ -198,15 +202,15 @@ export function createApp({ now = () => Date.now(), rules = RULES } = {}) {
   async function use(env, id, t, user, ip) {
     const db = env.DB;
     const day = utcDay(t);
-    if ((await dailyCount(db, day, ip, 'use')) >= rules.maxUsesPerIpPerDay) throw new HttpError(429, 'ip_daily');
     const since = t - rules.reuseCooldownMs;
-    const [, , check] = await db.batch([
+    const [, , , check] = await db.batch([
       db.prepare(
         `INSERT INTO uses (cache_id, user_hash, used_at)
          SELECT id, ?2, ?3 FROM caches
          WHERE id = ?1 AND removed_at IS NULL AND expires_at > ?3 AND charges > 0 AND owner <> ?2
-           AND NOT EXISTS (SELECT 1 FROM uses WHERE cache_id = ?1 AND user_hash = ?2 AND used_at > ?4)`,
-      ).bind(id, user, t, since),
+           AND NOT EXISTS (SELECT 1 FROM uses WHERE cache_id = ?1 AND user_hash = ?2 AND used_at > ?4)
+           AND ${usedToday('?5', '?6', 'use')} < ?7`,
+      ).bind(id, user, t, since, day, ip, rules.maxUsesPerIpPerDay),
       // batch는 한 연결에서 차례로 도는 트랜잭션이라 changes()는 바로 앞 문장이 바꾼 행 수다.
       // 같은 밀리초의 중복 요청이 앞 기록을 자기 것으로 착각하지 않도록, 시각 비교 대신 이것으로 판정한다.
       // SET 식의 charges는 갱신 전 값이다. 마지막 1회를 쓰면 소진으로 내려 슬롯을 비운다.
@@ -216,22 +220,25 @@ export function createApp({ now = () => Date.now(), rules = RULES } = {}) {
            removed_by = CASE WHEN charges <= 1 THEN 'exhausted' ELSE removed_by END
          WHERE id = ?1 AND changes() = 1`,
       ).bind(id, t),
+      bumpIfChanged(db, day, ip, 'use'),
+      // 여기서 changes()는 카운터 문장의 결과다. 사용이 반영됐을 때만 1이다.
       db.prepare(
         `SELECT kind, charges, owner, removed_at, expires_at, changes() AS ok,
-                (SELECT count(*) FROM uses WHERE cache_id = ?1 AND user_hash = ?2 AND used_at > ?3) AS recent
+                (SELECT count(*) FROM uses WHERE cache_id = ?1 AND user_hash = ?2 AND used_at > ?3) AS recent,
+                ${usedToday('?4', '?5', 'use')} AS today
          FROM caches WHERE id = ?1`,
-      ).bind(id, user, since),
+      ).bind(id, user, since, day, ip),
     ]);
     const c = check.results[0];
     if (!c) throw new HttpError(404, 'not_found');
     if (!c.ok) {
+      if (c.today >= rules.maxUsesPerIpPerDay) throw new HttpError(429, 'ip_daily');
       const alive = c.removed_at === null && c.expires_at > t && c.charges > 0;
       if (!alive) throw new HttpError(410, 'gone');
       if (c.owner === user) throw new HttpError(403, 'own_cache');
       if (c.recent) throw new HttpError(409, 'used_today');
       throw new HttpError(410, 'gone');
     }
-    await bump(db, day, ip, 'use').run();
     listMemo.at = -Infinity;
     return { kind: c.kind, charges: c.charges };
   }
