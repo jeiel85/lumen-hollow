@@ -37,6 +37,8 @@ export function addXray(meshes, color) {
   }
 }
 
+const UP = new THREE.Vector3(0, 1, 0);
+
 const lerpAngle = (a, b, t) => {
   let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI;
   if (d < -Math.PI) d += Math.PI * 2;
@@ -89,7 +91,33 @@ export class Player {
     const hood = add(new THREE.SphereGeometry(0.26, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), coat, 0, 1.55, -0.05, this.body);
     hood.rotation.x = -0.35;
     add(new THREE.BoxGeometry(0.4, 0.44, 0.2), pack, 0, 1.02, -0.3, this.body);
-    add(new THREE.BoxGeometry(0.1, 0.36, 0.12), coat, 0.3, 1.0, 0.12, this.body, false).rotation.x = -0.9;
+
+    // 오른팔(-x): 어깨에 매달려 걸음에 맞춰 흔든다. 앞으로 흔들 때 팔꿈치가 조금 더 굽는다.
+    this.arm = new THREE.Group();
+    this.arm.position.set(-0.27, 1.26, 0);
+    this.arm.rotation.z = -0.2; // 몸통(아래로 넓어지는 원뿔)에 파묻히지 않게 살짝 벌린다
+    this.body.add(this.arm);
+    add(new THREE.BoxGeometry(0.12, 0.31, 0.13), coat, 0, -0.135, 0, this.arm);
+    this.elbow = new THREE.Group();
+    this.elbow.position.y = -0.27;
+    this.arm.add(this.elbow);
+    add(new THREE.BoxGeometry(0.11, 0.25, 0.12), coat, 0, -0.11, 0, this.elbow);
+    add(new THREE.BoxGeometry(0.09, 0.1, 0.1), skin, 0, -0.28, 0, this.elbow);
+
+    // 왼팔(+x): 손전등을 허리 높이에서 앞으로 겨눈 채 고정한다. 빛줄기·조명이 model에 고정돼
+    // 있으므로 이 팔은 흔들지 않는다. 어깨→팔꿈치→손목을 점으로 잡고 마디를 그 사이에 놓는다.
+    const limb = (a, b, w, d) => {
+      const dir = new THREE.Vector3().subVectors(b, a);
+      // 관절에서 이웃 마디와 겹쳐 틈이 보이지 않도록 양 끝을 0.03씩 늘린다
+      const me = add(new THREE.BoxGeometry(w, dir.length() + 0.06, d), coat, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2, this.body);
+      me.quaternion.setFromUnitVectors(UP, dir.normalize());
+    };
+    const shoulder = new THREE.Vector3(0.27, 1.26, 0);
+    const elbow = new THREE.Vector3(0.35, 1.0, 0.05);
+    const wrist = new THREE.Vector3(0.31, 0.93, 0.23);
+    limb(shoulder, elbow, 0.12, 0.13);
+    limb(elbow, wrist, 0.11, 0.12);
+    add(new THREE.BoxGeometry(0.12, 0.12, 0.09), skin, 0.3, 0.92, 0.27, this.body); // 손전등을 쥔 주먹
     add(new THREE.CylinderGeometry(0.05, 0.06, 0.26, 8), dark, 0.3, 0.92, 0.36, this.body, false).rotation.x = Math.PI / 2;
 
     addXray(meshes, 0x6a5634);
@@ -218,6 +246,10 @@ export class Player {
     const sw = Math.sin(this.phase) * 0.7 * moving;
     this.legs[0].rotation.x = sw;
     this.legs[1].rotation.x = -sw;
+    // 오른팔은 같은 쪽 다리(legs[0], -x)와 반대로 흔든다. 음수 회전이 앞쪽이다.
+    const armSwing = -sw * 0.85 + Math.sin(t * 1.7) * 0.03 * (1 - moving);
+    this.arm.rotation.x = armSwing;
+    this.elbow.rotation.x = -0.18 - Math.max(0, -armSwing) * 0.6;
     this.body.position.y = Math.abs(Math.sin(this.phase)) * 0.05 * moving;
     this.body.rotation.z = Math.sin(this.phase) * 0.04 * moving;
 
