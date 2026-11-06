@@ -1,0 +1,18 @@
+{
+  "name": "lumen-hollow-caches",
+  "private": true,
+  "type": "module",
+  "description": "Lumen Hollow 공유 보급품 API (Cloudflare Workers + D1)",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "test": "node --test --disable-warning=ExperimentalWarning \"test/*.test.mjs\"",
+    "gen-slots": "node --disable-warning=ExperimentalWarning scripts/gen-slots.mjs",
+    "db:local": "wrangler d1 execute lumen-hollow-caches --local --file schema.sql",
+    "dev": "wrangler dev --local --port 8787"
+  },
+  "devDependencies": {
+    "wrangler": "4.158.0"
+  }
+}
