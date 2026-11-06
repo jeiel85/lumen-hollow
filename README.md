@@ -116,4 +116,12 @@ python -m http.server 8000
 
 ## 라이선스
 
-게임 코드와 에셋의 라이선스는 아직 정하지 않았습니다(별도 고지 전까지 All rights reserved). 포함된 three.js는 MIT 라이선스입니다(`vendor/three/LICENSE`).
+**코드는 가져다 써도 되고, 콘텐츠는 원작자를 표시하면 쓸 수 있습니다.**
+
+| 구분 | 해당하는 것 | 라이선스 |
+|---|---|---|
+| 코드 | `src/`, `index.html`, `style.css`, `sw.js` 등. 마을·모델·조명·소리를 만드는 코드 포함 | [MIT](LICENSE) |
+| 콘텐츠 | 이미지(`docs/`, `icons/`, `favicon.svg`), 게임 속 글, 게임 이름·세계관·그늘이 같은 등장 요소 | [CC BY 4.0](LICENSE-CONTENT.md) |
+| three.js | `vendor/three/` | MIT ([vendor/three/LICENSE](vendor/three/LICENSE)) |
+
+콘텐츠를 쓸 때는 `"Lumen Hollow" © 2026 박용은 (jeiel85), CC BY 4.0`과 원본 주소를 적고, 고쳤다면 고친 사실도 밝혀 주세요. 경계와 표시 방법은 [LICENSE-CONTENT.md](LICENSE-CONTENT.md)에 있습니다.
