@@ -5,6 +5,21 @@ export class Sound {
   constructor() {
     this.ctx = null;
     this.muted = load('lumen.muted') === '1';
+    this.volume = 1; // 설정 화면의 전체 음량(0~1)
+    this.ambience = 1; // 비·밤 저음·속삭임 같은 환경음 배율(0~1)
+  }
+
+  _masterLevel() {
+    return this.muted ? 0 : 0.8 * this.volume;
+  }
+
+  setVolume(volume, ambience) {
+    this.volume = volume;
+    this.ambience = ambience;
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.master.gain.setTargetAtTime(this._masterLevel(), t, 0.05);
+    this.amb.gain.setTargetAtTime(this.ambience, t, 0.05);
   }
 
   // 브라우저 자동재생 정책 때문에 첫 사용자 입력에서 호출해야 한다.
@@ -20,8 +35,12 @@ export class Sound {
     }
     const ctx = (this.ctx = new AC());
     this.master = ctx.createGain();
-    this.master.gain.value = this.muted ? 0 : 0.8;
+    this.master.gain.value = this._masterLevel();
     this.master.connect(ctx.destination);
+    // 환경음 묶음: 효과음과 따로 줄일 수 있게 한 단계 거친다.
+    this.amb = ctx.createGain();
+    this.amb.gain.value = this.ambience;
+    this.amb.connect(this.master);
 
     const len = ctx.sampleRate * 2;
     this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -38,7 +57,7 @@ export class Sound {
     const hp = ctx.createBiquadFilter();
     hp.type = 'highpass';
     hp.frequency.value = 500;
-    rain.connect(hp).connect(lp).connect(this.rainGain).connect(this.master);
+    rain.connect(hp).connect(lp).connect(this.rainGain).connect(this.amb);
 
     // 밤 저음
     this.nightGain = ctx.createGain();
@@ -56,7 +75,7 @@ export class Sound {
       o.connect(g).connect(dlp);
       o.start();
     }
-    dlp.connect(this.nightGain).connect(this.master);
+    dlp.connect(this.nightGain).connect(this.amb);
 
     // 그늘이가 가까울 때 속삭임
     this.dreadGain = ctx.createGain();
@@ -74,7 +93,7 @@ export class Sound {
     lfoAmt.gain.value = 0.5;
     lfo.connect(lfoAmt).connect(trem.gain);
     lfo.start();
-    whisper.connect(bp).connect(trem).connect(this.dreadGain).connect(this.master);
+    whisper.connect(bp).connect(trem).connect(this.dreadGain).connect(this.amb);
 
     // 트럭 엔진: 낮은 톱니파 두 개를 저역 필터로 뭉갠 소리. 회전수에 따라 음높이와 필터가 오른다.
     this.engineGain = ctx.createGain();
@@ -136,7 +155,7 @@ export class Sound {
   toggleMute() {
     this.muted = !this.muted;
     save('lumen.muted', this.muted ? '1' : '0');
-    if (this.ctx) this.master.gain.setTargetAtTime(this.muted ? 0 : 0.8, this.ctx.currentTime, 0.05);
+    if (this.ctx) this.master.gain.setTargetAtTime(this._masterLevel(), this.ctx.currentTime, 0.05);
     return this.muted;
   }
 

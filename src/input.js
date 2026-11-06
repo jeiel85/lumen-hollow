@@ -15,7 +15,9 @@ export class Input {
     this.usingTouch = false;
 
     addEventListener('keydown', (e) => {
-      if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
+      // 설정 화면의 슬라이더·스위치는 방향키·스페이스로 조작하므로 막지 않는다.
+      const inForm = e.target instanceof Element && e.target.closest('input, select, textarea');
+      if (!inForm && (e.code.startsWith('Arrow') || e.code === 'Space')) e.preventDefault();
       if (!this.keys.has(e.code)) this.pressed.add(e.code);
       this.keys.add(e.code);
     });
