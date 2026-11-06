@@ -1206,7 +1206,8 @@ function drive(dt) {
 
 function step(dt) {
   runTimers();
-  if (flushStory()) return;
+  // 타이머가 장면(엔딩 등)을 열었거나 판을 끝냈으면 이번 프레임의 진행은 하지 않는다.
+  if (game.state !== 'play' || flushStory()) return;
   const flashKey = input.consume('KeyF') || input.consume('Touch_flash');
   const flashClick = input.consume('MouseLeft');
   if (game.driving) {
