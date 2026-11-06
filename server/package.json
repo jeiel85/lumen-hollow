@@ -10,7 +10,8 @@
     "test": "node --test --disable-warning=ExperimentalWarning \"test/*.test.mjs\"",
     "gen-slots": "node --disable-warning=ExperimentalWarning scripts/gen-slots.mjs",
     "db:local": "wrangler d1 execute lumen-hollow-caches --local --file schema.sql",
-    "dev": "wrangler dev --local --port 8787"
+    "dev": "wrangler dev --local --port 8787",
+    "dev:admin": "wrangler dev --local --port 8788 -c wrangler.admin.toml"
   },
   "devDependencies": {
     "wrangler": "4.158.0"
