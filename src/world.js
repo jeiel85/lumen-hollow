@@ -7,6 +7,10 @@ export const PITCH = 32;
 export const EDGE = 84; // 아스팔트 끝
 export const BOUND = 87; // 플레이어 이동 한계
 export const LAMP_RADIUS = 5.6; // 켜진 가로등의 안전 반경
+export const TRUCK_LAMP_RADIUS = 4.2; // 트럭 짐칸 작업등의 안전 반경
+// 배전: 빛 경계에 붙어 버티는 그늘이 하나가 그 구역 부하를 초당 이만큼 올린다. 부하가 1이 되면 차단기가 내려간다.
+export const LOAD_PER_SHADE = 0.016;
+const LOAD_DECAY = 0.04; // 아무도 누르지 않을 때 초당 빠지는 부하
 // 탈 수 있는 트럭을 세워 두는 곳: 은신처 남쪽 도로의 북쪽 차선, 앞이 트인 서쪽을 향해.
 export const CAR_SPAWN = { x: 4, z: 13.4, a: -Math.PI / 2 };
 const LOT_Y = 0.16;
@@ -36,6 +40,8 @@ const TYPES = [
 ];
 
 const ZONE_MAP = ['AABCC', 'AABCC', 'DDHEE', 'FFGII', 'FFGII'];
+// 배전반에 그리는 3×3 구역 배치(북쪽이 위). 블록 지도 ZONE_MAP을 구역 단위로 줄인 것.
+export const ZONE_GRID = ['ABC', 'DHE', 'FGI'];
 
 export const ZONE_NAMES = {
   A: '서북 농장', B: '약국 거리', C: '동북 주택가', D: '서쪽 공원', E: '다이너 거리',
@@ -97,8 +103,15 @@ export class World {
     this.night = 0;
     this.zones = {};
     for (const id of Object.keys(ZONE_NAMES)) {
-      this.zones[id] = { id, name: ZONE_NAMES[id], powered: false, level: 0, glow: 0, win: new Builder(), mat: null, seed: hash(id.charCodeAt(0)) * 100 };
+      this.zones[id] = {
+        id, name: ZONE_NAMES[id], powered: false, on: true, load: 0, tripped: false,
+        level: 0, glow: 0, win: new Builder(), mat: null, seed: hash(id.charCodeAt(0)) * 100,
+      };
     }
+    this.homeBreaker = null; // 은신처 발전기의 차단기(은신처에는 배전함이 없다)
+    // 트럭 짐칸 작업등. 가로등처럼 안전 반경을 만들고, 그늘이가 몰리면 따로 과부하가 걸린다.
+    this.truckLamp = { extra: true, x: 0, z: 0, on: false, level: 0, glow: 0, load: 0, r: TRUCK_LAMP_RADIUS };
+    this.events = [];
     this.anchors = this._findAnchors();
     const rng = new Rng(20261105);
     this._ground();
@@ -696,6 +709,7 @@ export class World {
     b.add(geo.box(), gx, LOT_Y + 0.5, gz, 1.6, 1.0, 1.0, 0x6d7a5c);
     b.add(geo.cyl(8), gx + 0.5, LOT_Y + 1.25, gz, 0.2, 0.6, 0.2, C.dark);
     this._boxCollider(gx - 0.85, gx + 0.85, gz - 0.55, gz + 0.55);
+    this.homeBreaker = { x: gx, z: gz, zone: 'H', ix: gx, iz: gz + 1.25, home: true };
     this._neon('H', [{ x: gx - 0.4, y: LOT_Y + 1.05, z: gz + 0.51, sx: 0.12, sy: 0.12, sz: 0.04 }], new THREE.Color(0.3, 1.0, 0.4), { x: gx, y: 1.6, z: gz + 0.8 }, 3);
     const fx = cx - 4.2, fz = cz + 4.8;
     for (let i = 0; i < 7; i++) {
@@ -804,7 +818,7 @@ export class World {
     this.heads = new THREE.InstancedMesh(new THREE.BoxGeometry(0.36, 0.1, 0.36), new THREE.MeshBasicMaterial({ color: 0xffffff }), n);
     const poolMat = new THREE.MeshBasicMaterial({ map: makePoolTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
     const poolGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
-    this.pools = new THREE.InstancedMesh(poolGeo, poolMat, n);
+    this.pools = new THREE.InstancedMesh(poolGeo, poolMat, n + 1); // 마지막 칸은 트럭 작업등
     this.pools.renderOrder = 2;
     const size = LAMP_RADIUS * 2.3;
     for (let i = 0; i < n; i++) {
@@ -816,6 +830,8 @@ export class World {
       this.pools.setMatrixAt(i, _mat4);
       this.pools.setColorAt(i, _col.setRGB(0, 0, 0));
     }
+    this.pools.setMatrixAt(n, _mat4.makeScale(0, 1, 0));
+    this.pools.setColorAt(n, _col.setRGB(0, 0, 0));
     this.heads.frustumCulled = false;
     this.pools.frustumCulled = false;
     this.root.add(this.heads, this.pools);
@@ -890,6 +906,7 @@ export class World {
     this.cands = [
       ...this.lamps.map((L) => ({ kind: 0, ref: L, x: L.x, y: L.y - 0.2, z: L.z, color: WARM, i: 0, d: 0 })),
       ...this.signs.map((S) => ({ kind: 1, ref: S, x: S.x, y: S.y, z: S.z, color: S.color, i: 0, d: 0 })),
+      { kind: 2, ref: this.truckLamp, x: 0, y: 5.2, z: 0, color: new THREE.Color(1.0, 0.86, 0.66), i: 0, d: 0 },
     ];
     this.active = [];
   }
@@ -899,9 +916,14 @@ export class World {
   reset(seed) {
     for (const z of Object.values(this.zones)) {
       z.powered = z.id === 'H';
+      z.on = true;
+      z.load = 0;
+      z.tripped = false;
       z.level = z.powered ? 1 : 0;
       z.glow = z.level;
     }
+    Object.assign(this.truckLamp, { on: false, level: 0, glow: 0, load: 0 });
+    this.events.length = 0;
     const rng = new Rng(seed * 7919 + 13);
     const n = this.loot.length;
     const items = [];
@@ -936,12 +958,146 @@ export class World {
     return Object.values(this.zones).filter((z) => z.powered).length;
   }
 
+  // ---------------------------------------------------------------- 배전
+  // 은신처는 자체 발전기로 늘 켜져 있고 변전소 출력(capacity)을 쓰지 않는다. 나머지 구역은 배전함을 고친 뒤에도
+  // 변전소 출력만큼만 동시에 켤 수 있다. 출력은 배전함을 셋 고칠 때마다 하나씩 오르고, 여덟 곳을 다 고치면
+  // 변전소가 정상 출력으로 돌아와 마을 전체가 켜진다(승리).
+
+  get repairedCount() {
+    let n = 0;
+    for (const z of Object.values(this.zones)) if (z.id !== 'H' && z.powered) n++;
+    return n;
+  }
+
+  get capacity() {
+    return 2 + Math.floor(this.repairedCount / 3);
+  }
+
+  get onCount() {
+    let n = 0;
+    for (const z of Object.values(this.zones)) if (z.id !== 'H' && z.powered && z.on) n++;
+    return n;
+  }
+
+  get trippedCount() {
+    let n = 0;
+    for (const z of Object.values(this.zones)) if (z.powered && z.tripped) n++;
+    return n;
+  }
+
+  // 배전함을 고친다. 출력이 남으면 바로 켜고, 모자라면 꺼 둔 채로 고쳐 둔다. { on }을 돌려준다.
   powerZone(id) {
     const z = this.zones[id];
-    if (!z || z.powered) return false;
+    if (!z || z.powered) return null;
+    z.on = false;
     z.powered = true;
-    z.level = 0.001;
+    z.load = 0;
+    z.tripped = false;
+    z.on = this.onCount < this.capacity;
+    return { on: z.on };
+  }
+
+  // 마지막 배전함을 고치면 변전소가 정상 출력을 되찾아 출력 한도와 상관없이 모든 구역을 켠다.
+  restoreAll() {
+    for (const z of Object.values(this.zones)) {
+      if (!z.powered) continue;
+      z.on = true;
+      z.tripped = false;
+      z.load = 0;
+    }
+  }
+
+  // 배전반 스위치. 켜려는데 출력이 모자라면 false.
+  setSwitch(id, on) {
+    const z = this.zones[id];
+    if (!z || !z.powered || z.id === 'H') return false;
+    if (on === z.on) return true;
+    if (on && this.onCount >= this.capacity) return false;
+    // 부하와 차단 상태는 그대로 둔다. 껐다 켜는 것으로 차단기를 원격으로 올리거나 부하를 비울 수 없게.
+    z.on = on;
     return true;
+  }
+
+  // 빛 경계에 붙은 그늘이가 그 빛의 부하를 올린다. lit은 lightAt의 결과.
+  addLoad(lit, amount) {
+    const src = lit.L.extra ? lit.L : this.zones[lit.L.zone];
+    if (!src || src.tripped) return;
+    src.load += amount;
+    if (src.load < 1) return;
+    src.load = 0;
+    if (lit.L.extra) {
+      src.on = false;
+      this.events.push({ type: 'truckTrip' });
+    } else {
+      src.tripped = true;
+      this.events.push({ type: 'trip', zone: src.id });
+    }
+  }
+
+  resetBreaker(id) {
+    const z = this.zones[id];
+    if (!z || !z.tripped) return false;
+    z.tripped = false;
+    z.load = 0.35; // 올리자마자 다시 내려가지 않게 조금 여유를 둔다
+    return true;
+  }
+
+  // 새벽: 내려간 차단기는 마을 관리 회로가 다시 올리고 부하도 비운다. 다시 올린 구역 수를 돌려준다.
+  dawnReset() {
+    let n = 0;
+    for (const z of Object.values(this.zones)) {
+      if (z.tripped) n++;
+      z.tripped = false;
+      z.load = 0;
+    }
+    this.truckLamp.load = 0;
+    return n;
+  }
+
+  takeEvents() {
+    if (!this.events.length) return null;
+    const out = this.events.slice();
+    this.events.length = 0;
+    return out;
+  }
+
+  // 트럭 작업등 위치·상태를 매 프레임 넘겨받는다.
+  setTruckLamp(x, z, on) {
+    const L = this.truckLamp;
+    L.x = x;
+    L.z = z;
+    if (on && !L.on) L.load = 0;
+    L.on = on;
+  }
+
+  breakerOf(id) {
+    return id === 'H' ? this.homeBreaker : this.fuseBoxes.find((f) => f.zone === id) ?? null;
+  }
+
+  // 블록 좌표로 구역을 찾는다(도로 위는 가장 가까운 블록). 마을 밖이면 null.
+  zoneAt(x, z) {
+    const col = Math.round(x / PITCH) + 2;
+    const row = Math.round(z / PITCH) + 2;
+    if (col < 0 || col > 4 || row < 0 || row > 4) return null;
+    return ZONE_MAP[row][col];
+  }
+
+  // 플레이어 근처에서 켜져 있는(또는 차단된) 빛 가운데 가장 부하가 신경 쓰이는 것: HUD 부하 막대용.
+  nearbyLoad(x, z, reach) {
+    let best = null;
+    const r2 = (LAMP_RADIUS + reach) ** 2;
+    for (const L of this.lamps) {
+      const zn = this.zones[L.zone];
+      if (!zn.powered || !zn.on) continue;
+      if ((L.x - x) ** 2 + (L.z - z) ** 2 > r2) continue;
+      if (!best || zn.tripped || zn.load > best.load) best = zn;
+      if (zn.tripped) break;
+    }
+    const T = this.truckLamp;
+    if (T.on && (T.x - x) ** 2 + (T.z - z) ** 2 < (T.r + reach) ** 2 && (!best || (!best.tripped && T.load > best.load))) {
+      return { name: '트럭 작업등', load: T.load, tripped: false };
+    }
+    return best ? { name: best.name, load: best.load, tripped: best.tripped } : null;
   }
 
   markSearched(loot) {
@@ -973,9 +1129,15 @@ export class World {
       if (d < bd) { bd = d; best = { kind: 'loot', ref: l }; }
     }
     for (const f of this.fuseBoxes) {
-      if (this.zones[f.zone].powered) continue;
+      const zn = this.zones[f.zone];
+      if (zn.powered && !zn.tripped) continue;
       const d = (f.ix - x) ** 2 + (f.iz - z) ** 2;
-      if (d < bd * 1.4) { bd = d; best = { kind: 'fuse', ref: f }; }
+      if (d < bd * 1.4) { bd = d; best = { kind: zn.powered ? 'breaker' : 'fuse', ref: f }; }
+    }
+    const hb = this.homeBreaker;
+    if (hb && this.zones.H.tripped) {
+      const d = (hb.ix - x) ** 2 + (hb.iz - z) ** 2;
+      if (d < bd * 1.4) { bd = d; best = { kind: 'breaker', ref: hb }; }
     }
     return best;
   }
@@ -1029,15 +1191,23 @@ export class World {
     p.z = Math.min(Math.max(p.z, -BOUND), BOUND);
   }
 
-  // 켜진 가로등 불빛 안인지. 안이면 빛의 중심과 거리를 돌려준다.
+  // 켜진 가로등(또는 트럭 작업등) 불빛 안인지. 안이면 빛의 중심·거리·안전 반경을 돌려준다.
+  // 깜박임(glow)이 아니라 켜진 정도(level)로 판단해, 과부하로 깜박이는 동안 경계가 흔들리지 않게 한다.
   lightAt(x, z) {
     if (this.night < 0.3) return null;
     for (const L of this.lamps) {
-      if (this.zones[L.zone].glow < 0.5) continue;
+      if (this.zones[L.zone].level < 0.5) continue;
       const dx = x - L.x;
       const dz = z - L.z;
       const d2 = dx * dx + dz * dz;
-      if (d2 < LAMP_RADIUS * LAMP_RADIUS) return { L, dx, dz, d: Math.sqrt(d2) };
+      if (d2 < LAMP_RADIUS * LAMP_RADIUS) return { L, dx, dz, d: Math.sqrt(d2), r: LAMP_RADIUS };
+    }
+    const T = this.truckLamp;
+    if (T.level >= 0.5) {
+      const dx = x - T.x;
+      const dz = z - T.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < T.r * T.r) return { L: T, dx, dz, d: Math.sqrt(d2), r: T.r };
     }
     return null;
   }
@@ -1047,11 +1217,26 @@ export class World {
   update(dt, t, night, focus, pxPerUnit) {
     this.night = night;
     for (const z of Object.values(this.zones)) {
-      if (z.powered && z.level < 1) z.level = Math.min(1, z.level + dt / 1.8);
-      const flick = z.level > 0 && z.level < 1 ? (hash(Math.floor(t * 16) + z.seed) > 0.45 ? 1 : 0.12) : 1;
+      const lit = z.powered && z.on && !z.tripped;
+      if (lit && z.level < 1) z.level = Math.min(1, z.level + dt / 1.8);
+      else if (!lit && z.level > 0) z.level = Math.max(0, z.level - dt / (z.tripped ? 0.5 : 0.9));
+      z.load = Math.max(0, z.load - dt * LOAD_DECAY);
+      let flick = z.level > 0 && z.level < 1 ? (hash(Math.floor(t * 16) + z.seed) > 0.45 ? 1 : 0.12) : 1;
+      // 과부하가 걸리면 부하가 클수록 자주 깜박인다(차단기가 내려가기 전 경고).
+      if (lit && z.load > 0.5 && hash(Math.floor(t * 14) + z.seed * 3.1) < (z.load - 0.5) * 1.1) flick *= 0.3;
       z.glow = z.level * flick;
       if (z.mat) z.mat.emissiveIntensity = 1.25 * night * z.glow;
     }
+    const T = this.truckLamp;
+    T.load = Math.max(0, T.load - dt * LOAD_DECAY);
+    T.level = T.on ? Math.min(1, T.level + dt / 0.35) : Math.max(0, T.level - dt / 0.35);
+    const tg = T.level * night * (T.load > 0.5 && hash(Math.floor(t * 14) + 91) < (T.load - 0.5) * 1.1 ? 0.3 : 1);
+    T.glow = tg;
+    const tn = this.lamps.length;
+    const ts = T.level > 0 ? T.r * 2.3 : 0;
+    this.pools.setMatrixAt(tn, _mat4.makeScale(ts, 1, ts).setPosition(T.x, 0.2, T.z));
+    this.pools.setColorAt(tn, _col.setRGB(1.0, 0.82, 0.6).multiplyScalar(tg * 0.42));
+    this.pools.instanceMatrix.needsUpdate = true;
 
     for (let i = 0; i < this.lamps.length; i++) {
       const g = this.zones[this.lamps[i].zone].glow * night;
@@ -1063,7 +1248,7 @@ export class World {
     this.pools.instanceColor.needsUpdate = true;
 
     for (const s of this.signs) {
-      let k = this.zones[s.zone].glow;
+      let k = s.fire ? 1 : this.zones[s.zone].glow;
       if (s.fire) {
         k *= 0.78 + 0.22 * Math.sin(t * 11 + s.seed) * Math.sin(t * 7.3 + s.seed * 2);
       } else if (k > 0) {
@@ -1077,8 +1262,13 @@ export class World {
 
     const blink = Math.sin(t * 5) > 0 ? 1 : 0.15;
     for (const fb of this.fuseBoxes) {
-      const on = this.zones[fb.zone].powered;
-      fb.light.material.color.setRGB(on ? 0.3 : 3.0 * blink, on ? 2.6 : 0.2 * blink, on ? 0.5 : 0.15 * blink);
+      const zn = this.zones[fb.zone];
+      const on = zn.powered;
+      // 상태등: 미복구 빨강 깜박임, 차단됨 주황 깜박임, 켜짐 초록, 꺼 둠 어두운 초록
+      if (!on) fb.light.material.color.setRGB(3.0 * blink, 0.2 * blink, 0.15 * blink);
+      else if (zn.tripped) fb.light.material.color.setRGB(3.2 * blink, 1.5 * blink, 0.1 * blink);
+      else if (zn.on) fb.light.material.color.setRGB(0.3, 2.6, 0.5);
+      else fb.light.material.color.setRGB(0.08, 0.5, 0.12);
       fb.beacon.visible = !on;
     }
     this.beaconMat.uniforms.uOpacity.value = (0.05 + 0.4 * night) * (0.75 + 0.25 * Math.sin(t * 2.2));
@@ -1095,7 +1285,11 @@ export class World {
     act.length = 0;
     if (night > 0.02) {
       for (const c of this.cands) {
-        const g = c.kind === 0 ? this.zones[c.ref.zone].glow * night * 40 : c.ref.level * c.ref.power;
+        if (c.kind === 2) {
+          c.x = c.ref.x;
+          c.z = c.ref.z;
+        }
+        const g = c.kind === 0 ? this.zones[c.ref.zone].glow * night * 40 : c.kind === 2 ? c.ref.glow * 18 : c.ref.level * c.ref.power;
         if (g < 0.05) continue;
         c.i = g;
         c.d = (c.x - focus.x) ** 2 + (c.z - focus.z) ** 2;

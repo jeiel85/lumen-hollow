@@ -6,7 +6,7 @@
 const BUILD = '__BUILD__';
 const CACHE = `lumen-${BUILD}`;
 const MODULES = [
-  'src/main.js', 'src/audio.js', 'src/env.js', 'src/geometry.js', 'src/hud.js', 'src/input.js', 'src/player.js',
+  'src/main.js', 'src/audio.js', 'src/env.js', 'src/geometry.js', 'src/grid.js', 'src/hud.js', 'src/input.js', 'src/player.js',
   'src/post.js', 'src/pwa.js', 'src/records.js', 'src/rng.js', 'src/settings.js', 'src/shades.js', 'src/storage.js',
   'src/vehicle.js', 'src/wardrobe.js', 'src/world.js',
 ];

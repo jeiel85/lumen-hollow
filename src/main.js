@@ -12,6 +12,7 @@ import { QUALITY, ZOOM, loadSettings, saveSettings, bindSettings } from './setti
 import { loadBest, recordRun, hasRecords, describeBest, initRecordsPanel } from './records.js';
 import { initPwa } from './pwa.js';
 import { Wardrobe, OutfitDrops, Closet, itemLabel, objParticle } from './wardrobe.js';
+import { Switchboard } from './grid.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -94,7 +95,8 @@ const game = {
   driving: false,
   holdLock: false,
   hintCar: false,
-  flashNoteAt: -99,
+  hintLamp: false,
+  hintLoad: false,
 };
 
 // 게임 시간 기준 지연 실행. 일시정지 중에는 멈추고, 새 판을 시작하면 비운다.
@@ -184,7 +186,7 @@ function renderBest() {
 // ---------------------------------------------------------------- 게임 흐름
 
 // 배포 직후 캐시된 옛 index.html과 섞이면 settings 화면이 없을 수 있다.
-const SCREENS = ['title', 'pause', 'end', 'settings', 'closet'];
+const SCREENS = ['title', 'pause', 'end', 'settings', 'closet', 'grid'];
 function setScreen(id) {
   if (id !== 'settings') settingsFrom = null;
   for (const s of SCREENS) $(s)?.classList.toggle('hidden', s !== id);
@@ -237,7 +239,7 @@ function startGame() {
   timers.length = 0;
   Object.assign(game, {
     state: 'play', nights: 0, hold: 0, holdKey: null, peaceful: false, won: false, shake: 0, hintFlash: false,
-    driving: false, holdLock: false, zoomBoost: 0, flashNoteAt: -99,
+    driving: false, holdLock: false, zoomBoost: 0, hintLoad: false,
   });
   hud.setDriving(false);
   camFocus.copy(player.pos);
@@ -254,6 +256,24 @@ function startGame() {
   if (drops.spawn(world, wardrobe, START) && wardrobe.foundCount === 0) {
     later(9.5, () => hud.toast('누군가 두고 간 옷가지 꾸러미가 마을 어딘가에서 빛나고 있다. 주우면 옷장에 영원히 남는다.'));
   }
+}
+
+// 배전반: 플레이 중에만 열고, 여는 동안은 일시정지처럼 시간이 멈춘다.
+let board = null;
+function openGrid() {
+  if (game.state !== 'play' || !board) return;
+  game.state = 'grid';
+  board.open(world.zoneAt(player.pos.x, player.pos.z));
+  setScreen('grid');
+  $('grid-title')?.focus();
+}
+
+function closeGrid() {
+  if (game.state !== 'grid') return;
+  game.state = 'play';
+  setScreen(null);
+  // 배전반을 연 사이에 그래픽 컨텍스트를 잃었다면 진행하지 않고 일시정지로 둔다.
+  if (game.contextLost) pauseGame(true);
 }
 
 function pauseGame(on) {
@@ -295,6 +315,8 @@ function continueWalk() {
 
 function backToTitle() {
   if (game.driving) leaveCar();
+  car.lamp = false;
+  world.setTruckLamp(car.pos.x, car.pos.z, false);
   game.state = 'title';
   hud.show(false);
   hud.showTouch(false);
@@ -441,12 +463,64 @@ function completeLoot(loot) {
 
 function restoreZone(box) {
   const zone = world.zones[box.zone];
+  const capBefore = world.capacity;
   player.fuses--;
-  world.powerZone(box.zone);
+  const res = world.powerZone(box.zone);
   sound.play('power');
-  hud.toast(`${zone.name}에 다시 전기가 들어왔다! (${world.poweredZones}/${world.totalZones})`, 'good');
-  if (env.night < 0.3) later(1.5, () => hud.toast('밤이 되면 이 구역의 가로등이 그늘이를 막아 준다.'));
-  if (world.poweredZones === world.totalZones) later(2.2, () => endGame(true));
+  if (world.poweredZones === world.totalZones) {
+    world.restoreAll();
+    hud.toast('마지막 배전함을 고쳤다! 변전소가 제 출력을 되찾아 마을 전체에 불이 들어온다.', 'good');
+    later(2.2, () => endGame(true));
+    return;
+  }
+  const where = `배전반(${input.usingTouch || mobile ? '위쪽 전력 버튼' : 'Tab'})`;
+  if (res?.on) {
+    hud.toast(`${zone.name}에 다시 전기가 들어왔다! (${world.poweredZones}/${world.totalZones})`, 'good');
+    if (env.night < 0.3) later(1.5, () => hud.toast('밤이 되면 이 구역의 가로등이 그늘이를 막아 준다.'));
+  } else {
+    hud.toast(`${zone.name} 배전함을 고쳤다. 변전소 출력이 모자라 꺼 두었다.`, 'warn');
+    later(1.5, () => hud.toast(`${where}에서 오늘 밤 켤 구역을 고르자.`));
+  }
+  if (world.capacity > capBefore) later(3.0, () => hud.toast(`변전소 출력이 올랐다. 이제 ${world.capacity}곳까지 함께 켤 수 있다.`, 'good'));
+}
+
+// 과부하로 차단기가 내려간 구역을 배전함(은신처는 발전기)에서 다시 올린다.
+function resetBreaker(ref) {
+  if (!world.resetBreaker(ref.zone)) return;
+  sound.play('breaker');
+  hud.toast(`${ref.zone === 'H' ? '은신처' : world.zones[ref.zone].name}에 다시 불이 들어왔다.`, 'good');
+}
+
+function onGridEvent(e) {
+  if (e.type === 'trip') {
+    sound.play('trip');
+    game.shake = Math.max(game.shake, 0.25);
+    const home = e.zone === 'H';
+    hud.toast(`${home ? '은신처' : world.zones[e.zone].name} 차단기가 내려갔다! ${home ? '발전기' : '배전함'}에서 다시 올리자.`, 'warn');
+  } else if (e.type === 'truckTrip') {
+    car.lamp = false;
+    sound.play('trip');
+    hud.toast('작업등이 과부하로 꺼졌다! 트럭에 타서 다시 켜자.', 'warn');
+  }
+}
+
+// 운전석에서 짐칸 작업등(발전기)을 켜고 끈다. 내린 뒤에도 연료가 있는 동안 켜져 있다.
+function toggleTruckLamp() {
+  const r = car.toggleLamp();
+  if (r === 'on' || r === 'off') sound.play('lamp');
+  if (r === 'on' && !game.hintLamp) {
+    game.hintLamp = true;
+    hud.toast('짐칸 작업등을 켰다. 세워 둔 트럭 둘레가 가로등 아래처럼 안전해진다. 대신 연료를 쓴다.', 'good');
+  } else if (r === 'moving') {
+    hud.toast('작업등은 트럭을 세운 뒤에 켤 수 있다.');
+  } else if (r === 'nofuel') {
+    hud.toast('연료가 없어 발전기를 돌릴 수 없다.', 'warn');
+  }
+}
+
+function onCarEvent(ev) {
+  if (ev.lampOut === 'fuel') hud.toast('연료가 바닥나 작업등이 꺼졌다.', 'warn');
+  else if (ev.lampOut === 'moving' && env.night > 0.3) hud.toast('출발하면서 작업등을 껐다.');
 }
 
 // 트럭 타기·내리기
@@ -552,6 +626,18 @@ function interact(dt) {
     }
     return;
   }
+  if (target.kind === 'breaker') {
+    const ref = target.ref;
+    const name = ref.zone === 'H' ? '은신처 발전기' : `${world.zones[ref.zone].name} 배전함`;
+    const dur = 1.2;
+    const done = holdProgress(dt, dur);
+    hud.prompt(`${how} 차단기 올리기 · ${name}`, Math.min(1, game.hold / dur));
+    if (done) {
+      game.hold = 0;
+      resetBreaker(ref);
+    }
+    return;
+  }
   if (target.kind === 'loot') {
     const dur = 1.0;
     const done = holdProgress(dt, dur);
@@ -588,11 +674,17 @@ function onTimeEvent(ev) {
     }
   } else if (ev === 'night') {
     if (!game.peaceful) hud.toast('그늘이들이 깨어났다.', 'warn');
+    if (!game.peaceful && !game.hintLoad) {
+      game.hintLoad = true;
+      later(2.4, () => hud.toast('그늘이가 가로등 가장자리에 몰려 버티면 과부하가 걸린다. 깜박이기 시작하면 손전등으로 흩어 놓자.'));
+    }
   } else if (ev === 'dawn') {
     game.nights++;
     env.day++;
     sound.play('dawn');
+    const reset = world.dawnReset();
     if (!game.peaceful) hud.toast(`${game.nights}번째 밤을 버텼다. 날이 밝는다.`, 'good');
+    if (reset) later(1.6, () => hud.toast('날이 밝자 내려갔던 차단기가 다시 올라갔다.'));
     if (player.flashOn) player.flashOn = false;
   }
 }
@@ -610,7 +702,7 @@ function walk(dt) {
     if (raycaster.ray.intersectPlane(aimPlane, aimPoint)) aim = aimPoint;
   }
   player.update(dt, game.time, { x: move.x, z: move.z }, aim, world, env.night, env.rainLevel);
-  car.update(dt, null, world, env.night);
+  onCarEvent(car.update(dt, null, world, env.night));
   // 세워 둔 트럭과 정적 충돌체를 번갈아 풀어, 트럭이 밀어낸 자리가 벽 속이 되지 않게 한다.
   // 트럭과 벽 사이 틈처럼 둘 다 만족하는 자리가 없으면 이번 이동을 취소한다.
   for (let i = 0; i < 3 && car.pushOut(player.pos, PLAYER_R); i++) world.collide(player.pos, PLAYER_R);
@@ -630,6 +722,7 @@ function drive(dt) {
     ctl = car.steerToward(dir.x, dir.z, Math.hypot(ms.x, ms.y));
   }
   const ev = car.update(dt, ctl, world, env.night);
+  onCarEvent(ev);
   if (ev.crash) {
     sound.play('crash');
     game.shake = Math.min(0.6, 0.15 + ev.crash * 0.04);
@@ -648,10 +741,7 @@ function step(dt) {
   const flashKey = input.consume('KeyF') || input.consume('Touch_flash');
   const flashClick = input.consume('MouseLeft');
   if (game.driving) {
-    if (flashKey && game.time - game.flashNoteAt > 4) {
-      game.flashNoteAt = game.time;
-      hud.toast('차 안에서는 손전등 대신 전조등이 앞을 비춘다.');
-    }
+    if (flashKey) toggleTruckLamp();
   } else if (flashKey || flashClick) {
     toggleFlash();
   }
@@ -661,6 +751,7 @@ function step(dt) {
 
   if (game.driving) drive(dt);
   else walk(dt);
+  world.setTruckLamp(car.pos.x, car.pos.z, car.lamp && car.fuel > 0);
 
   const lit = world.lightAt(player.pos.x, player.pos.z);
   if (lit) player.battery = Math.min(100, player.battery + dt * 3.5);
@@ -683,6 +774,8 @@ function step(dt) {
   }
   if (ev.banished) sound.play('banish');
   game.dread = ev.nearest < 12 ? 1 - ev.nearest / 12 : 0;
+  const gridEvents = world.takeEvents();
+  if (gridEvents) for (const e of gridEvents) onGridEvent(e);
 
   interact(dt);
 
@@ -715,6 +808,11 @@ function frame(now) {
     else if (game.state === 'play') pauseGame(true);
     else if (game.state === 'pause') pauseGame(false);
     else if (game.state === 'closet') closeCloset();
+    else if (game.state === 'grid') closeGrid();
+  }
+  if (input.consume('Tab') || input.consume('KeyB')) {
+    if (game.state === 'play') openGrid();
+    else if (game.state === 'grid') closeGrid();
   }
   if (input.consume('KeyM')) {
     const muted = toggleMute();
@@ -759,11 +857,15 @@ function frame(now) {
   env.update(dt, camFocus, pxPerUnit);
   world.update(dt, game.time, env.night, camFocus, pxPerUnit);
   world.setWetness(env.rainLevel);
+  // 근처 빛의 부하: HUD 막대와 웅웅거림. 밤에 부하가 오르거나 차단됐을 때만 보인다.
+  const near = game.state === 'play' || game.state === 'grid' ? world.nearbyLoad(player.pos.x, player.pos.z, 3) : null;
+  const loadShown = env.night > 0.3 && near && (near.tripped || near.load > 0.04) ? near : null;
   if (game.state !== 'title') {
-    sound.setMix({ rain: env.rainLevel, night: env.night, dread: game.state === 'play' ? game.dread ?? 0 : 0 });
+    const buzz = game.state === 'play' && loadShown && !loadShown.tripped ? Math.max(0, (loadShown.load - 0.35) / 0.65) : 0;
+    sound.setMix({ rain: env.rainLevel, night: env.night, dread: game.state === 'play' ? game.dread ?? 0 : 0, buzz });
   }
   // 일시정지 중에는 공회전, 그 밖(타이틀·종료 화면)에는 엔진을 끈다.
-  const engineOn = game.driving && car.running && (game.state === 'play' || game.state === 'pause');
+  const engineOn = game.driving && car.running && (game.state === 'play' || game.state === 'pause' || game.state === 'grid');
   sound.setEngine(game.state === 'play' && engineOn ? {
     on: true, rpm: Math.min(1, Math.abs(car.speed) / MAX_FWD), load: car.throttle, skid: Math.min(1, Math.max(0, car.slip - 2) / 4),
   } : { on: engineOn });
@@ -785,6 +887,7 @@ function frame(now) {
       day: env.day, hour: env.hour, zonesOn: world.poweredZones, zonesTotal: world.totalZones,
       hp: player.hp, battery: player.battery, fuses: player.fuses, bandages: player.bandages, flashOn: player.flashActive,
       cans: player.cans, driving: game.driving, fuel: car.fuel,
+      powerUsed: world.onCount, powerCap: world.capacity, tripped: world.trippedCount, load: loadShown,
     });
     const dead = game.state === 'play' ? world.nearestDeadBox(player.pos.x, player.pos.z) : null;
     if (dead) {
@@ -803,6 +906,9 @@ function frame(now) {
 $('start-btn').addEventListener('click', startGame);
 $('closet-btn')?.addEventListener('click', openCloset);
 $('closet-close')?.addEventListener('click', closeCloset);
+$('power-btn')?.addEventListener('click', openGrid);
+$('grid-close')?.addEventListener('click', closeGrid);
+if ($('grid')) board = new Switchboard(world, { onToggle: () => sound.play('click') });
 $('resume-btn').addEventListener('click', () => pauseGame(false));
 $('quit-btn').addEventListener('click', backToTitle);
 $('restart-btn').addEventListener('click', startGame);
@@ -827,7 +933,7 @@ document.addEventListener('visibilitychange', () => document.hidden && pauseGame
 if (params.has('debug')) {
   window.lumen = {
     THREE, scene, camera, renderer, world, env, post, player, shades, car, game, input, hud, startGame,
-    wardrobe, drops, closet, openCloset, closeCloset,
+    wardrobe, drops, closet, openCloset, closeCloset, board, openGrid, closeGrid,
     step(sec) {
       let t = last;
       for (let i = 0, n = Math.round(sec / 0.05); i < n; i++) frame((t += 50));

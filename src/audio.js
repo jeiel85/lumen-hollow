@@ -123,6 +123,23 @@ export class Sound {
     sbp.frequency.value = 1500;
     sbp.Q.value = 6;
     squeal.connect(sbp).connect(this.skidGain).connect(this.master);
+
+    // 과부하 걸린 가로등의 전기 웅웅거림. 부하가 오를수록 커져 차단기가 내려가기 전에 귀로도 알린다.
+    // 위험 신호라서 환경음 음량과 상관없이 효과음 쪽(master)으로 보낸다.
+    this.buzzGain = ctx.createGain();
+    this.buzzGain.gain.value = 0;
+    const buzzF = ctx.createBiquadFilter();
+    buzzF.type = 'bandpass';
+    buzzF.frequency.value = 240;
+    buzzF.Q.value = 4;
+    for (const f of [120, 240.6]) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f;
+      o.connect(buzzF);
+      o.start();
+    }
+    buzzF.connect(this.buzzGain).connect(this.master);
   }
 
   _noiseSource() {
@@ -133,12 +150,13 @@ export class Sound {
     return s;
   }
 
-  setMix({ rain = 0, night = 0, dread = 0 }) {
+  setMix({ rain = 0, night = 0, dread = 0, buzz = 0 }) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     this.rainGain.gain.setTargetAtTime(rain * 0.22, t, 0.4);
     this.nightGain.gain.setTargetAtTime(night * 0.5, t, 0.8);
     this.dreadGain.gain.setTargetAtTime(dread * 0.28, t, 0.25);
+    this.buzzGain.gain.setTargetAtTime(buzz * 0.05, t, 0.15);
   }
 
   // on: 시동이 걸려 있는지, rpm: 0~1(속도), load: 0~1(가속 페달), skid: 0~1(미끄러짐)
@@ -244,6 +262,19 @@ export class Sound {
         break;
       case 'pour':
         this._burst(t, 0.7, { freq: 900, q: 2.5, gain: 0.08, sweep: 0.6 });
+        break;
+      case 'trip': // 차단기가 내려감: 스파크 두 번과 꺼져 가는 웅 소리
+        this._burst(t, 0.16, { freq: 3400, q: 0.8, gain: 0.18, type: 'highpass' });
+        this._burst(t + 0.09, 0.1, { freq: 5200, q: 1, gain: 0.12, type: 'highpass' });
+        this._tone(118, t + 0.05, 0.7, { gain: 0.2, type: 'sawtooth', slide: 0.3 });
+        break;
+      case 'breaker': // 차단기를 올림: 철컥, 그리고 다시 도는 웅 소리
+        this._burst(t, 0.07, { freq: 900, q: 1.5, gain: 0.22 });
+        this._tone(60, t + 0.06, 0.9, { gain: 0.1, type: 'sawtooth', slide: 2 });
+        break;
+      case 'lamp': // 작업등 스위치
+        this._burst(t, 0.05, { freq: 1800, q: 2, gain: 0.1 });
+        this._tone(220, t + 0.03, 0.35, { gain: 0.05, type: 'triangle', slide: 1.5 });
         break;
       case 'win':
         [523.3, 659.3, 784, 1046.5, 1318.5].forEach((f, i) => this._tone(f, t + i * 0.12, 2.2, { gain: 0.07, type: 'triangle' }));

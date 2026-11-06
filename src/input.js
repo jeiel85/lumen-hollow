@@ -18,6 +18,11 @@ export class Input {
       // 설정 화면의 슬라이더·스위치는 방향키·스페이스로 조작하므로 막지 않는다.
       const inForm = e.target instanceof Element && e.target.closest('input, select, textarea');
       if (!inForm && (e.code.startsWith('Arrow') || e.code === 'Space')) e.preventDefault();
+      // Tab은 플레이 중에는 배전반 열기로 쓰고, 메뉴·설정 화면 안에서는 원래대로 포커스를 옮긴다.
+      if (e.code === 'Tab') {
+        if (e.target instanceof Element && e.target.closest('.screen')) return;
+        e.preventDefault();
+      }
       if (!this.keys.has(e.code)) this.pressed.add(e.code);
       this.keys.add(e.code);
     });

@@ -21,6 +21,8 @@ const LIGHT_ANGLE = 0.5;
 const FUEL_IDLE = 0.12; // 시동만 걸려 있을 때 %/s
 const FUEL_DRIVE = 1.5; // 가속 페달을 끝까지 밟았을 때 추가 %/s
 export const RAM_SPEED = 6; // 이 속도 이상으로 들이받으면 그늘이가 흩어진다
+const LAMP_FUEL = 0.3; // 짐칸 작업등(발전기)이 쓰는 연료 %/s. 연료 40%면 밤 하나 남짓 버틴다.
+const LAMP_MAX_SPEED = 1.5; // 작업등은 세워 둔 채로만 켠다. 이보다 빨리 움직이면 꺼진다.
 const SKID_MAX = 480;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -83,6 +85,11 @@ export class Vehicle {
     // 짐칸의 연료통과 녹슨 상자
     box(0.34, 0.44, 0.5, can, 0.42, 1.13, -1.6);
     box(0.62, 0.34, 0.58, rust, -0.36, 1.08, -1.1);
+    // 짐칸 발전기와 작업등 기둥: 세워 두고 켜면 트럭 둘레가 가로등 아래처럼 안전해진다.
+    box(0.56, 0.38, 0.46, mat(0x6d7a5c), -0.38, 1.09, -1.72);
+    box(0.06, 1.7, 0.06, dark, 0.66, 1.75, -0.86);
+    this.lampMat = new THREE.MeshBasicMaterial({ color: 0x5a564c });
+    box(0.34, 0.2, 0.22, this.lampMat, 0.66, 2.62, -0.86);
 
     // 전조등·후미등은 조명 대신 자체 발광 색으로만 표현한다(블룸이 번지게 밝게).
     this.headMat = new THREE.MeshBasicMaterial({ color: 0x8a8a80 });
@@ -158,6 +165,7 @@ export class Vehicle {
     this.slip = 0;
     this.braking = false;
     this.throttle = 0;
+    this.lamp = false;
     this.skids.count = 0;
     this.skidNext = 0;
     this._place();
@@ -169,6 +177,18 @@ export class Vehicle {
 
   get running() {
     return this.occupied && this.fuel > 0;
+  }
+
+  // 짐칸 작업등을 켜고 끈다. 켤 수 없으면 이유('nofuel' | 'moving')를, 아니면 'on' | 'off'를 돌려준다.
+  toggleLamp() {
+    if (this.lamp) {
+      this.lamp = false;
+      return 'off';
+    }
+    if (this.fuel <= 0) return 'nofuel';
+    if (Math.abs(this.speed) > LAMP_MAX_SPEED) return 'moving';
+    this.lamp = true;
+    return 'on';
   }
 
   // 점을 차체 좌표(lx: 오른쪽, lz: 앞쪽)로
@@ -263,8 +283,15 @@ export class Vehicle {
 
   // ctl: { thr: -1~1(앞·뒤), steer: -1~1(오른쪽 +) }. 사람이 타지 않았으면 무시하고 주차 브레이크.
   update(dt, ctl, world, night) {
-    const ev = { crash: 0, stalled: false };
+    const ev = { crash: 0, stalled: false, lampOut: null };
     this.crashCool = Math.max(0, this.crashCool - dt);
+    if (this.lamp) {
+      this.fuel = Math.max(0, this.fuel - LAMP_FUEL * dt);
+      if (this.fuel <= 0) {
+        this.lamp = false;
+        ev.lampOut = 'fuel';
+      }
+    }
     if (!this.occupied && this.vel.lengthSq() < 1e-6) {
       this.slip = 0;
       this.throttle = 0;
@@ -364,6 +391,10 @@ export class Vehicle {
     this.pos.y += (gy - this.pos.y) * (1 - Math.exp(-dt * 14));
 
     // 연료
+    if (this.lamp && Math.abs(this.speed) > LAMP_MAX_SPEED) {
+      this.lamp = false;
+      ev.lampOut = 'moving';
+    }
     if (this.running) {
       this.fuel = Math.max(0, this.fuel - (FUEL_IDLE + FUEL_DRIVE * this.throttle) * dt);
       if (this.fuel <= 0) ev.stalled = true;
@@ -516,6 +547,7 @@ export class Vehicle {
     const tail = this.braking ? 5 : on ? 1.4 + night : 0.35;
     this.tailMat.color.setRGB(0.9, 0.12, 0.08).multiplyScalar(tail);
     for (const m of this.mats) m.emissiveIntensity = 0.16 * night;
+    this.lampMat.color.setRGB(0.4, 0.39, 0.34).multiplyScalar(this.lamp && this.fuel > 0 ? 2.5 + 6 * night : 1);
   }
 
   _place() {

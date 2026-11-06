@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LAMP_RADIUS, BOUND } from './world.js';
+import { BOUND, LOAD_PER_SHADE } from './world.js';
 import { RAM_SPEED } from './vehicle.js';
 
 // 그늘이(Shade): 밤에만 나타나는 그림자 형체. 빛에 닿으면 물러나고 오래 비추면 흩어진다.
@@ -105,7 +105,7 @@ export class Shades {
     const { player, world, night, nights, spawning, car, driving } = ctx;
     const px = player.pos.x;
     const pz = player.pos.z;
-    const events = { hits: 0, banished: 0, rammed: 0, nearest: Infinity, burning: 0 };
+    const events = { hits: 0, banished: 0, rammed: 0, nearest: Infinity, burning: 0, pressing: 0 };
     const ramming = driving && Math.abs(car.speed) >= RAM_SPEED;
 
     const target = spawning ? Math.min(5 + nights * 2, 14) : 0;
@@ -154,17 +154,33 @@ export class Shades {
         } else {
           s.burn = Math.max(0, s.burn - dt * 0.35);
         }
+        const x0 = s.x;
+        const z0 = s.z;
         s.x += s.vx * dt;
         s.z += s.vz * dt;
         if (car) car.pushOut(s, 0.3);
 
-        // 켜진 가로등 불빛 안으로는 못 들어온다. 경계로 밀려나며 조금씩 탄다.
-        const lit = world.lightAt(s.x, s.z);
+        // 켜진 빛(가로등·트럭 작업등) 안으로는 못 들어온다. 경계로 밀려나며 조금씩 타고, 버티는 동안 그 빛에 부하를 건다.
+        // 빛이 겹친 곳(길 건너 가로등, 가로등 옆에 세운 트럭)에서는 한 빛 밖으로 밀어낸 자리가 다른 빛 안일 수 있어
+        // 몇 번 되풀이한다. 끝내 못 빠져나오면 이번 이동을 취소하고, 빛에 둘러싸인 셈이라 빨리 탄다.
+        let lit = world.lightAt(s.x, s.z);
         if (lit) {
-          const n = lit.d || 0.001;
-          s.x = lit.L.x + (lit.dx / n) * LAMP_RADIUS;
-          s.z = lit.L.z + (lit.dz / n) * LAMP_RADIUS;
           s.burn += dt * 0.25;
+          world.addLoad(lit, dt * LOAD_PER_SHADE);
+          events.pressing++;
+          for (let k = 0; lit && k < 4; k++) {
+            const n = lit.d || 0.001;
+            s.x = lit.L.x + (lit.dx / n) * (lit.r + 0.01);
+            s.z = lit.L.z + (lit.dz / n) * (lit.r + 0.01);
+            lit = world.lightAt(s.x, s.z);
+          }
+          if (lit) {
+            s.x = x0;
+            s.z = z0;
+            s.vx = 0;
+            s.vz = 0;
+            s.burn += dt * 1.5;
+          }
         }
         // 빠르게 달리는 차에 부딪히면 그 자리에서 흩어진다.
         const rammed = ramming && car.contains(s.x, s.z, 0.45);
