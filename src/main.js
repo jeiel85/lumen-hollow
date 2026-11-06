@@ -18,6 +18,7 @@ import { Online, NOTES, KIND_NAMES, RUN_TAKE_LIMIT, BATTERY_PACK, BATTERY_PACK_M
 import { Story, DOCS, sceneById } from './story.js';
 import { Dialogue } from './dialogue.js';
 import { SCENES } from './script.js';
+import { captureRun, writeRun, readRun, clearRun, restoreWorld, describeRun } from './runsave.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -118,6 +119,7 @@ const game = {
   placing: null,
   placeNote: 1,
   hintThanks: false,
+  savedAt: 0, // 판을 마지막으로 저장한 게임 시간(game.time)
 };
 
 // 이야기 장면: 차례를 기다리는 장면 id와, 장면이 카메라를 옮긴 곳
@@ -249,19 +251,12 @@ function foundOutfit(item) {
   hud.toast(`${label}${objParticle(label)} 주웠다! 바로 ${WEAR_VERB[item.slot]} 봤다. 처음 화면 '옷장'에서 언제든 바꿀 수 있다.`, 'good');
 }
 
-function startGame() {
-  if (game.contextLost || !game.ready) return;
+// 새 판과 이어하기가 함께 쓰는 준비: 그늘이·타이머·이야기·온라인 상태와 화면을 판 시작 상태로 돌린다.
+// 마을·플레이어·트럭·시간은 부르는 쪽이 정한다.
+function beginRun() {
   sound.init();
-  world.reset((Math.random() * 1e9) | 0);
-  player.reset(START.x, START.z);
-  car.reset(CAR_SPAWN.x, CAR_SPAWN.z, CAR_SPAWN.a);
   shades.clear();
   shades.banished = 0;
-  const h = Number(params.get('hour'));
-  env.setHour(Number.isFinite(h) && params.has('hour') ? h : 7.5);
-  env.day = 1;
-  env.rainyNight = true;
-  env.rainLevel = 0;
   timers.length = 0;
   storyQueue.length = 0;
   storyCam.on = false;
@@ -271,18 +266,34 @@ function startGame() {
     state: 'play', nights: 0, hold: 0, holdKey: null, peaceful: false, won: false, shake: 0, hintFlash: false,
     driving: false, holdLock: false, zoomBoost: 0, hintLoad: false,
     run: game.run + 1, startedAt: game.time, onlineLive: false, onlinePaused: false, cacheTaken: 0, cacheBusy: false,
+    savedAt: game.time,
   });
   closePlace();
   caches.clear();
   hud.setOnline(false);
   if (online.enabled && hud.hasOnlineUi) bg(loadCaches(game.run));
   hud.setDriving(false);
-  camFocus.copy(player.pos);
   setScreen(null);
   hud.clearToasts();
   hud.show(true);
   hud.showTouch(mobile || input.usingTouch);
   $('key-hints').classList.toggle('hidden', mobile);
+}
+
+function startGame() {
+  if (game.contextLost || !game.ready) return;
+  world.reset((Math.random() * 1e9) | 0);
+  player.reset(START.x, START.z);
+  car.reset(CAR_SPAWN.x, CAR_SPAWN.z, CAR_SPAWN.a);
+  const h = Number(params.get('hour'));
+  env.setHour(Number.isFinite(h) && params.has('hour') ? h : 7.5);
+  env.day = 1;
+  env.rainyNight = true;
+  env.rainLevel = 0;
+  beginRun();
+  camFocus.copy(player.pos);
+  // 지난 판의 저장을 바로 이 판으로 덮는다. 첫 자동 저장 전에 탭이 죽어도 지난 판이 되살아나지 않게.
+  saveRun();
   // 처음 하는 사람은 도착 장면이 같은 내용을 들려준다.
   if (!queueStory('start')) hud.toast('정전된 마을. 불이 남은 곳은 은신처뿐이다.');
   later(1.8, () => hud.toast('퓨즈를 모아 꺼진 배전함에 끼우면 그 구역에 다시 불이 들어온다.'));
@@ -293,6 +304,116 @@ function startGame() {
     later(9.5, () => hud.toast('누군가 두고 간 옷가지 꾸러미가 마을 어딘가에서 빛나고 있다. 주우면 옷장에 영원히 남는다.'));
   }
   flushStory();
+}
+
+// 처음 화면의 '새로 시작'. 이어할 수 있는 판이 있으면 지워도 되는지 먼저 묻는다.
+// 브라우저 confirm()은 닫힐 때 늦게 오는 blur가 막 시작한 판을 일시정지시켜서, 처음 화면 안에서 묻는다.
+// 두 번째 자리에 '취소'를 두어, '새로 시작'을 두 번 연달아 눌러도 판이 지워지지 않게 한다.
+function newGame() {
+  if (game.contextLost || !game.ready) return;
+  const r = readRun(world);
+  // 더 새 버전이 쓴 저장도 새 판이 덮어쓰므로 함께 묻는다.
+  const lose = r.status === 'ok' ? `진행 중인 판(${describeRun(r.run, world.totalZones)})이 지워져요.`
+    : r.status === 'newer' ? '더 새 버전에서 저장한 판이 지워져요.' : null;
+  if (!lose || !$('new-confirm')) {
+    startGame();
+    return;
+  }
+  $('title-actions').classList.add('hidden');
+  $('new-confirm').classList.remove('hidden');
+  $('run-info').textContent = lose;
+  $('new-no').focus();
+}
+
+function cancelNewGame() {
+  renderRun();
+  $('start-btn').focus();
+}
+
+// ---------------------------------------------------------------- 판 저장(이어하기)
+// 형식·저장 시점은 DECISIONS.md "판 중간 저장". 탭이 가려질 때·닫힐 때·일시정지, 구역 복구·해질녘·새벽,
+// 플레이 중 15초마다 저장한다. 승리·패배하면 지운다.
+
+const SAVE_EVERY = 15; // 게임 시간(초)
+const RUN_STATES = new Set(['play', 'pause', 'story', 'grid']);
+
+function saveRun() {
+  // 끝난 판, 승리 뒤 산책, 처음 화면·옷장에서는 저장하지 않는다.
+  if (!RUN_STATES.has(game.state) || game.won || game.peaceful || !player.alive) return;
+  game.savedAt = game.time;
+  let data;
+  try {
+    data = captureRun({ world, player, car, env, game, shades });
+  } catch (err) {
+    // 저장 형식이 게임 상태를 따라가지 못한 버그다. 판은 계속하되, 고칠 수 있게 기록을 남긴다.
+    console.error('[run] 판을 저장하지 못했습니다.', err);
+    return;
+  }
+  writeRun(data);
+}
+
+// 처음 화면의 '이어하기'
+function resumeGame() {
+  if (game.contextLost || !game.ready) return;
+  const r = readRun(world);
+  if (r.status !== 'ok') {
+    renderRun();
+    return;
+  }
+  const { player: p, car: c, env: e, run } = r.run;
+  restoreWorld(world, r.run);
+  player.reset(p.x, p.z);
+  Object.assign(player, { hp: p.hp, battery: p.battery, fuses: p.fuses, bandages: p.bandages, cans: p.cans });
+  world.collide(player.pos, PLAYER_R);
+  player.pos.y = world.heightAt(player.pos.x, player.pos.z);
+  player.facing = p.facing;
+  player.model.rotation.y = p.facing;
+  car.reset(c.x, c.z, c.a, c.fuel);
+  car.lamp = c.lamp && c.fuel > 0;
+  world.setTruckLamp(car.pos.x, car.pos.z, car.lamp);
+  world.truckLamp.load = c.lampLoad;
+  world.truckLamp.level = car.lamp ? 1 : 0;
+  env.setHour(e.hour);
+  env.day = e.day;
+  env.rainyNight = e.rainyNight;
+  env.rainLevel = e.rain;
+  beginRun();
+  game.nights = run.nights;
+  game.cacheTaken = run.cacheTaken;
+  shades.banished = run.banished;
+  for (const key of run.hints) game[key] = true;
+  if (c.driving) seatInCar();
+  else player.flashOn = p.flash && player.battery > 0;
+  camFocus.copy(player.pos);
+  hud.toast(`지난 판을 이어 간다 · ${env.day}일째, 밝힌 구역 ${world.poweredZones}/${world.totalZones}`, 'good');
+  if (world.poweredZones === world.totalZones) {
+    // 마지막 배전함을 고친 직후, 엔딩이 나오기 전에 저장된 판이다.
+    world.restoreAll();
+    later(1.2, winGame);
+  } else if (world.poweredZones > 1) {
+    // 구역을 켠 뒤 무전이 오기 전에 탭이 닫혔다면 그 무전을 이어서 튼다(이미 본 장면은 다시 나오지 않는다).
+    later(1.2, () => queueStory({ zones: world.poweredZones }));
+  }
+  drops.spawn(world, wardrobe, player.pos);
+  flushStory();
+}
+
+// 처음 화면: 이어할 판이 있으면 '이어하기'와 요약을, 이어갈 수 없는 저장이면 그 이유를 보여 준다.
+function renderRun() {
+  const btn = $('resume-run-btn');
+  const info = $('run-info');
+  if (!btn || !info) return; // 배포 직후 캐시된 옛 index.html과 섞인 경우
+  const r = readRun(world);
+  const ok = r.status === 'ok';
+  $('title-actions')?.classList.remove('hidden');
+  $('new-confirm')?.classList.add('hidden');
+  btn.classList.toggle('hidden', !ok);
+  $('start-btn').classList.toggle('ghost', ok);
+  if (game.ready) $('start-btn').textContent = ok ? '새로 시작' : '시작하기';
+  if (ok) info.textContent = describeRun(r.run, world.totalZones);
+  else if (r.status === 'layout') info.textContent = '게임이 업데이트되어 마을이 바뀌었어요. 지난 판은 이어 갈 수 없어요.';
+  else if (r.status === 'newer') info.textContent = '더 새 버전에서 저장한 판이 있어요. 새로고침하면 이어 갈 수 있어요.';
+  else info.textContent = '';
 }
 
 // 배전반: 플레이 중에만 열고, 여는 동안은 일시정지처럼 시간이 멈춘다.
@@ -311,6 +432,7 @@ function closeGrid() {
   if (game.state !== 'grid') return;
   game.state = 'play';
   setScreen(null);
+  saveRun(); // 바꾼 스위치를 남긴다
   // 배전반을 연 사이에 그래픽 컨텍스트를 잃었다면 진행하지 않고 일시정지로 둔다.
   if (game.contextLost) pauseGame(true);
 }
@@ -320,6 +442,7 @@ function pauseGame(on) {
     if (game.placing && !game.placing.busy) closePlace();
     game.state = 'pause';
     setScreen('pause');
+    saveRun();
   } else if (!on && game.state === 'pause' && !game.contextLost) {
     game.state = 'play';
     setScreen(null);
@@ -330,6 +453,7 @@ function endGame(won) {
   game.won = won;
   game.state = 'end';
   saveBest();
+  clearRun(); // 끝난 판은 이어 갈 수 없다
   hud.prompt(null);
   if (game.placing && !game.placing.busy) closePlace();
   const zones = `${world.poweredZones}/${world.totalZones}`;
@@ -357,6 +481,8 @@ function continueWalk() {
 }
 
 function backToTitle() {
+  // 일시정지에서 나가면 판을 남겨 두어 처음 화면의 '이어하기'로 돌아온다(끝 화면에서 나가면 저장은 이미 지워졌다).
+  saveRun();
   if (game.driving) leaveCar();
   car.lamp = false;
   world.setTruckLamp(car.pos.x, car.pos.z, false);
@@ -374,6 +500,7 @@ function backToTitle() {
   shades.clear();
   drops.clear();
   renderBest();
+  renderRun();
   renderOnline();
   setScreen('title');
 }
@@ -687,6 +814,7 @@ function restoreZone(box) {
     hud.toast('마지막 배전함을 고쳤다! 변전소가 제 출력을 되찾아 마을 전체에 불이 들어온다.', 'good');
     // 불이 들어오는 걸 잠깐 보여 준 뒤 할머니의 무전(엔딩)이 온다.
     later(2.2, winGame);
+    saveRun(); // 엔딩 전에 탭이 닫혀도 이어하면 엔딩부터 나온다
     return;
   }
   const where = `배전반(${input.usingTouch || mobile ? '위쪽 전력 버튼' : 'Tab'})`;
@@ -699,6 +827,7 @@ function restoreZone(box) {
   }
   if (world.capacity > capBefore) later(3.0, () => hud.toast(`변전소 출력이 올랐다. 이제 ${world.capacity}곳까지 함께 켤 수 있다.`, 'good'));
   later(2.4, () => queueStory({ zones: world.poweredZones }));
+  saveRun();
 }
 
 // 과부하로 차단기가 내려간 구역을 배전함(은신처는 발전기)에서 다시 올린다.
@@ -1071,11 +1200,7 @@ function enterCar() {
     sound.play('pour');
     hud.toast(`연료통 ${poured}개를 부었다. 연료 ${Math.round(car.fuel)}%`, 'good');
   }
-  game.driving = true;
-  car.occupied = true;
-  player.setRiding(true);
-  player.pos.copy(car.pos);
-  hud.setDriving(true);
+  seatInCar();
   sound.play('door');
   sound.play('carstart');
   if (!game.hintCar) {
@@ -1085,6 +1210,15 @@ function enterCar() {
       : 'W 가속 · S 브레이크·후진 · A/D 핸들. 멈춘 뒤 E를 길게 눌러 내린다.'));
     later(3.2, () => hud.toast('연료는 달릴수록 줄어든다. 퓨즈를 끼우거나 뒤지려면 내려야 한다.'));
   }
+}
+
+// 운전석에 앉힌다. 타기와 이어하기가 함께 쓴다.
+function seatInCar() {
+  game.driving = true;
+  car.occupied = true;
+  player.setRiding(true);
+  player.pos.copy(car.pos);
+  hud.setDriving(true);
 }
 
 function leaveCar() {
@@ -1234,6 +1368,7 @@ function onTimeEvent(ev) {
       game.hintFlash = true;
       later(1.6, () => hud.toast(`${mobile ? '손전등 버튼' : 'F 키나 마우스 클릭'}으로 손전등을 켜자. 오래 비추면 그늘이가 흩어진다.`));
     }
+    saveRun();
   } else if (ev === 'night') {
     if (!game.peaceful) hud.toast('그늘이들이 깨어났다.', 'warn');
     if (!game.peaceful && !game.hintLoad) {
@@ -1249,6 +1384,7 @@ function onTimeEvent(ev) {
     if (reset) later(1.6, () => hud.toast('날이 밝자 내려갔던 차단기가 다시 올라갔다.'));
     if (player.flashOn) player.flashOn = false;
     if (!game.peaceful) queueStory('dawn');
+    saveRun();
   }
 }
 
@@ -1358,6 +1494,7 @@ function step(dt) {
   if (found) foundOutfit(found);
 
   if (!player.alive) endGame(false);
+  else if (game.time - game.savedAt >= SAVE_EVERY) saveRun();
 }
 
 // ---------------------------------------------------------------- 루프
@@ -1505,7 +1642,10 @@ function frame(now) {
 
 // ---------------------------------------------------------------- UI 연결
 
-$('start-btn').addEventListener('click', startGame);
+$('start-btn').addEventListener('click', newGame);
+$('resume-run-btn')?.addEventListener('click', resumeGame);
+$('new-yes')?.addEventListener('click', startGame);
+$('new-no')?.addEventListener('click', cancelNewGame);
 $('closet-btn')?.addEventListener('click', openCloset);
 $('closet-close')?.addEventListener('click', closeCloset);
 $('power-btn')?.addEventListener('click', openGrid);
@@ -1548,12 +1688,20 @@ $('online-toggle')?.addEventListener('click', () => {
 });
 $('online-forget')?.addEventListener('click', () => bg(forgetOnline()));
 addEventListener('blur', () => pauseGame(true));
-document.addEventListener('visibilitychange', () => document.hidden && pauseGame(true));
+// 모바일에서 백그라운드로 간 탭은 알림 없이 종료될 수 있고, 그 전에 확실히 오는 마지막 신호가 visibilitychange(hidden)다.
+// pagehide는 데스크톱에서 탭을 닫거나 다른 페이지로 갈 때를 받는다. 장면·배전반 화면처럼 일시정지가 걸리지 않는 상태도 저장한다.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) return;
+  pauseGame(true);
+  saveRun();
+});
+addEventListener('pagehide', saveRun);
 
 // ?debug: 콘솔에서 상태를 들여다보고 시뮬레이션을 고정 간격으로 돌려 보는 개발용 핸들
 if (params.has('debug')) {
   window.lumen = {
     THREE, scene, camera, renderer, world, env, post, player, shades, car, game, input, hud, startGame,
+    saveRun, resumeGame, readRun: () => readRun(world), backToTitle, pauseGame,
     wardrobe, drops, closet, openCloset, closeCloset, board, openGrid, closeGrid, online, caches,
     story, dialogue, storyQueue, playScene, openDoc, queueStory,
     step(sec) {
@@ -1575,6 +1723,8 @@ function setContextLost(lost) {
   $('gl-reload')?.classList.add('hidden');
   clearTimeout(reloadHintTimer);
   for (const id of ['start-btn', 'resume-btn', 'restart-btn', 'continue-btn']) $(id).disabled = lost || !game.ready;
+  // 이어하기·새로 시작 확인 버튼도 새로 생긴 요소라 없을 수 있다.
+  for (const id of ['resume-run-btn', 'new-yes']) if ($(id)) $(id).disabled = lost || !game.ready;
   // 옷장 버튼은 새로 생긴 요소라, 배포 직후 옛 HTML과 섞이면 없을 수 있다.
   if ($('closet-btn')) $('closet-btn').disabled = lost || !game.ready;
   if (lost) closeSettings();
@@ -1637,6 +1787,7 @@ async function warmUpOnce() {
 }
 
 renderBest();
+renderRun();
 env.setHour(Number(params.get('hour')) || 16.5);
 document.body.classList.add('ready');
 requestAnimationFrame(frame);
@@ -1644,6 +1795,7 @@ warmUp().then(() => {
   game.ready = true;
   document.body.classList.add('loaded');
   $('start-btn').textContent = '시작하기';
+  renderRun(); // 이어할 판이 있으면 '새로 시작'으로 바꾼다
   setContextLost(game.contextLost ?? false);
   // 사전 컴파일이 메인 스레드를 오래 막는 느린 기기에서 요청 시간 제한이 헛걸리지 않게, 준비가 끝난 뒤 소식을 받는다.
   renderOnline();
