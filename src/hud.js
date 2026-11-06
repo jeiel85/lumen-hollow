@@ -10,7 +10,7 @@ export class Hud {
       prompt: $('prompt'), promptText: $('prompt-text'), promptFill: $('prompt-fill'),
       toasts: $('toasts'), pointer: $('pointer'), pointerDist: $('pointer-dist'), batWrap: $('bat-wrap'),
       flashState: $('flash-state'), touch: $('touch'), can: $('inv-can'), fuelWrap: $('fuel-wrap'), fuel: $('fuel-fill'),
-      keys: $('key-hints'), useBtn: document.querySelector('[data-act="use"]'),
+      keys: $('key-hints'), useBtn: document.querySelector('[data-act="use"]'), mute: $('mute-btn'), fps: $('fps'),
       drop: $('drop-btn'), place: $('place'), placeSub: $('place-sub'), placeNote: $('place-note-text'),
     };
     this._walkKeys = this.el.keys?.textContent ?? '';
@@ -60,6 +60,23 @@ export class Hud {
 
   showTouch(on) {
     this.el.touch.classList.toggle('hidden', !on);
+  }
+
+  // 좁은 화면에서는 아이콘만 보이므로 상태를 aria-label에도 적는다.
+  setMuted(muted) {
+    const btn = this.el.mute;
+    const label = btn.querySelector('.chip-text') ?? btn;
+    label.textContent = muted ? '소리 꺼짐' : '소리 켜짐';
+    btn.classList.toggle('off', muted);
+    btn.setAttribute('aria-label', muted ? '소리 켜기' : '소리 끄기');
+  }
+
+  showFps(on) {
+    this.el.fps?.classList.toggle('hidden', !on);
+  }
+
+  setFps(fps) {
+    if (this.el.fps) this._set('fps', this.el.fps, `${Math.round(fps)} fps`);
   }
 
   _set(key, el, text) {

@@ -20,7 +20,25 @@ export function load(key) {
 export function save(key, value) {
   try {
     window.localStorage.setItem(key, value);
+    return true;
+  } catch (err) {
+    warn(err);
+    return false;
+  }
+}
+
+export function remove(key) {
+  try {
+    window.localStorage.removeItem(key);
   } catch (err) {
     warn(err);
   }
+}
+
+// 실제로 쓰고 지워 봐야 안다(사파리 사생활 보호 모드는 읽기는 되고 쓰기에서 예외를 던졌다).
+export function storageAvailable() {
+  const probe = 'lumen.probe';
+  if (!save(probe, '1')) return false;
+  remove(probe);
+  return true;
 }

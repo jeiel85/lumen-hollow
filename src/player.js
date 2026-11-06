@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DEFAULT_WEAR, buildPart, disposeTree, itemById } from './wardrobe.js';
 
 export const SPEED = 5.2;
 export const PLAYER_R = 0.36; // 충돌 반지름
@@ -37,6 +38,8 @@ export function addXray(meshes, color) {
   }
 }
 
+const UP = new THREE.Vector3(0, 1, 0);
+
 const lerpAngle = (a, b, t) => {
   let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI;
   if (d < -Math.PI) d += Math.PI * 2;
@@ -61,8 +64,9 @@ export class Player {
     const pants = mat(0x3a4658);
     const skin = mat(0xefc8a6);
     const boot = mat(0x3a2e28);
-    const pack = mat(0x7b5a3e);
     const dark = mat(0x26292c);
+    const hairMat = mat(0x4a3426);
+    this.coatMat = coat;
     const meshes = [];
     const add = (geo, m, x, y, z, parent = this.model, shadow = true) => {
       const me = new THREE.Mesh(geo, m);
@@ -86,13 +90,46 @@ export class Player {
     this.model.add(this.body);
     add(new THREE.CylinderGeometry(0.24, 0.34, 0.78, 8), coat, 0, 0.98, 0, this.body);
     add(new THREE.SphereGeometry(0.22, 10, 8), skin, 0, 1.52, 0.02, this.body);
-    const hood = add(new THREE.SphereGeometry(0.26, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), coat, 0, 1.55, -0.05, this.body);
-    hood.rotation.x = -0.35;
-    add(new THREE.BoxGeometry(0.4, 0.44, 0.2), pack, 0, 1.02, -0.3, this.body);
-    add(new THREE.BoxGeometry(0.1, 0.36, 0.12), coat, 0.3, 1.0, 0.12, this.body, false).rotation.x = -0.9;
+    this.hood = add(new THREE.SphereGeometry(0.26, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), coat, 0, 1.55, -0.05, this.body);
+    this.hood.rotation.x = -0.35;
+    // 후드를 벗으면(모자를 쓰거나 맨머리) 보이는 머리카락. 이마가 드러나게 뒤로 기울인다.
+    this.hair = add(new THREE.SphereGeometry(0.232, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.56), hairMat, 0, 1.53, 0, this.body);
+    this.hair.rotation.x = -0.45;
+    this.hair.visible = false;
+    // 모자·안경·배낭은 setOutfit이 갈아 끼운다.
+    this.parts = { hat: null, glasses: null, pack: null };
+    this.partMats = [];
+
+    // 오른팔(-x): 어깨에 매달려 걸음에 맞춰 흔든다. 앞으로 흔들 때 팔꿈치가 조금 더 굽는다.
+    this.arm = new THREE.Group();
+    this.arm.position.set(-0.27, 1.26, 0);
+    this.arm.rotation.z = -0.2; // 몸통(아래로 넓어지는 원뿔)에 파묻히지 않게 살짝 벌린다
+    this.body.add(this.arm);
+    add(new THREE.BoxGeometry(0.12, 0.31, 0.13), coat, 0, -0.135, 0, this.arm);
+    this.elbow = new THREE.Group();
+    this.elbow.position.y = -0.27;
+    this.arm.add(this.elbow);
+    add(new THREE.BoxGeometry(0.11, 0.25, 0.12), coat, 0, -0.11, 0, this.elbow);
+    add(new THREE.BoxGeometry(0.09, 0.1, 0.1), skin, 0, -0.28, 0, this.elbow);
+
+    // 왼팔(+x): 손전등을 허리 높이에서 앞으로 겨눈 채 고정한다. 빛줄기·조명이 model에 고정돼
+    // 있으므로 이 팔은 흔들지 않는다. 어깨→팔꿈치→손목을 점으로 잡고 마디를 그 사이에 놓는다.
+    const limb = (a, b, w, d) => {
+      const dir = new THREE.Vector3().subVectors(b, a);
+      // 관절에서 이웃 마디와 겹쳐 틈이 보이지 않도록 양 끝을 0.03씩 늘린다
+      const me = add(new THREE.BoxGeometry(w, dir.length() + 0.06, d), coat, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2, this.body);
+      me.quaternion.setFromUnitVectors(UP, dir.normalize());
+    };
+    const shoulder = new THREE.Vector3(0.27, 1.26, 0);
+    const elbow = new THREE.Vector3(0.35, 1.0, 0.05);
+    const wrist = new THREE.Vector3(0.31, 0.93, 0.23);
+    limb(shoulder, elbow, 0.12, 0.13);
+    limb(elbow, wrist, 0.11, 0.12);
+    add(new THREE.BoxGeometry(0.12, 0.12, 0.09), skin, 0.3, 0.92, 0.27, this.body); // 손전등을 쥔 주먹
     add(new THREE.CylinderGeometry(0.05, 0.06, 0.26, 8), dark, 0.3, 0.92, 0.36, this.body, false).rotation.x = Math.PI / 2;
 
     addXray(meshes, 0x6a5634);
+    this.setOutfit(DEFAULT_WEAR);
 
     // 손전등
     this.flash = new THREE.SpotLight(0xfff0d2, 0, FLASH_RANGE + 7, FLASH_ANGLE, 0.5, 1.15);
@@ -139,6 +176,9 @@ export class Player {
     this.bandages = 0;
     this.cans = 0;
     this.flashOn = false;
+    // update가 돌지 않는 화면(처음 화면·옷장)에서도 지난 판의 손전등 빛이 남지 않게 바로 끈다.
+    this.flash.intensity = 0;
+    this.beamMat.uniforms.uOpacity.value = 0;
     this.invuln = 0;
     this.hurtFx = 0;
     this.alive = true;
@@ -155,6 +195,56 @@ export class Player {
     this.beam.visible = !on;
     if (on) this.flashOn = false;
     this.vel.set(0, 0, 0);
+  }
+
+  // 옷장 착용 상태를 모델에 반영한다. 비옷 색은 몸통·팔·후드가 함께 쓰는 재질 색을 바꾸고,
+  // 모자·안경·배낭은 부품을 새로 만들어 끼운다(이전 부품은 GPU 자원까지 해제).
+  setOutfit(wear) {
+    const coat = itemById(wear.coat) ?? itemById(DEFAULT_WEAR.coat);
+    this.coatMat.color.setHex(coat.color);
+    this.coatMat.emissive.setHex(coat.color);
+    this.hood.visible = wear.hat === 'hat.hood';
+    this.hair.visible = !this.hood.visible;
+    // 모자 아래에서는 머리카락을 조금 줄여 모자 겉면을 뚫고 나오지 않게 한다.
+    this.hair.scale.setScalar(wear.hat === 'hat.bare' ? 1 : 0.95);
+    this.partMats.length = 0;
+    const mat = (c, opts = {}) => {
+      const m = new THREE.MeshStandardMaterial({ color: c, roughness: opts.roughness ?? 0.75, flatShading: true, emissive: c, emissiveIntensity: 0 });
+      this.partMats.push(m);
+      return m;
+    };
+    for (const slot of Object.keys(this.parts)) {
+      const old = this.parts[slot];
+      if (old) {
+        this.body.remove(old);
+        disposeTree(old);
+      }
+      const g = buildPart(wear[slot], mat);
+      if (g) {
+        const meshes = [];
+        g.traverse((o) => {
+          if (o.isMesh) {
+            o.castShadow = true;
+            meshes.push(o);
+          }
+        });
+        addXray(meshes, 0x6a5634);
+        this.body.add(g);
+      }
+      this.parts[slot] = g;
+    }
+    // 바뀐 재질의 밤 발광 세기를 다음 update 전에도 맞춰 둔다.
+    for (const m of this.partMats) m.emissiveIntensity = this.mats[0].emissiveIntensity;
+  }
+
+  // 옷장 미리보기용 차렷 자세(걷기 흔적을 지우고 빈팔만 숨 쉬듯 살짝 흔든다)
+  idlePose(t) {
+    this.legs[0].rotation.x = 0;
+    this.legs[1].rotation.x = 0;
+    this.body.position.y = 0;
+    this.body.rotation.z = 0;
+    this.arm.rotation.x = Math.sin(t * 1.7) * 0.03;
+    this.elbow.rotation.x = -0.18;
   }
 
   get flashActive() {
@@ -218,6 +308,10 @@ export class Player {
     const sw = Math.sin(this.phase) * 0.7 * moving;
     this.legs[0].rotation.x = sw;
     this.legs[1].rotation.x = -sw;
+    // 오른팔은 같은 쪽 다리(legs[0], -x)와 반대로 흔든다. 음수 회전이 앞쪽이다.
+    const armSwing = -sw * 0.85 + Math.sin(t * 1.7) * 0.03 * (1 - moving);
+    this.arm.rotation.x = armSwing;
+    this.elbow.rotation.x = -0.18 - Math.max(0, -armSwing) * 0.6;
     this.body.position.y = Math.abs(Math.sin(this.phase)) * 0.05 * moving;
     this.body.rotation.z = Math.sin(this.phase) * 0.04 * moving;
 
@@ -226,6 +320,7 @@ export class Player {
     const flick = this.battery < 15 && on ? (Math.sin(t * 37) * Math.sin(t * 13) > 0.6 ? 0.25 : 1) : 1;
     this.flash.intensity = on * flick * (14 + 26 * night);
     for (const m of this.mats) m.emissiveIntensity = 0.22 * night;
+    for (const m of this.partMats) m.emissiveIntensity = 0.22 * night;
     this.beamMat.uniforms.uOpacity.value = on * flick * night * (0.2 + rain * 0.18);
     return speed;
   }

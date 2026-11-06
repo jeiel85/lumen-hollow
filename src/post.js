@@ -136,6 +136,13 @@ export class Post {
     this.mFinal.uniforms.uRes.value.set(w, h);
   }
 
+  // 화질 설정으로 MSAA 샘플 수를 바꾼다. 렌더 타깃을 버리면 다음에 쓸 때 새 샘플 수로 다시 만든다.
+  setSamples(samples) {
+    if (this.rtScene.samples === samples) return;
+    this.rtScene.samples = samples;
+    this.rtScene.dispose();
+  }
+
   _pass(mat, target) {
     this.quad.material = mat;
     this.r.setRenderTarget(target);
