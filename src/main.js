@@ -261,6 +261,8 @@ function startGame() {
   car.reset(CAR_SPAWN.x, CAR_SPAWN.z, CAR_SPAWN.a);
   shades.clear();
   shades.banished = 0;
+  // 지난 판의 날아가던 빛과 촛불 단서를 치운다(뒤질 곳 내용이 새로 섞이므로 남으면 엉뚱한 자리를 가리킨다).
+  wisps.clear();
   const h = Number(params.get('hour'));
   env.setHour(Number.isFinite(h) && params.has('hour') ? h : 7.5);
   env.day = 1;
