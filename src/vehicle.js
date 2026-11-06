@@ -241,7 +241,7 @@ export class Vehicle {
   }
 
   // 스틱으로 가고 싶은 방향(월드 dx, dz)과 세기를 받아 가속·핸들 입력으로 바꾼다(터치용).
-  // 거의 뒤쪽을 가리키면 멈춘 상태에서 후진으로 전환하고, 옆으로 꺾으면 다시 전진한다.
+  // 거의 뒤쪽을 가리키면 먼저 브레이크를 밟고, 멈추면 후진으로 전환한다. 옆으로 꺾으면 다시 전진한다.
   steerToward(dx, dz, mag) {
     if (mag < 0.15) {
       this.reverse = false;
@@ -249,7 +249,10 @@ export class Vehicle {
     }
     const want = Math.atan2(dx, dz);
     const diff = wrap(want - this.a);
-    if (!this.reverse && Math.abs(diff) > 2.5 && this.speed < 1.5) this.reverse = true;
+    if (!this.reverse && Math.abs(diff) > 2.5) {
+      if (this.speed >= 1.5) return { thr: -mag, steer: 0 };
+      this.reverse = true;
+    }
     if (this.reverse) {
       const back = wrap(want - this.a - Math.PI);
       if (Math.abs(back) <= 1.3) return { thr: -mag, steer: clamp(back * 2.2, -1, 1) };
