@@ -98,7 +98,7 @@ export function initRecordsPanel({ totalZones, onChange, mobile }) {
     best: $('records-best'), store: $('records-store'), msg: $('records-msg'), file: $('records-file'),
     exportBtn: $('records-export'), importBtn: $('records-import'), clearBtn: $('records-clear'),
   };
-  let clearArmed = 0;
+  let clearArmed = null; // 지우기를 처음 누른 시각. null이면 아직 확인 대기 중이 아니다.
 
   const say = (text, kind = '') => {
     el.msg.textContent = text;
@@ -171,15 +171,19 @@ export function initRecordsPanel({ totalZones, onChange, mobile }) {
 
   // 실수로 지우지 않게 두 번 눌러야 지운다(전체 화면에서 확인 창을 띄우면 전체 화면이 풀리는 브라우저가 있다).
   el.clearBtn.addEventListener('click', () => {
-    if (performance.now() - clearArmed > 4000) {
-      clearArmed = performance.now();
+    const now = performance.now();
+    if (clearArmed === null || now - clearArmed > 4000) {
+      const armedAt = now;
+      clearArmed = armedAt;
       el.clearBtn.textContent = '한 번 더 누르면 지워요';
       setTimeout(() => {
-        if (performance.now() - clearArmed >= 4000) el.clearBtn.textContent = '지우기';
+        if (clearArmed !== armedAt) return; // 그사이 지웠거나 다시 눌렀다
+        clearArmed = null;
+        el.clearBtn.textContent = '지우기';
       }, 4100);
       return;
     }
-    clearArmed = 0;
+    clearArmed = null;
     el.clearBtn.textContent = '지우기';
     remove(KEY);
     say('최고 기록을 지웠어요.');
@@ -190,7 +194,7 @@ export function initRecordsPanel({ totalZones, onChange, mobile }) {
   return {
     refresh() {
       say('');
-      clearArmed = 0;
+      clearArmed = null;
       el.clearBtn.textContent = '지우기';
       return refresh();
     },

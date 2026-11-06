@@ -46,22 +46,22 @@ async function cachedPage() {
   return cache.match('./');
 }
 
-// 네트워크가 느리면(지하철 등) 무한정 기다리지 않고 받아 둔 페이지를 연다.
+// 네트워크가 느리면(지하철 등) 무한정 기다리지 않고, 서버가 오류(503 등)를 내면 그 오류 대신 받아 둔 페이지를 연다.
 async function navigate(request) {
-  const network = fetch(request.url, { cache: 'no-cache', credentials: 'same-origin' }).then((res) => {
-    if (res.redirected) return Response.redirect(res.url, 302);
-    return res;
-  });
+  const network = fetch(request.url, { cache: 'no-cache', credentials: 'same-origin' })
+    .then((res) => (res.redirected ? Response.redirect(res.url, 302) : res));
   const timeout = new Promise((resolve) => setTimeout(resolve, NAV_TIMEOUT, null));
+  let res = null;
   try {
-    const first = await Promise.race([network, timeout]);
-    if (first) return first;
-    return (await cachedPage()) ?? (await network);
-  } catch (err) {
-    const page = await cachedPage();
-    if (page) return page;
-    throw err;
+    res = await Promise.race([network, timeout]);
+  } catch {
+    res = null; // 오프라인 등 네트워크 실패
   }
+  if (res && res.status < 400) return res; // 정상 응답(리디렉트 포함)
+  const page = await cachedPage();
+  if (page) return page;
+  // 받아 둔 페이지가 없으면 서버의 오류 응답을 그대로 보여 주고, 시간 초과였다면 네트워크를 끝까지 기다린다.
+  return res ?? network;
 }
 
 self.addEventListener('fetch', (event) => {
