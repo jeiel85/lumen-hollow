@@ -6,7 +6,7 @@ import { RAM_SPEED } from './vehicle.js';
 const MAX = 18;
 const FAR = 46; // 차로 멀리 달아나면 뒤에 남은 그늘이는 사라진다(새로 깨어날 자리를 비운다).
 
-function glowTexture() {
+export function glowTexture() {
   const cv = document.createElement('canvas');
   cv.width = cv.height = 64;
   const g = cv.getContext('2d');
@@ -105,7 +105,8 @@ export class Shades {
     const { player, world, night, nights, spawning, car, driving } = ctx;
     const px = player.pos.x;
     const pz = player.pos.z;
-    const events = { hits: 0, banished: 0, rammed: 0, nearest: Infinity, burning: 0, pressing: 0 };
+    // returned: 이번 프레임에 흩어져 주인에게 돌아가는 그림자 자리(빛줄기 연출·깨어남 단서용)
+    const events = { hits: 0, banished: 0, rammed: 0, nearest: Infinity, burning: 0, pressing: 0, returned: [] };
     const ramming = driving && Math.abs(car.speed) >= RAM_SPEED;
 
     const target = spawning ? Math.min(5 + nights * 2, 14) : 0;
@@ -190,6 +191,7 @@ export class Shades {
           s.state = 'die';
           events.banished++;
           this.banished++;
+          events.returned.push({ x: s.x, z: s.z });
         } else if (touching && s.cool <= 0 && player.alive) {
           if (player.hurt(15, s.x, s.z)) events.hits++;
           s.cool = 1.3;

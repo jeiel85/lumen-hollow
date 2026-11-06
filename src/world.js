@@ -159,6 +159,7 @@ export class World {
     // 공유 보급품 슬롯 목록(서버와의 약속)과 이야기 기록 자리가 어긋나므로, 새 장식은 모두 이것으로 고른다.
     this.deco = new Rng(1926);
     this.signQuads = {}; // 구역별 간판 글귀 사각형(마감 때 구역마다 메시 하나로 합친다)
+    this.homes = []; // 사람이 잠들어 있는 집의 현관(돌려보낸 그림자가 날아가는 곳)
     this.wireSparks = {}; // 구역별 점등 불꽃이 흐를 전선 조각
     const rng = new Rng(20261105);
     this._ground();
@@ -388,6 +389,8 @@ export class World {
     }
     this.colliders.push(f.aabb(0, 0, w + 0.24, d + 0.24));
     if (o.loot !== false) this._addLoot(f.px(doorX, d / 2 + 2.0), f.pz(doorX, d / 2 + 2.0), ctx);
+    // 은신처(loot: false)는 주인공의 집이라 빼고, 나머지 집 현관 위 창가를 기억해 둔다.
+    if (o.loot !== false) this.homes.push({ x: f.px(doorX, d / 2 + 0.3), y: y0 + 2.2, z: f.pz(doorX, d / 2 + 0.3), zone });
     return { f, w, d, doorX, top };
   }
 
@@ -1101,28 +1104,33 @@ export class World {
     gg.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
     this.glintOn = new THREE.BufferAttribute(new Float32Array(ln).fill(1), 1);
     gg.setAttribute('aOn', this.glintOn);
+    // 깨어난 주민이 촛불로 알려 준 퓨즈 자리는 금빛으로 크게 반짝인다.
+    this.glintHint = new THREE.BufferAttribute(new Float32Array(ln), 1);
+    gg.setAttribute('aHint', this.glintHint);
     this.glintMat = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 }, uPx: { value: 30 }, uNight: { value: 0 } },
       vertexShader: `
-        attribute float aSeed; attribute float aOn;
+        attribute float aSeed; attribute float aOn; attribute float aHint;
+        varying float vH;
         uniform float uTime; uniform float uPx;
         varying float vA;
         void main(){
           vec3 p = position; p.y += sin(uTime * 2.0 + aSeed) * 0.08;
           float tw = 0.65 + 0.35 * sin(uTime * 3.1 + aSeed * 2.3);
           vA = aOn * tw;
-          gl_PointSize = aOn * uPx * 0.9 * (0.8 + 0.2 * tw);
+          vH = aHint;
+          gl_PointSize = aOn * uPx * 0.9 * (0.8 + 0.2 * tw) * (1.0 + aHint * 0.7);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }`,
       fragmentShader: `
-        uniform float uNight; varying float vA;
+        uniform float uNight; varying float vA; varying float vH;
         void main(){
           vec2 q = gl_PointCoord - 0.5;
           float core = exp(-dot(q, q) * 90.0);
           float rays = max(0.0, 1.0 - abs(q.x) * 14.0) * max(0.0, 1.0 - abs(q.y) * 2.2)
                      + max(0.0, 1.0 - abs(q.y) * 14.0) * max(0.0, 1.0 - abs(q.x) * 2.2);
           float a = (core + rays * 0.6) * vA;
-          gl_FragColor = vec4(vec3(1.0, 0.9, 0.65) * mix(1.4, 2.6, uNight), a);
+          gl_FragColor = vec4(mix(vec3(1.0, 0.9, 0.65), vec3(1.0, 0.62, 0.2), vH) * mix(1.4, 2.6, uNight) * (1.0 + vH * 0.4), a);
         }`,
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
@@ -1175,7 +1183,9 @@ export class World {
     for (let i = 0; i < n; i++) {
       this.loot[i].item = items[i];
       this.loot[i].searched = false;
+      this.loot[i].hinted = false;
       this.glintOn.array[i] = 1;
+      this.glintHint.array[i] = 0;
     }
     // 은신처 옆 블록에 퓨즈가 하나는 있도록 보장
     const near = this.loot.filter((l) => l.near);
@@ -1185,6 +1195,38 @@ export class World {
       if (donor) [donor.item, tgt.item] = [tgt.item, donor.item];
     }
     this.glintOn.needsUpdate = true;
+    this.glintHint.needsUpdate = true;
+  }
+
+  // 돌려보낸 그림자가 찾아갈 집: 가장 가까운 집 현관 창가
+  nearestHome(x, z) {
+    let best = null;
+    let bd = Infinity;
+    for (const h of this.homes) {
+      const d = (h.x - x) ** 2 + (h.z - z) ** 2;
+      if (d < bd) { bd = d; best = h; }
+    }
+    return best;
+  }
+
+  // 아직 아무도 찾지 않았고 알려 주지도 않은 퓨즈 가운데 (x, z)에서 가장 가까운 것
+  hiddenFuseNear(x, z) {
+    let best = null;
+    let bd = Infinity;
+    for (const l of this.loot) {
+      if (l.item !== 'fuse' || l.searched || l.hinted) continue;
+      const d = (l.x - x) ** 2 + (l.z - z) ** 2;
+      if (d < bd) { bd = d; best = l; }
+    }
+    return best;
+  }
+
+  hintLoot(loot) {
+    const i = this.loot.indexOf(loot);
+    if (i < 0) return;
+    loot.hinted = true;
+    this.glintHint.array[i] = 1;
+    this.glintHint.needsUpdate = true;
   }
 
   get totalZones() {
