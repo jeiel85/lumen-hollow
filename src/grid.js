@@ -71,7 +71,8 @@ export class Switchboard {
 
   render() {
     const w = this.world;
-    this.el.cap.textContent = `변전소 출력 ${w.onCount} / ${w.capacity}곳 사용 중 · 배전함을 3곳 고칠 때마다 1곳씩 늘어난다`;
+    const full = w.repairedCount >= w.totalZones - 1;
+    this.el.cap.textContent = `변전소 출력 ${w.onCount} / ${w.capacity}곳 사용 중 · ${full ? '변전소가 제 출력을 되찾았다' : '배전함을 3곳 고칠 때마다 1곳씩 늘어난다'}`;
     for (const id of Object.keys(this.cells)) {
       const z = w.zones[id];
       const st = stateOf(z);

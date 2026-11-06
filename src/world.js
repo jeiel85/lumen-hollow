@@ -969,8 +969,10 @@ export class World {
     return n;
   }
 
+  // 다 고치면 변전소가 제 출력을 되찾아 한도가 없어진다(승리 뒤 산책에서도 껐다 켤 수 있게).
   get capacity() {
-    return 2 + Math.floor(this.repairedCount / 3);
+    const r = this.repairedCount;
+    return r >= this.totalZones - 1 ? r : 2 + Math.floor(r / 3);
   }
 
   get onCount() {
