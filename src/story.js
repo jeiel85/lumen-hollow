@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Builder, Frame, geo, tint } from './geometry.js';
+import { makeBeaconMaterial } from './world.js';
 import { Rng } from './rng.js';
 import { load, save, remove } from './storage.js';
 import { SCENES, CLUES } from './script.js';
@@ -63,15 +64,6 @@ function loadProgress() {
     if (Array.isArray(raw.found)) for (const id of raw.found) if (CLUE_BY_ID.has(id)) found.add(id);
   }
   return { seen, found };
-}
-
-function beamMaterial(color) {
-  return new THREE.ShaderMaterial({
-    uniforms: { uOpacity: { value: 0 }, uColor: { value: new THREE.Color(color) } },
-    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: 'uniform float uOpacity; uniform vec3 uColor; varying vec2 vUv; void main(){ float a = pow(clamp(1.0 - vUv.y, 0.0, 1.0), 2.2) * uOpacity; gl_FragColor = vec4(uColor, a); }',
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-  });
 }
 
 export class Story {
@@ -369,7 +361,7 @@ export class Story {
 
     // 열렸지만 아직 안 읽은 기록 위의 푸른 빛기둥(배전함의 붉은 기둥과 구별)
     const beamGeo = new THREE.CylinderGeometry(0.26, 0.26, 16, 12, 1, true).translate(0, 8, 0);
-    this.beamMat = beamMaterial(new THREE.Color(0.45, 0.75, 1.0));
+    this.beamMat = makeBeaconMaterial(new THREE.Color(0.45, 0.75, 1.0)); // 배전함·옷가지 기둥과 같은 셰이더
     for (const s of this.spots) {
       s.beam = new THREE.Mesh(beamGeo, this.beamMat);
       s.beam.position.set(s.x, s.top - 0.2, s.z);

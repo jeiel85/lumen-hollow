@@ -11,6 +11,7 @@ import { Sound } from './audio.js';
 import { QUALITY, ZOOM, loadSettings, saveSettings, bindSettings } from './settings.js';
 import { loadBest, recordRun, hasRecords, describeBest, initRecordsPanel } from './records.js';
 import { initPwa } from './pwa.js';
+import { Wardrobe, OutfitDrops, Closet, itemLabel, objParticle } from './wardrobe.js';
 import { Story, DOCS, sceneById } from './story.js';
 import { Dialogue } from './dialogue.js';
 import { SCENES } from './script.js';
@@ -70,6 +71,11 @@ const sound = new Sound();
 sound.setVolume(settings.volume, settings.ambience);
 const story = new Story(scene, world);
 const dialogue = new Dialogue({ sound });
+
+const wardrobe = new Wardrobe();
+player.setOutfit(wardrobe.wear);
+const drops = new OutfitDrops(scene);
+const closet = new Closet(wardrobe, () => player.setOutfit(wardrobe.wear));
 
 const START = new THREE.Vector3(0, 0, 3.2);
 player.reset(START.x, START.z);
@@ -188,11 +194,42 @@ function renderBest() {
 // ---------------------------------------------------------------- 게임 흐름
 
 // 배포 직후 캐시된 옛 index.html과 섞이면 settings 화면이 없을 수 있다.
-const SCREENS = ['title', 'pause', 'end', 'settings', 'journal'];
+const SCREENS = ['title', 'pause', 'end', 'settings', 'closet', 'journal'];
 function setScreen(id) {
   if (id !== 'settings') settingsFrom = null;
   if (id !== 'journal') journalFrom = null;
   for (const s of SCREENS) $(s)?.classList.toggle('hidden', s !== id);
+}
+
+// 옷장: 처음 화면에서 주인공을 은신처 앞에 세워 놓고 가까이서 돌려 보며 갈아입힌다.
+function openCloset() {
+  if (!game.ready || game.contextLost || game.state !== 'title') return;
+  game.state = 'closet';
+  game.titleHour = env.hour;
+  env.setHour(12); // 색이 왜곡되지 않는 한낮 빛에서 고른다
+  env.rainLevel = 0;
+  player.reset(START.x, START.z);
+  player.pos.y = world.heightAt(START.x, START.z);
+  closet.open();
+  setScreen('closet');
+}
+
+function closeCloset() {
+  if (game.state !== 'closet') return;
+  game.state = 'title';
+  env.setHour(game.titleHour);
+  setScreen('title');
+}
+
+const WEAR_VERB = { coat: '입어', hat: '써', glasses: '써', pack: '메' };
+
+function foundOutfit(item) {
+  wardrobe.unlock(item.id);
+  wardrobe.put(item.id);
+  player.setOutfit(wardrobe.wear);
+  sound.play('pickup');
+  const label = itemLabel(item);
+  hud.toast(`${label}${objParticle(label)} 주웠다! 바로 ${WEAR_VERB[item.slot]} 봤다. 처음 화면 '옷장'에서 언제든 바꿀 수 있다.`, 'good');
 }
 
 function startGame() {
@@ -229,6 +266,10 @@ function startGame() {
   later(1.8, () => hud.toast('퓨즈를 모아 꺼진 배전함에 끼우면 그 구역에 다시 불이 들어온다.'));
   later(3.8, () => hud.toast('화살표가 가장 가까운 배전함을 가리킨다. 퓨즈 하나는 이미 갖고 있다.'));
   later(6.4, () => !game.driving && hud.toast('은신처 앞 도로에 낡은 트럭이 서 있다. 연료가 남은 동안은 몰 수 있다.'));
+  // 아직 옷가지를 하나도 줍지 않았을 때만 존재를 알려 준다.
+  if (drops.spawn(world, wardrobe, START) && wardrobe.foundCount === 0) {
+    later(9.5, () => hud.toast('누군가 두고 간 옷가지 꾸러미가 마을 어딘가에서 빛나고 있다. 주우면 옷장에 영원히 남는다.'));
+  }
   flushStory();
 }
 
@@ -279,6 +320,7 @@ function backToTitle() {
   hud.showTouch(false);
   hud.prompt(null);
   shades.clear();
+  drops.clear();
   renderBest();
   setScreen('title');
 }
@@ -848,6 +890,10 @@ function step(dt) {
 
   interact(dt);
 
+  drops.update(dt, game.time, env.night);
+  const found = drops.take(player.pos.x, player.pos.z, game.driving ? 1.8 : 1.0);
+  if (found) foundOutfit(found);
+
   if (!player.alive) endGame(false);
 }
 
@@ -874,6 +920,7 @@ function frame(now) {
     else if (journalFrom) closeJournal();
     else if (game.state === 'play') pauseGame(true);
     else if (game.state === 'pause') pauseGame(false);
+    else if (game.state === 'closet') closeCloset();
   }
   if (input.consume('KeyM')) {
     const muted = toggleMute();
@@ -914,6 +961,12 @@ function frame(now) {
     env.setHour(env.hour + dt * 0.9);
     const t = game.time;
     camFocus.set(Math.sin(t * 0.05) * 22, 0, Math.cos(t * 0.037) * 18 - 4);
+  } else if (game.state === 'closet') {
+    dt = raw;
+    game.time += dt;
+    player.idlePose(game.time);
+    closet.update(raw, player);
+    camFocus.copy(player.pos); // 그림자·광원 선택 기준을 주인공 주변으로
   }
   game.clock += dt;
   game.shake = Math.max(0, game.shake - raw * 1.6);
@@ -934,10 +987,12 @@ function frame(now) {
 
   // 흔들림·점멸을 끄면 체력 경고는 깜박이지 않는 붉은 테두리로, 피격 번쩍임은 절반으로 줄인다.
   const lowHp = player.hp < 30 && game.state === 'play' ? 0.25 + (settings.shake ? 0.15 * Math.sin(game.time * 5) : 0) : 0;
+  // 옷장은 전용 근접 카메라로 그리고, 인물이 화면 가운데가 아닐 수 있어 틸트시프트 흐림을 끈다.
+  const inCloset = game.state === 'closet';
   // 화질을 바꿔 셰이더를 다시 컴파일하는 동안에는 숨긴 물체까지 켜져 있으니 그리지 않고 직전 화면을 둔다.
   if (!(game.warming && game.ready)) {
-    post.render(scene, camera, env.look, game.clock, {
-      focus: 0.5, band: 0.07, blurScale: settings.tilt ? (game.state === 'title' ? 1.25 : 1.0) : 0,
+    post.render(scene, inCloset ? closet.camera : camera, env.look, game.clock, {
+      focus: 0.5, band: 0.07, blurScale: settings.tilt && !inCloset ? (game.state === 'title' ? 1.25 : 1.0) : 0,
       hurt: Math.max(player.hurtFx * (settings.shake ? 0.9 : 0.45), lowHp),
     });
   }
@@ -971,6 +1026,8 @@ function frame(now) {
 // ---------------------------------------------------------------- UI 연결
 
 $('start-btn').addEventListener('click', startGame);
+$('closet-btn')?.addEventListener('click', openCloset);
+$('closet-close')?.addEventListener('click', closeCloset);
 $('resume-btn').addEventListener('click', () => pauseGame(false));
 $('quit-btn').addEventListener('click', backToTitle);
 $('restart-btn').addEventListener('click', startGame);
@@ -998,6 +1055,7 @@ document.addEventListener('visibilitychange', () => document.hidden && pauseGame
 if (params.has('debug')) {
   window.lumen = {
     THREE, scene, camera, renderer, world, env, post, player, shades, car, game, input, hud, startGame,
+    wardrobe, drops, closet, openCloset, closeCloset,
     story, dialogue, storyQueue, playScene, openDoc, queueStory,
     step(sec) {
       let t = last;
@@ -1018,6 +1076,8 @@ function setContextLost(lost) {
   $('gl-reload')?.classList.add('hidden');
   clearTimeout(reloadHintTimer);
   for (const id of ['start-btn', 'resume-btn', 'restart-btn', 'continue-btn']) $(id).disabled = lost || !game.ready;
+  // 옷장 버튼은 새로 생긴 요소라, 배포 직후 옛 HTML과 섞이면 없을 수 있다.
+  if ($('closet-btn')) $('closet-btn').disabled = lost || !game.ready;
   if (lost) closeSettings();
   if (lost) {
     pauseGame(true);
