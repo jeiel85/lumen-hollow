@@ -33,6 +33,7 @@
       "./src/rng.js": "./src/rng.js?v=__BUILD__",
       "./src/shades.js": "./src/shades.js?v=__BUILD__",
       "./src/storage.js": "./src/storage.js?v=__BUILD__",
+      "./src/vehicle.js": "./src/vehicle.js?v=__BUILD__",
       "./src/world.js": "./src/world.js?v=__BUILD__"
     }
   }
@@ -54,7 +55,8 @@
       <div class="stats">
         <div class="bar hp"><span class="label">체력</span><div class="track"><div id="hp-fill" class="fill"></div></div></div>
         <div id="bat-wrap" class="bar bat"><span class="label">손전등 <b id="flash-state">OFF</b></span><div class="track"><div id="bat-fill" class="fill"></div></div></div>
-        <div class="inv"><span class="item">퓨즈 <b id="inv-fuse">1</b></span><span class="item">붕대 <b id="inv-band">0</b></span></div>
+        <div id="fuel-wrap" class="bar fuel hidden"><span class="label">트럭 연료</span><div class="track"><div id="fuel-fill" class="fill"></div></div></div>
+        <div class="inv"><span class="item">퓨즈 <b id="inv-fuse">1</b></span><span class="item">붕대 <b id="inv-band">0</b></span><span class="item">연료통 <b id="inv-can">0</b></span></div>
       </div>
       <div id="key-hints" class="keys">WASD 이동 · 마우스 조준 · F/클릭 손전등 · E 길게 상호작용 · Q 붕대 · 휠 줌 · Esc 일시정지</div>
     </div>
@@ -81,6 +83,7 @@
       <ul class="howto">
         <li><b>낮</b> 마을을 돌며 반짝이는 곳을 뒤져 퓨즈·배터리·붕대를 모은다</li>
         <li><b>밤</b> 그늘이는 빛을 싫어한다. 켜진 가로등 아래는 안전하고 손전등으로 쫓아낼 수 있다</li>
+        <li><b>트럭</b> 은신처 앞 낡은 트럭은 연료가 있는 동안 달린다. 전조등도 그늘이를 태운다</li>
         <li><b>목표</b> 배전함 8곳에 퓨즈를 끼워 마을 전체에 다시 불을 켠다</li>
       </ul>
       <p id="best" class="best"></p>

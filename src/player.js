@@ -6,6 +6,36 @@ const FLASH_ANGLE = 0.42;
 const BEAM_LEN = 10;
 const BEAM_HALF = 0.33;
 
+// 손전등·전조등이 비 오는 밤공기에 그리는 빛줄기. 꼭짓점이 원점, 밑면이 +z 쪽(len)인 열린 원뿔.
+export function makeBeam(len, half) {
+  const geom = new THREE.ConeGeometry(Math.tan(half) * len, len, 28, 1, true)
+    .translate(0, -len / 2, 0)
+    .rotateX(-Math.PI / 2);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uOpacity: { value: 0 }, uColor: { value: new THREE.Color(1.0, 0.92, 0.75) }, uLen: { value: len } },
+    vertexShader: `uniform float uLen; varying float vT; varying vec3 vN;
+      void main(){ vT = position.z / uLen; vN = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform float uOpacity; uniform vec3 uColor; varying float vT; varying vec3 vN;
+      void main(){ float edge = pow(clamp(abs(vN.z), 0.0, 1.0), 1.6); float a = pow(clamp(1.0 - vT, 0.0, 1.0), 2.0) * smoothstep(0.0, 0.06, vT) * edge * uOpacity; gl_FragColor = vec4(uColor, a); }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.renderOrder = 7;
+  return mesh;
+}
+
+// 건물에 가려졌을 때 보이는 실루엣. 깊이 비교를 반전한 가산 재질을 불투명 패스에서
+// 몸체보다 먼저(renderOrder 1 < 2) 그려서, 자기 몸에 가린 부분은 실루엣이 생기지 않게 한다.
+export function addXray(meshes, color) {
+  const xray = new THREE.MeshBasicMaterial({ color, blending: THREE.AdditiveBlending, depthFunc: THREE.GreaterDepth, depthWrite: false });
+  for (const m of meshes) {
+    m.renderOrder = 2;
+    const ghost = new THREE.Mesh(m.geometry, xray);
+    ghost.renderOrder = 1;
+    m.add(ghost);
+  }
+}
+
 const lerpAngle = (a, b, t) => {
   let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI;
   if (d < -Math.PI) d += Math.PI * 2;
@@ -61,15 +91,7 @@ export class Player {
     add(new THREE.BoxGeometry(0.1, 0.36, 0.12), coat, 0.3, 1.0, 0.12, this.body, false).rotation.x = -0.9;
     add(new THREE.CylinderGeometry(0.05, 0.06, 0.26, 8), dark, 0.3, 0.92, 0.36, this.body, false).rotation.x = Math.PI / 2;
 
-    // 건물에 가려졌을 때 보이는 실루엣. 깊이 비교를 반전한 가산 재질을 불투명 패스에서
-    // 몸체보다 먼저(renderOrder 1 < 2) 그려서, 자기 몸에 가린 부분은 실루엣이 생기지 않게 한다.
-    const xray = new THREE.MeshBasicMaterial({ color: 0x6a5634, blending: THREE.AdditiveBlending, depthFunc: THREE.GreaterDepth, depthWrite: false });
-    for (const m of meshes) {
-      m.renderOrder = 2;
-      const ghost = new THREE.Mesh(m.geometry, xray);
-      ghost.renderOrder = 1;
-      m.add(ghost);
-    }
+    addXray(meshes, 0x6a5634);
 
     // 손전등
     this.flash = new THREE.SpotLight(0xfff0d2, 0, FLASH_RANGE + 7, FLASH_ANGLE, 0.5, 1.15);
@@ -84,21 +106,10 @@ export class Player {
     fs.normalBias = 0.02;
     this.model.add(this.flash, this.flash.target);
 
-    const beamGeo = new THREE.ConeGeometry(Math.tan(BEAM_HALF) * BEAM_LEN, BEAM_LEN, 28, 1, true)
-      .translate(0, -BEAM_LEN / 2, 0)
-      .rotateX(-Math.PI / 2);
-    this.beamMat = new THREE.ShaderMaterial({
-      uniforms: { uOpacity: { value: 0 }, uColor: { value: new THREE.Color(1.0, 0.92, 0.75) }, uLen: { value: BEAM_LEN } },
-      vertexShader: `uniform float uLen; varying float vT; varying vec3 vN;
-        void main(){ vT = position.z / uLen; vN = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `uniform float uOpacity; uniform vec3 uColor; varying float vT; varying vec3 vN;
-        void main(){ float edge = pow(clamp(abs(vN.z), 0.0, 1.0), 1.6); float a = pow(clamp(1.0 - vT, 0.0, 1.0), 2.0) * smoothstep(0.0, 0.06, vT) * edge * uOpacity; gl_FragColor = vec4(uColor, a); }`,
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-    });
-    this.beam = new THREE.Mesh(beamGeo, this.beamMat);
+    this.beam = makeBeam(BEAM_LEN, BEAM_HALF);
+    this.beamMat = this.beam.material;
     this.beam.position.set(0.3, 0.95, 0.5);
     this.beam.rotation.x = 0.07;
-    this.beam.renderOrder = 7;
     this.model.add(this.beam);
 
     // 발밑 표시 고리
@@ -108,6 +119,7 @@ export class Player {
     );
     ring.position.y = 0.03;
     this.root.add(ring);
+    this.ring = ring;
 
     this.pos = this.root.position;
     this.vel = new THREE.Vector3();
@@ -124,10 +136,24 @@ export class Player {
     this.battery = 100;
     this.fuses = 1;
     this.bandages = 0;
+    this.cans = 0;
     this.flashOn = false;
     this.invuln = 0;
     this.hurtFx = 0;
     this.alive = true;
+    this.setRiding(false);
+  }
+
+  // 차에 타 있는 동안은 몸을 숨기고 손전등을 끈다. 손전등 조명 자체는 장면에 남겨 둔다
+  // (조명 개수가 바뀌면 모든 재질의 셰이더가 다시 컴파일되어 프레임이 멈춘다).
+  setRiding(on) {
+    this.riding = on;
+    this.body.visible = !on;
+    for (const l of this.legs) l.visible = !on;
+    this.ring.visible = !on;
+    this.beam.visible = !on;
+    if (on) this.flashOn = false;
+    this.vel.set(0, 0, 0);
   }
 
   get flashActive() {
@@ -164,6 +190,11 @@ export class Player {
   update(dt, t, move, aim, world, night, rain) {
     this.invuln = Math.max(0, this.invuln - dt);
     this.hurtFx = Math.max(0, this.hurtFx - dt * 1.8);
+    if (this.riding) {
+      this.flash.intensity = 0;
+      this.beamMat.uniforms.uOpacity.value = 0;
+      return 0;
+    }
 
     const k = 1 - Math.exp(-dt * 12);
     this.vel.x += (move.x * SPEED - this.vel.x) * k;

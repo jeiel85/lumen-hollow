@@ -75,6 +75,35 @@ export class Sound {
     lfo.connect(lfoAmt).connect(trem.gain);
     lfo.start();
     whisper.connect(bp).connect(trem).connect(this.dreadGain).connect(this.master);
+
+    // 트럭 엔진: 낮은 톱니파 두 개를 저역 필터로 뭉갠 소리. 회전수에 따라 음높이와 필터가 오른다.
+    this.engineGain = ctx.createGain();
+    this.engineGain.gain.value = 0;
+    this.engineFilter = ctx.createBiquadFilter();
+    this.engineFilter.type = 'lowpass';
+    this.engineFilter.frequency.value = 320;
+    this.engineOsc = [];
+    for (const [type, mul, amp] of [['sawtooth', 1, 0.5], ['square', 0.5, 0.35]]) {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.value = 40 * mul;
+      const g = ctx.createGain();
+      g.gain.value = amp;
+      o.connect(g).connect(this.engineFilter);
+      o.start();
+      this.engineOsc.push({ o, mul });
+    }
+    this.engineFilter.connect(this.engineGain).connect(this.master);
+
+    // 타이어 끌리는 소리
+    this.skidGain = ctx.createGain();
+    this.skidGain.gain.value = 0;
+    const squeal = this._noiseSource();
+    const sbp = ctx.createBiquadFilter();
+    sbp.type = 'bandpass';
+    sbp.frequency.value = 1500;
+    sbp.Q.value = 6;
+    squeal.connect(sbp).connect(this.skidGain).connect(this.master);
   }
 
   _noiseSource() {
@@ -91,6 +120,17 @@ export class Sound {
     this.rainGain.gain.setTargetAtTime(rain * 0.22, t, 0.4);
     this.nightGain.gain.setTargetAtTime(night * 0.5, t, 0.8);
     this.dreadGain.gain.setTargetAtTime(dread * 0.28, t, 0.25);
+  }
+
+  // on: 시동이 걸려 있는지, rpm: 0~1(속도), load: 0~1(가속 페달), skid: 0~1(미끄러짐)
+  setEngine({ on = false, rpm = 0, load = 0, skid = 0 }) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const f = 34 + rpm * 62 + load * 9;
+    for (const { o, mul } of this.engineOsc) o.frequency.setTargetAtTime(f * mul, t, 0.08);
+    this.engineFilter.frequency.setTargetAtTime(260 + rpm * 700 + load * 380, t, 0.1);
+    this.engineGain.gain.setTargetAtTime(on ? 0.05 + load * 0.05 + rpm * 0.03 : 0, t, on ? 0.12 : 0.3);
+    this.skidGain.gain.setTargetAtTime(skid * 0.07, t, 0.06);
   }
 
   toggleMute() {
@@ -166,6 +206,25 @@ export class Sound {
       case 'heal':
         this._tone(587.3, t, 0.3, { gain: 0.08, type: 'triangle' });
         this._tone(880, t + 0.1, 0.4, { gain: 0.07, type: 'triangle' });
+        break;
+      case 'carstart':
+        for (let i = 0; i < 3; i++) this._burst(t + i * 0.11, 0.08, { freq: 260, q: 1.2, gain: 0.18, type: 'lowpass' });
+        this._tone(48, t + 0.32, 0.5, { gain: 0.12, type: 'sawtooth', slide: 1.6 });
+        break;
+      case 'door':
+        this._burst(t, 0.09, { freq: 700, q: 1.4, gain: 0.16 });
+        this._tone(120, t, 0.12, { gain: 0.1, type: 'triangle', slide: 0.6 });
+        break;
+      case 'crash':
+        this._burst(t, 0.45, { freq: 380, q: 0.7, gain: 0.32, type: 'lowpass', sweep: 0.4 });
+        this._tone(92, t, 0.3, { gain: 0.22, type: 'sine', slide: 0.5 });
+        break;
+      case 'stall':
+        this._tone(70, t, 0.9, { gain: 0.12, type: 'sawtooth', slide: 0.35 });
+        this._burst(t + 0.2, 0.15, { freq: 300, q: 1, gain: 0.1, type: 'lowpass' });
+        break;
+      case 'pour':
+        this._burst(t, 0.7, { freq: 900, q: 2.5, gain: 0.08, sweep: 0.6 });
         break;
       case 'win':
         [523.3, 659.3, 784, 1046.5, 1318.5].forEach((f, i) => this._tone(f, t + i * 0.12, 2.2, { gain: 0.07, type: 'triangle' }));

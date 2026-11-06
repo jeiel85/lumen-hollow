@@ -7,6 +7,8 @@ export const PITCH = 32;
 export const EDGE = 84; // 아스팔트 끝
 export const BOUND = 87; // 플레이어 이동 한계
 export const LAMP_RADIUS = 5.6; // 켜진 가로등의 안전 반경
+// 탈 수 있는 트럭을 세워 두는 곳: 은신처 남쪽 도로의 북쪽 차선, 앞이 트인 서쪽을 향해.
+export const CAR_SPAWN = { x: 4, z: 13.4, a: -Math.PI / 2 };
 const LOT_Y = 0.16;
 const ROADS = [-80, -48, -16, 16, 48, 80];
 
@@ -901,6 +903,7 @@ export class World {
     add('fuse', 11);
     add('battery', 13);
     add('bandage', 8);
+    add('fuel', 7);
     while (items.length < n) items.push('empty');
     items.length = n;
     rng.shuffle(items);
