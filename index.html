@@ -47,6 +47,7 @@
       "./src/pwa.js": "./src/pwa.js?v=__BUILD__",
       "./src/records.js": "./src/records.js?v=__BUILD__",
       "./src/rng.js": "./src/rng.js?v=__BUILD__",
+      "./src/runsave.js": "./src/runsave.js?v=__BUILD__",
       "./src/script.js": "./src/script.js?v=__BUILD__",
       "./src/settings.js": "./src/settings.js?v=__BUILD__",
       "./src/shades.js": "./src/shades.js?v=__BUILD__",
@@ -119,7 +120,15 @@
         <p class="eyebrow">ISOMETRIC SURVIVAL · PROTOTYPE</p>
         <h1>Lumen Hollow</h1>
         <p class="tagline">그날 밤, 세상의 불이 꺼졌다. 어둠 속에서 무언가가 다가온다.<br>낮에는 퓨즈를 모으고, 꺼진 구역에 하나씩 다시 불을 밝혀라.</p>
-        <button id="start-btn" class="btn" type="button" disabled>불러오는 중…</button>
+        <div id="title-actions" class="title-actions">
+          <button id="resume-run-btn" class="btn hidden" type="button" disabled>이어하기</button>
+          <button id="start-btn" class="btn" type="button" disabled>불러오는 중…</button>
+        </div>
+        <div id="new-confirm" class="title-actions hidden" role="group" aria-label="새로 시작 확인">
+          <button id="new-yes" class="btn" type="button">지우고 새로 시작</button>
+          <button id="new-no" class="btn ghost" type="button">취소</button>
+        </div>
+        <p id="run-info" class="run-info" aria-live="polite"></p>
         <div class="title-links">
           <button id="closet-btn" class="chip" type="button" disabled>옷장</button>
           <button id="journal-btn" class="chip" type="button">수첩</button>
