@@ -47,7 +47,7 @@ const ZONE_MAP = ['AABCC', 'AABCC', 'DDHEE', 'FFGII', 'FFGII'];
 export const ZONE_GRID = ['ABC', 'DHE', 'FGI'];
 
 export const ZONE_NAMES = {
-  A: '서북 농장', B: '약국 거리', C: '동북 주택가', D: '서쪽 공원', E: '다이너 거리',
+  A: '서북 농장', B: '약국 거리', C: '동북 주택가', D: '서쪽 공원', E: '골목식당 거리',
   F: '헛간 들판', G: '남쪽 광장', H: '은신처', I: '동남 주택가',
 };
 
@@ -71,9 +71,9 @@ export function makeBeaconMaterial(color) {
   });
 }
 
-// 한글 간판. [글귀, 바탕, 글자색]. 약국·다이너는 이야기에 나오는 가게라 따로 고정한다.
+// 한글 간판. [글귀, 바탕, 글자색]. 약국·골목식당은 이야기에 나오는 가게라 따로 고정한다.
 const SIGNS = [
-  ['약국', '#2f7d5a', '#ffffff'], ['다이너', '#b34d5a', '#fff3e6'],
+  ['약국', '#2f7d5a', '#ffffff'], ['골목식당', '#b34d5a', '#fff3e6'],
   ['슈퍼', '#c8372d', '#ffffff'], ['철물점', '#2d5f9a', '#ffffff'], ['세탁소', '#ffffff', '#2d5f9a'],
   ['다방', '#6a3b2a', '#ffe7b8'], ['미용실', '#ffffff', '#c8372d'], ['분식', '#f2c230', '#2a1c10'],
   ['문구사', '#3f8a5a', '#ffffff'], ['정육점', '#ffffff', '#b8241f'], ['식당', '#c8372d', '#fff3c4'],
@@ -206,6 +206,8 @@ export class World {
     this.root = new THREE.Group();
     scene.add(this.root);
     this.sb = new Builder();
+    // 전선 굵기: 휴대폰(낮은 DPR·작은 화면)에서는 0.05m가 1px보다 가늘어 끊기거나 반짝여 보여 조금 굵게(#25)
+    this.wireW = mobile ? 0.08 : 0.05;
     this.colliders = [];
     this.lamps = [];
     this.signs = [];
@@ -618,7 +620,7 @@ export class World {
       ];
       this._neon(zone, parts, new THREE.Color(0.15, 1.0, 0.45), { x: f.px(lx + 0.8, lz), y: ly - 0.4, z: f.pz(lx + 0.8, lz) }, 22);
     } else if (variant === 'diner') {
-      const s = this._shop(cx, cz + 4.6, 0, ctx, { w: 15, d: 7.4, floors: 1, wall: 0xe8dcc4, awning: 0xb34d5a, signColor: 0xc96a76, doorX: 2.5, signText: '다이너' });
+      const s = this._shop(cx, cz + 4.6, 0, ctx, { w: 15, d: 7.4, floors: 1, wall: 0xe8dcc4, awning: 0xb34d5a, signColor: 0xc96a76, doorX: 2.5, signText: '골목식당' });
       const { f, w, d, top } = s;
       const pink = new THREE.Color(1.0, 0.28, 0.55);
       this._neon(zone, [{ x: f.px(0, d / 2 + 0.16), y: top - 0.3, z: f.pz(0, d / 2 + 0.16), sx: w - 0.4, sy: 0.08, sz: 0.06, ry: f.a }], pink, { x: f.px(-3, d / 2 + 1.2), y: top - 0.6, z: f.pz(-3, d / 2 + 1.2) }, 10);
@@ -785,6 +787,49 @@ export class World {
     this._circleCollider(binX, binZ, 0.35);
     this._addLoot(cx + 3.6, cz + 0.6, ctx);
     if (rng.chance(0.6)) this._addLoot(binX - 0.8, binZ, ctx);
+    this._parkFurniture(cx, cz, q, ctx);
+  }
+
+  // 공원의 정자와 운동기구(#25 읍내 공원). 마을 난수(rng)도 공용 장식 난수(this.deco)도 쓰지 않고 블록마다 따로 씨를 둔다 —
+  // 뒤따르는 장식·충돌체 자리와 보급품 슬롯·기록 자리가 바뀌지 않게. 연못 반대쪽부터 나무·벤치·뒤질 곳과 겹치지 않는 자리에 둔다.
+  _parkFurniture(cx, cz, pond, ctx) {
+    const r = new Rng(7000 + ctx.row * 5 + ctx.col);
+    // 연못이 없는 세 사분면의 후보 점들(길에서 2.6m, 담에서 2.4m 떨어진 곳). 연못 반대쪽 사분면을 먼저 본다.
+    const quads = [[-pond[0], -pond[1]], ...(r.chance(0.5) ? [[pond[0], -pond[1]], [-pond[0], pond[1]]] : [[-pond[0], pond[1]], [pond[0], -pond[1]]])];
+    const spots = [];
+    for (const [sx, sz] of quads) for (const [a, c] of [[5.2, 5.2], [4.0, 6.6], [6.6, 4.0], [4.0, 4.0], [6.6, 6.6]]) spots.push([cx + sx * a, cz + sz * c]);
+    const free = (x, z, need) => this.colliders.every((c) => (c.t === 1
+      ? Math.hypot(c.x - x, c.z - z) > need + c.r
+      : x < c.x0 - need || x > c.x1 + need || z < c.z0 - need || z > c.z1 + need))
+      && this.loot.every((l) => Math.hypot(l.x - x, l.z - z) > need + 0.8);
+    const b = this.sb;
+    const at = spots.findIndex(([x, z]) => free(x, z, 3.1)); // 지붕 반폭 2.2 + 나무 갓 약 1.2 — 줄기 충돌체(0.35) 밖으로 이만큼
+    if (at >= 0) {
+      // 정자: 낮은 마루, 기둥 넷, 기와지붕(사각뿔)
+      const [x, z] = spots.splice(at, 1)[0];
+      const f = new Frame(x, z, r.range(-0.2, 0.2));
+      f.add(b, geo.box(), 0, LOT_Y + 0.06, 0, 2.8, 0.1, 2.8, 0x8a6a4a);
+      for (const [px, pz] of [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2]]) {
+        f.add(b, geo.cyl(6, 0.5), px, LOT_Y + 1.15, pz, 0.2, 2.1, 0.2, 0x7a4a2e);
+        this._circleCollider(f.px(px, pz), f.pz(px, pz), 0.16);
+      }
+      f.add(b, geo.box(), 0, LOT_Y + 2.25, 0, 3.0, 0.14, 3.0, 0x6a3f28);
+      f.add(b, geo.cone(4), 0, LOT_Y + 2.85, 0, 4.4, 1.1, 4.4, 0x3d4448, Math.PI / 4);
+    }
+    const at2 = spots.findIndex(([x, z]) => free(x, z, 1.8));
+    if (at2 >= 0) {
+      // 운동기구: 철봉과 허리 돌리기 원판
+      const [x, z] = spots[at2];
+      const f = new Frame(x, z, r.range(0, Math.PI));
+      for (const s of [-0.8, 0.8]) {
+        f.add(b, geo.cyl(6, 0.5), s, LOT_Y + 1.0, 0, 0.12, 2.0, 0.12, 0x4f7f9a);
+        this._circleCollider(f.px(s, 0), f.pz(s, 0), 0.12);
+      }
+      f.add(b, geo.cyl(6, 0.5), 0, LOT_Y + 1.95, 0, 0.07, 1.7, 0.07, 0xc8c2b4, 0, 0, Math.PI / 2);
+      f.add(b, geo.cyl(10, 1), 0, LOT_Y + 0.12, 1.3, 0.8, 0.08, 0.8, 0xd8a33a);
+      f.add(b, geo.cyl(6, 0.5), 0, LOT_Y + 0.6, 1.3, 0.1, 1.0, 0.1, 0x4f7f9a);
+      this._circleCollider(f.px(0, 1.3), f.pz(0, 1.3), 0.4);
+    }
   }
 
   _farm(ctx, withBarn) {
@@ -1042,7 +1087,7 @@ export class World {
       const ry = Math.atan2(dx, dz);
       const rx = Math.atan2(-dy, h);
       const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, mz = (z0 + z1) / 2;
-      this.sb.add(geo.box(), mx, my, mz, 0.05, 0.05, len + 0.02, C.wire, ry, rx);
+      this.sb.add(geo.box(), mx, my, mz, this.wireW, this.wireW, len + 0.02, C.wire, ry, rx);
       if (spark) {
         const zid = spark((i + 0.5) / n);
         if (zid) (this.wireSparks[zid] ??= new Builder()).add(geo.box(), mx, my, mz, 0.11, 0.11, len + 0.02, 0xffffff, ry, rx);
