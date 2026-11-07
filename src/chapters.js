@@ -21,18 +21,21 @@ const REACH = 1.8;
 const U = Math.SQRT1_2;
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
 
-function loadFlags() {
+// 저장된 표시를 읽는다. 더 새 버전(v > 1)이 쓴 저장이면 newer: 읽지 않고, 덮어쓰지도 않는다
+// (서비스 워커가 옛 코드를 띄운 탭에서 새 진행을 잃지 않게. lumen.run과 같은 규칙).
+export function loadChapterFlags() {
   let raw = null;
   try {
     raw = JSON.parse(load(KEY));
   } catch {
     raw = null; // 손상된 기록은 처음부터
   }
-  const out = new Set();
+  const flags = new Set();
+  const newer = !!raw && typeof raw === 'object' && Number.isInteger(raw.v) && raw.v > VERSION;
   if (raw && typeof raw === 'object' && raw.v === VERSION && Array.isArray(raw.flags)) {
-    for (const f of raw.flags) if (FLAGS.has(f)) out.add(f);
+    for (const f of raw.flags) if (FLAGS.has(f)) flags.add(f);
   }
-  return out;
+  return { flags, newer };
 }
 
 // ---------------------------------------------------------------- 무대
@@ -221,7 +224,7 @@ export class Chapters {
     this.story = story;
     this.root = new THREE.Group();
     scene.add(this.root);
-    this.flags = loadFlags();
+    ({ flags: this.flags, newer: this.locked } = loadChapterFlags());
     this.ch = 0; // 지금 하고 있는 장(2~4). 장 밖이면 0
     this.step = null;
     this.night = false; // 4장 마지막 밤이 시작됐는지(이번 실행 동안만)
@@ -256,6 +259,7 @@ export class Chapters {
   // ---------------------------------------------------------------- 진행 상태
 
   _save() {
+    if (this.locked) return; // 더 새 버전이 쓴 저장은 남겨 둔다(이번 실행 동안만 기억)
     save(KEY, JSON.stringify({ v: VERSION, flags: [...this.flags] }));
   }
 
@@ -270,8 +274,10 @@ export class Chapters {
   }
 
   // 수첩의 '이야기 처음부터'와 '2장부터 다시'
+  // 수첩의 "이야기 처음부터"처럼 사용자가 직접 지울 때는 더 새 버전 저장이어도 지운다.
   wipe() {
     this.flags.clear();
+    this.locked = false;
     remove(KEY);
   }
 

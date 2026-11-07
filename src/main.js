@@ -1837,8 +1837,12 @@ function step(dt) {
 
 let last = performance.now();
 const fpsMeter = { frames: 0, since: 0 };
+// 화면 갱신 루프. frame()은 다시 예약하지 않아서, 디버그 step()이 frame()을 직접 불러도 루프가 늘지 않는다.
+function loop(now) {
+  requestAnimationFrame(loop);
+  frame(now);
+}
 function frame(now) {
-  requestAnimationFrame(frame);
   // rAF 타임스탬프가 직전 performance.now()보다 앞설 수 있어 음수 dt를 막는다.
   const raw = Math.min(0.05, Math.max(0, (now - last) / 1000));
   last = now;
@@ -2071,9 +2075,11 @@ if (params.has('debug')) {
     saveRun, resumeGame, readRun: () => readRun(world), backToTitle, pauseGame,
     wardrobe, drops, closet, openCloset, closeCloset, board, openGrid, closeGrid, online, caches,
     story, dialogue, storyQueue, playScene, openDoc, queueStory, chapters, startChapter, get ground() { return ground; },
-    step(sec) {
+    // sec초를 dt초 간격으로 진행한다. 실제 화면처럼 걷기·충돌을 보려면 dt를 1/60로 준다(최대 0.05, frame의 상한).
+    step(sec, dt = 0.05) {
+      const ms = Math.min(50, Math.max(1, dt * 1000));
       let t = last;
-      for (let i = 0, n = Math.round(sec / 0.05); i < n; i++) frame((t += 50));
+      for (let i = 0, n = Math.round((sec * 1000) / ms); i < n; i++) frame((t += ms));
       last = performance.now();
     },
   };
@@ -2158,7 +2164,7 @@ renderRun();
 renderChapter();
 env.setHour(Number(params.get('hour')) || 16.5);
 document.body.classList.add('ready');
-requestAnimationFrame(frame);
+requestAnimationFrame(loop);
 warmUp().then(() => {
   game.ready = true;
   document.body.classList.add('loaded');

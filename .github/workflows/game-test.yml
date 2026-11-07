@@ -1,0 +1,60 @@
+# 게임 코드(src/)의 Node 시험: 마을 생성·충돌·빛 판정, 이야기 소품과 보급품 슬롯 약속, 1장 기록 자리,
+# 옷가지 id, 2~4장 무대 이음매·진행 계산·저장 형식. 브라우저 시험(tests/e2e)은 수동 실행(workflow_dispatch).
+name: Game tests
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'vendor/**'
+      - 'server/src/slots.js'
+      - 'index.html'
+      - '.github/workflows/game-test.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'vendor/**'
+      - 'server/src/slots.js'
+  workflow_dispatch:
+    inputs:
+      e2e:
+        description: '브라우저 시험(tests/e2e)도 돌린다(소프트웨어 GL이라 몇 분 걸린다)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Run game tests
+        run: node --test --disable-warning=ExperimentalWarning "tests/node/*.test.mjs"
+
+  e2e:
+    if: github.event_name == 'workflow_dispatch' && inputs.e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Serve repo
+        run: python3 -m http.server 8000 --bind 127.0.0.1 > /dev/null 2>&1 &
+      - name: Walk
+        run: node tests/e2e/walk.mjs
+      - name: Chapter 1
+        run: node tests/e2e/chapter1.mjs
+      - name: Chapters 2-4
+        run: node tests/e2e/chapters.mjs 'http://127.0.0.1:8000/?debug' 960 540
+      - name: Resume and fail
+        run: node tests/e2e/resume.mjs 'http://127.0.0.1:8000/?debug' 960 540
