@@ -19,8 +19,11 @@ export class Input {
       const inForm = e.target instanceof Element && e.target.closest('input, select, textarea');
       if (!inForm && (e.code.startsWith('Arrow') || e.code === 'Space')) e.preventDefault();
       // Tab은 플레이 중에는 배전반 열기로 쓰고, 메뉴·설정 화면 안에서는 원래대로 포커스를 옮긴다.
+      // Shift+Tab과 HUD 버튼(소리·일시정지·배전반·지도)에 포커스가 있을 때의 Tab도 원래대로 둬서, 키보드만으로
+      // HUD 버튼에 갈 수 있게 한다(#21).
       if (e.code === 'Tab') {
-        if (e.target instanceof Element && e.target.closest('.screen')) return;
+        if (e.target instanceof Element && e.target.closest('.screen, #hud')) return;
+        if (e.shiftKey) return;
         e.preventDefault();
       }
       if (!this.keys.has(e.code)) this.pressed.add(e.code);

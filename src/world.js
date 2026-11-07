@@ -132,6 +132,37 @@ export function makePoolTexture() {
   return t;
 }
 
+// 시야를 가리는 충돌체: 건물·차처럼 두께가 있는 상자만(울타리·전봇대·나무 줄기는 손전등 빛이 넘어간다).
+export function sightBoxes(colliders) {
+  return colliders.filter((c) => c.t === 0 && Math.min(c.x1 - c.x0, c.z1 - c.z0) >= 0.6);
+}
+
+// 선분 a→b가 상자 가운데 하나라도 지나는가(손전등·전조등이 벽 너머를 비추지 못하게, #14). 슬랩 방식.
+export function segmentBlocked(boxes, ax, az, bx, bz) {
+  const dx = bx - ax;
+  const dz = bz - az;
+  for (const c of boxes) {
+    if (Math.max(ax, bx) < c.x0 || Math.min(ax, bx) > c.x1 || Math.max(az, bz) < c.z0 || Math.min(az, bz) > c.z1) continue;
+    let t0 = 0;
+    let t1 = 1;
+    let hit = true;
+    for (const [o, d, lo, hi] of [[ax, dx, c.x0, c.x1], [az, dz, c.z0, c.z1]]) {
+      if (Math.abs(d) < 1e-9) {
+        if (o < lo || o > hi) { hit = false; break; }
+        continue;
+      }
+      let u = (lo - o) / d;
+      let v = (hi - o) / d;
+      if (u > v) [u, v] = [v, u];
+      t0 = Math.max(t0, u);
+      t1 = Math.min(t1, v);
+      if (t0 > t1) { hit = false; break; }
+    }
+    if (hit) return true;
+  }
+  return false;
+}
+
 // 원(반지름 r) vs 정적 충돌체 목록(t: 0 축 정렬 상자, t: 1 원). p를 직접 밀어낸다. 마을과 2~4장 무대가 함께 쓴다.
 export function pushOut(colliders, p, r) {
   for (const c of colliders) {
@@ -426,7 +457,13 @@ export class World {
     this.colliders.push(f.aabb(0, 0, w + 0.24, d + 0.24));
     if (o.loot !== false) this._addLoot(f.px(doorX, d / 2 + 2.0), f.pz(doorX, d / 2 + 2.0), ctx);
     // 은신처(loot: false)는 주인공의 집이라 빼고, 나머지 집 현관 위 창가를 기억해 둔다.
-    if (o.loot !== false) this.homes.push({ x: f.px(doorX, d / 2 + 0.3), y: y0 + 2.2, z: f.pz(doorX, d / 2 + 0.3), zone });
+    // nx, nz: 현관 쪽 벽이 바라보는 방향(깨어난 집의 창에 불을 켤 때 쓴다)
+    if (o.loot !== false) {
+      this.homes.push({
+        x: f.px(doorX, d / 2 + 0.3), y: y0 + 2.2, z: f.pz(doorX, d / 2 + 0.3), zone,
+        nx: f.px(0, 1) - f.px(0, 0), nz: f.pz(0, 1) - f.pz(0, 0),
+      });
+    }
     return { f, w, d, doorX, top };
   }
 
@@ -1245,14 +1282,17 @@ export class World {
     return best;
   }
 
-  // 아직 아무도 찾지 않았고 알려 주지도 않은 퓨즈 가운데 (x, z)에서 가장 가까운 것
-  hiddenFuseNear(x, z) {
+  // 촛불 단서를 둘 숨은 퓨즈: 단서가 가장 적게 놓인 구역을 먼저 고르고, 그 안에서 (x, z)에 가장 가까운 것.
+  // 한곳에서만 버텨도 단서가 그 주변에 몰리지 않고 마을에 고르게 퍼진다(#28).
+  hiddenFuseSpread(x, z) {
+    const hints = {};
+    for (const l of this.loot) if (l.hinted) hints[this.zoneAt(l.x, l.z)] = (hints[this.zoneAt(l.x, l.z)] ?? 0) + 1;
     let best = null;
-    let bd = Infinity;
+    let bs = Infinity;
     for (const l of this.loot) {
       if (l.item !== 'fuse' || l.searched || l.hinted) continue;
-      const d = (l.x - x) ** 2 + (l.z - z) ** 2;
-      if (d < bd) { bd = d; best = l; }
+      const score = (hints[this.zoneAt(l.x, l.z)] ?? 0) * 1e6 + (l.x - x) ** 2 + (l.z - z) ** 2;
+      if (score < bs) { bs = score; best = l; }
     }
     return best;
   }
@@ -1486,6 +1526,12 @@ export class World {
     return Math.abs(x) <= BOUND && Math.abs(z) <= BOUND;
   }
 
+  // a에서 b가 건물에 가려 보이지 않는가(손전등이 벽 너머를 태우지 않게)
+  blocksSight(ax, az, bx, bz) {
+    this._sight ??= sightBoxes(this.colliders);
+    return segmentBlocked(this._sight, ax, az, bx, bz);
+  }
+
   // 켜진 가로등(또는 트럭 작업등) 불빛 안인지. 안이면 빛의 중심·거리·안전 반경을 돌려준다.
   // 깜박임(glow)이 아니라 켜진 정도(level)로 판단해, 과부하로 깜박이는 동안 경계가 흔들리지 않게 한다.
   lightAt(x, z) {
@@ -1541,9 +1587,17 @@ export class World {
     T.glow = tg;
     const tn = this.lamps.length;
     const ts = T.level > 0 ? T.r * 2.3 : 0;
-    this.pools.setMatrixAt(tn, _mat4.makeScale(ts, 1, ts).setPosition(T.x, 0.2, T.z));
+    // 웅덩이 행렬은 트럭 작업등 칸만 움직인다. 바뀐 때만 그 한 칸만 올린다(#21).
+    const pk = this._poolKey ??= { s: -1, x: 0, z: 0 };
+    if (ts !== pk.s || (ts > 0 && (T.x !== pk.x || T.z !== pk.z))) {
+      Object.assign(pk, { s: ts, x: T.x, z: T.z });
+      this.pools.setMatrixAt(tn, _mat4.makeScale(ts, 1, ts).setPosition(T.x, 0.2, T.z));
+      const im = this.pools.instanceMatrix;
+      im.clearUpdateRanges();
+      im.addUpdateRange(tn * 16, 16);
+      im.needsUpdate = true;
+    }
     this.pools.setColorAt(tn, _col.setRGB(1.0, 0.82, 0.6).multiplyScalar(tg * 0.42));
-    this.pools.instanceMatrix.needsUpdate = true;
 
     for (let i = 0; i < this.lamps.length; i++) {
       const g = this.zones[this.lamps[i].zone].glow * night;

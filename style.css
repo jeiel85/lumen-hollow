@@ -477,3 +477,7 @@ body.chapter-mode .hud .zones, body.chapter-mode #power-btn, body.chapter-mode .
   .map-panel { width: min(420px, calc(100vh - 92px)); padding: 10px; gap: 6px; }
   .map-legend { display: none; }
 }
+
+/* 화면 밖에서 다가오는 그늘이 표시(#14): 가장자리의 붉은 갈매기 표. 가까울수록 진하다. */
+.threat { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; pointer-events: none; }
+.threat::before { content: ""; position: absolute; left: 3px; top: 3px; width: 10px; height: 10px; border-top: 3px solid #ff5a4a; border-right: 3px solid #ff5a4a; transform: rotate(45deg); filter: drop-shadow(0 0 5px rgba(255, 70, 50, 0.9)); }

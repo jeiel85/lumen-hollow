@@ -453,6 +453,7 @@ function openGrid() {
   if (game.placing && !game.placing.busy) closePlace();
   game.state = 'grid';
   board.open(world.zoneAt(player.pos.x, player.pos.z));
+  $('grid-live')?.classList.toggle('hidden', !gridLive());
   setScreen('grid');
   $('grid-title')?.focus();
 }
@@ -464,6 +465,11 @@ function closeGrid() {
   saveRun(); // 바꾼 스위치를 남긴다
   // 배전반을 연 사이에 그래픽 컨텍스트를 잃었다면 진행하지 않고 일시정지로 둔다.
   if (game.contextLost) pauseGame(true);
+}
+
+// 밤(해질녘부터)에는 배전반을 여는 동안에도 시간이 흐른다. 위기 중에 열어 숨을 고르는 일시정지가 되지 않게(#21).
+function gridLive() {
+  return env.night > 0.3;
 }
 
 function pauseGame(on) {
@@ -919,21 +925,30 @@ function restoreZone(box) {
 // 여섯을 돌려보낼 때마다 깨어난 누군가가 아직 숨은 퓨즈 자리에 촛불(금빛 기둥)을 켜 둔다. 밤에 맞서 싸운 보상이다.
 const RETURNS_PER_HINT = 6;
 
+// 집이 먼 곳(공원·농장 한가운데)에서는 빛이 마을을 가로질러 길게 날지 않고, 그 집 쪽으로 이만큼 날다 사라진다(#28).
+const WISP_REACH = 28;
+
 function sendHome(p) {
   game.returned++;
   const home = world.nearestHome(p.x, p.z);
   if (!home) return;
   const reveal = game.returned % RETURNS_PER_HINT === 0;
   const run = game.run;
-  wisps.spawn(p, home, () => {
+  const dx = home.x - p.x;
+  const dz = home.z - p.z;
+  const d = Math.hypot(dx, dz);
+  const near = d <= WISP_REACH;
+  const to = near ? home : { x: p.x + (dx / d) * WISP_REACH * 0.8, y: 7, z: p.z + (dz / d) * WISP_REACH * 0.8 };
+  wisps.spawn(p, to, () => {
     if (run !== game.run) return;
-    wisps.flash(home);
+    if (near) wisps.flash(home);
+    wisps.wake(home);
     if (reveal) revealFuse(home);
   });
 }
 
 function revealFuse(home) {
-  const loot = world.hiddenFuseNear(home.x, home.z);
+  const loot = world.hiddenFuseSpread(home.x, home.z);
   // 촛불 자리가 없으면 표시하지 않는다(알려 준 것으로 쳐 버리면 그 퓨즈가 다음 단서에서 영영 빠진다).
   if (!loot || !wisps.candle(loot, world.heightAt(loot.x, loot.z))) return;
   world.hintLoot(loot);
@@ -1715,12 +1730,31 @@ function onTimeEvent(ev) {
     env.day++;
     sound.play('dawn');
     const reset = world.dawnReset();
+    wisps.dawn();
     if (!game.peaceful) hud.toast(`${game.nights}번째 밤을 버텼다. 날이 밝는다.`, 'good');
     if (reset) later(1.6, () => hud.toast('날이 밝자 내려갔던 차단기가 다시 올라갔다.'));
     if (player.flashOn) player.flashOn = false;
     if (!game.peaceful) queueStory('dawn');
     saveRun();
   }
+}
+
+// 터치에는 조준 막대가 없어 손전등이 걷는 쪽에 묶였다(뒤로 물러나며 비출 수 없었다, #14). 손전등을 켰으면
+// 8m 안의 가장 가까운 그늘이 쪽을 비춘다. 없으면 걷는 쪽.
+const TOUCH_AIM_R = 8;
+const touchAimPoint = new THREE.Vector3();
+function touchAim() {
+  let best = null;
+  let bd = TOUCH_AIM_R;
+  for (const s of shades.list) {
+    if (!s.active || s.state !== 'stalk') continue;
+    const d = Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
+    if (d < bd) {
+      bd = d;
+      best = s;
+    }
+  }
+  return best ? touchAimPoint.set(best.x, player.pos.y + 0.9, best.z) : null;
 }
 
 function walk(dt) {
@@ -1734,6 +1768,8 @@ function walk(dt) {
     raycaster.setFromCamera(ndc, camera);
     aimPlane.constant = -(player.pos.y + 0.9);
     if (raycaster.ray.intersectPlane(aimPlane, aimPoint)) aim = aimPoint;
+  } else if ((input.usingTouch || mobile) && player.flashOn) {
+    aim = touchAim();
   }
   player.update(dt, game.time, { x: move.x, z: move.z }, aim, ground, env.night, env.rainLevel);
   if (game.chapter) return; // 장 무대에는 트럭이 없다
@@ -1771,12 +1807,17 @@ function drive(dt) {
   player.update(dt, game.time, { x: 0, z: 0 }, null, world, env.night, env.rainLevel);
 }
 
-function step(dt) {
+// frozen: 배전반을 연 밤(플레이어는 서 있고 입력·상호작용은 받지 않는다. 장면은 배전반을 닫은 뒤에 연다).
+function step(dt, frozen = false) {
   runTimers();
   // 타이머가 장면(엔딩 등)을 열었거나 판을 끝냈으면 이번 프레임의 진행은 하지 않는다.
-  if (game.state !== 'play' || flushStory()) return;
+  if (frozen ? game.state !== 'grid' : game.state !== 'play' || flushStory()) return;
   if (game.chapter) {
     chapterStep(dt);
+    return;
+  }
+  if (frozen) {
+    stepWorld(dt, true);
     return;
   }
   const flashKey = input.consume('KeyF') || input.consume('Touch_flash');
@@ -1796,9 +1837,14 @@ function step(dt) {
     refreshPlace();
   }
 
+  stepWorld(dt, false);
+}
+
+function stepWorld(dt, frozen) {
   for (const ev of env.advance(dt)) onTimeEvent(ev);
 
-  if (game.driving) drive(dt);
+  if (frozen) player.update(dt, game.time, { x: 0, z: 0 }, null, ground, env.night, env.rainLevel);
+  else if (game.driving) drive(dt);
   else walk(dt);
   world.setTruckLamp(car.pos.x, car.pos.z, car.lamp && car.fuel > 0);
 
@@ -1816,6 +1862,7 @@ function step(dt) {
   if (ev.hits) {
     sound.play('hurt');
     game.shake = 0.45;
+    if (frozen) closeGrid(); // 맞으면 배전반에서 손을 뗀다
   }
   if (ev.rammed) {
     sound.play('crash');
@@ -1828,7 +1875,7 @@ function step(dt) {
   if (gridEvents) for (const e of gridEvents) onGridEvent(e);
 
   // 이번 프레임에 쓰러졌으면 상호작용(기록 읽기·장면 시작)을 하지 않고 바로 끝 화면으로 간다.
-  if (player.alive) interact(dt);
+  if (player.alive && !frozen) interact(dt);
 
   drops.update(dt, game.time, env.night);
   const found = drops.take(player.pos.x, player.pos.z, game.driving ? 1.8 : 1.0);
@@ -1836,6 +1883,24 @@ function step(dt) {
 
   if (!player.alive) endGame(false);
   else if (game.time - game.savedAt >= SAVE_EVERY) saveRun();
+}
+
+// 화면 밖 16m 안에서 다가오는 그늘이(가까운 순 최대 6). 화면 안의 그늘이는 눈으로 보이니 표시하지 않는다.
+const THREAT_R = 16;
+const threatOut = [];
+function offscreenThreats() {
+  threatOut.length = 0;
+  for (const s of shades.list) {
+    if (!s.active || s.state !== 'stalk') continue;
+    const d = Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
+    if (d > THREAT_R) continue;
+    tmp.set(s.x, 0.8, s.z).project(camera);
+    if (Math.abs(tmp.x) < 0.92 && Math.abs(tmp.y) < 0.92) continue;
+    threatOut.push({ sx: (tmp.x * 0.5 + 0.5) * innerWidth, sy: (-tmp.y * 0.5 + 0.5) * innerHeight, k: 1 - d / THREAT_R, d });
+  }
+  threatOut.sort((a, b) => a.d - b.d);
+  if (threatOut.length > 6) threatOut.length = 6;
+  return threatOut;
 }
 
 // ---------------------------------------------------------------- 루프
@@ -1896,7 +1961,12 @@ function frame(now) {
   }
 
   let dt = 0;
-  if (game.state === 'play') {
+  if (game.state === 'grid' && gridLive()) {
+    // 배전반 앞에 서 있는 채로 세상은 흐른다(움직임·행동 입력은 받지 않는다).
+    dt = raw;
+    game.time += dt;
+    step(dt, true);
+  } else if (game.state === 'play') {
     dt = raw;
     game.time += dt;
     step(dt);
@@ -1972,6 +2042,7 @@ function frame(now) {
       cans: player.cans, driving: game.driving, fuel: car.fuel,
       powerUsed: world.onCount, powerCap: world.capacity, tripped: world.trippedCount, load: loadShown,
     });
+    hud.threats(game.state === 'play' || game.state === 'grid' ? offscreenThreats() : []);
     const dead = game.state === 'play' && !game.chapter ? world.nearestDeadBox(player.pos.x, player.pos.z) : null;
     if (dead) {
       tmp.set(dead.box.x, 1.5, dead.box.z).project(camera);

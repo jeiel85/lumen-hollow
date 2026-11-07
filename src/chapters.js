@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Builder, Frame, geo } from './geometry.js';
-import { LAMP_RADIUS, makePoolTexture, pushOut } from './world.js';
+import { LAMP_RADIUS, makePoolTexture, pushOut, segmentBlocked, sightBoxes } from './world.js';
 import { load, save, remove } from './storage.js';
 import { LAKE, ISLAND, clueById } from './story.js';
 import { CHAPTERS, OBJECTIVES } from './script.js';
@@ -95,6 +95,11 @@ class Stage {
 
   walkable(x, z, m = 0) {
     return this.areas.some((a) => this._in(a, x, z, m));
+  }
+
+  blocksSight(ax, az, bx, bz) {
+    this._sight ??= sightBoxes(this.colliders);
+    return segmentBlocked(this._sight, ax, az, bx, bz);
   }
 
   // 몸(반지름 r)이 영역들의 합집합 안에 있는가. 영역마다 따로 r만큼 줄여 보면, 두 영역이 2r보다 덜 겹치는
