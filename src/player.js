@@ -163,6 +163,7 @@ export class Player {
     this.vel = new THREE.Vector3();
     this.facing = 0;
     this.phase = 0;
+    this.footfall = 0;
     this.reset(0, 0);
   }
 
@@ -281,6 +282,7 @@ export class Player {
   update(dt, t, move, aim, world, night, rain) {
     this.invuln = Math.max(0, this.invuln - dt);
     this.hurtFx = Math.max(0, this.hurtFx - dt * 1.8);
+    this.footfall = 0;
     if (this.riding) {
       this.flash.intensity = 0;
       this.beamMat.uniforms.uOpacity.value = 0;
@@ -304,7 +306,11 @@ export class Player {
     this.model.rotation.y = this.facing;
 
     const moving = Math.min(1, speed / SPEED);
+    const prevPhase = this.phase;
     this.phase += dt * speed * 2.4;
+    // 발이 땅에 닿는 순간(다리가 가장 멀리 벌어질 때, 위상 π/2 + kπ)이면 그 걸음의 빠르기(0~1), 아니면 0. 발소리에 쓴다.
+    const stride = (p) => Math.floor((p - Math.PI / 2) / Math.PI);
+    if (moving > 0.2 && stride(this.phase) !== stride(prevPhase)) this.footfall = moving;
     const sw = Math.sin(this.phase) * 0.7 * moving;
     this.legs[0].rotation.x = sw;
     this.legs[1].rotation.x = -sw;

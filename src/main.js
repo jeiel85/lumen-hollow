@@ -1735,6 +1735,7 @@ function walk(dt) {
     if (raycaster.ray.intersectPlane(aimPlane, aimPoint)) aim = aimPoint;
   }
   player.update(dt, game.time, { x: move.x, z: move.z }, aim, ground, env.night, env.rainLevel);
+  if (player.footfall) sound.footstep(player.footfall, env.rainLevel); // 걸음마다 발소리(비 오면 젖은 소리)
   if (game.chapter) return; // 장 무대에는 트럭이 없다
   onCarEvent(car.update(dt, null, world, env.night));
   // 세워 둔 트럭과 정적 충돌체를 번갈아 풀어, 트럭이 밀어낸 자리가 벽 속이 되지 않게 한다.
@@ -2075,7 +2076,7 @@ addEventListener('pagehide', saveRun);
 // ?debug: 콘솔에서 상태를 들여다보고 시뮬레이션을 고정 간격으로 돌려 보는 개발용 핸들
 if (params.has('debug')) {
   window.lumen = {
-    THREE, scene, camera, renderer, world, env, post, player, shades, car, wisps, game, input, hud, startGame,
+    THREE, scene, camera, renderer, world, env, post, player, shades, car, wisps, game, input, hud, sound, startGame,
     saveRun, resumeGame, readRun: () => readRun(world), backToTitle, pauseGame,
     wardrobe, drops, closet, openCloset, closeCloset, board, openGrid, closeGrid, online, caches,
     story, dialogue, storyQueue, playScene, openDoc, queueStory, chapters, startChapter, get ground() { return ground; },
