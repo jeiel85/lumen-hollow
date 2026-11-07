@@ -110,22 +110,24 @@ test('촛불 단서는 한자리에서 계속 받아도 구역에 고르게 퍼�
 test('첫 밤에는 아무 방향, 다섯 번째 밤부터는 등 뒤에서 깨어나는 비율이 늘어난다', () => {
   const behindShare = (nights) => {
     const shades = new Shades(scene);
-    const p = fakePlayer(0, 0, 0); // +z를 본다 → 등 뒤는 -z
+    // 트인 네거리(16, 16)에서 +z를 본다 → 등 뒤는 -z. 건물이 깨어날 자리를 가리지 않게 은신처(원점)에서는 재지 않는다.
+    const p = fakePlayer(16, 16, 0);
     let back = 0;
     let all = 0;
-    for (let i = 0; i < 300; i++) {
+    for (let i = 0; i < 3000; i++) {
       for (const s of shades.list) s.active = false;
       shades.spawnTimer = 0;
       shades.update(0.001, 0, ctx(p, { spawning: true, nights, night: 1 }));
       for (const s of shades.list) {
         if (!s.active) continue;
         all++;
-        if (s.z < -Math.abs(s.x) * 0.5) back++;
+        if (s.z - 16 < -Math.abs(s.x - 16) * 0.5) back++;
       }
     }
     return back / all;
   };
   const first = behindShare(0);
   const deep = behindShare(6);
-  assert.ok(deep > first + 0.08, `등 뒤 비율 첫 밤 ${first.toFixed(2)} → 깊은 밤 ${deep.toFixed(2)}`);
+  // 3000번에서 첫 밤 약 0.29, 깊은 밤 약 0.39(차이의 표준편차 약 0.012)
+  assert.ok(deep > first + 0.06, `등 뒤 비율 첫 밤 ${first.toFixed(2)} → 깊은 밤 ${deep.toFixed(2)}`);
 });
