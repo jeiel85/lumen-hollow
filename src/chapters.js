@@ -536,7 +536,8 @@ export class Chapters {
   }
 
   // 화면 밖 푸른 화살표가 가리킬 곳
-  target(x, z) {
+  // 지금 차례에 가야 할 곳들(화면 밖 화살표는 가장 가까운 하나, 지도는 전부)
+  targetList() {
     let list = [];
     const st = this.step;
     const unread = (ids) => this.spots.filter((s) => ids.includes(s.clue) && !this.story.isFound(s.clue));
@@ -554,9 +555,13 @@ export class Chapters {
     else if (st === 'rest') list = [this.spot('water')];
     else if (st === 'class') list = [this.spot('class')];
     else if (st === 'broadcast') list = [this.spot('podium')];
+    return list.filter(Boolean);
+  }
+
+  target(x, z) {
     let best = null;
     let bd = Infinity;
-    for (const s of list) {
+    for (const s of this.targetList()) {
       if (!s) continue;
       const d = Math.hypot(s.x - x, s.z - z);
       if (d < bd) {
