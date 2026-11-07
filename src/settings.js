@@ -1,4 +1,4 @@
-import { load, save } from './storage.js';
+import { load, save, storageAvailable } from './storage.js';
 
 // 플레이어 설정: 저장·검증과 설정 화면의 입력 요소 연결.
 const KEY = 'lumen.settings';
@@ -51,9 +51,13 @@ export function loadSettings(opts) {
   return s;
 }
 
+// 저장했으면 true. 저장소가 막힌 브라우저(사생활 보호 모드 등)에서는 false이고, 설정은 이 페이지 동안만 적용된다.
 export function saveSettings(s) {
-  save(KEY, JSON.stringify(s));
+  return save(KEY, JSON.stringify(s));
 }
+
+// 기록 묶음의 안내(records.js)와 같은 말투로, 설정이 남지 않는다는 것을 설정 화면 위에 보인다.
+const BLOCKED = '이 브라우저는 저장소를 막아 두어 설정이 이번 세션에만 적용돼요(사생활 보호 모드 등).';
 
 const pct = (v) => `${Math.round(v * 100)}%`;
 const FORMAT = {
@@ -67,12 +71,18 @@ const FORMAT = {
 export function bindSettings(root, settings, onChange) {
   const inputs = [...root.querySelectorAll('[data-setting]')];
   const outputs = new Map([...root.querySelectorAll('[data-out]')].map((o) => [o.dataset.out, o]));
+  const notice = root.querySelector('#settings-store'); // 배포 직후 옛 index.html과 섞이면 없을 수 있다
+  const warnBlocked = (blocked) => {
+    if (notice) notice.textContent = blocked ? BLOCKED : '';
+  };
   const show = (key) => {
     const out = outputs.get(key);
     if (out && FORMAT[key]) out.textContent = FORMAT[key](settings[key]);
   };
 
+  // 설정 화면을 열 때마다 부른다. 저장소는 열려 있는 동안에도 막힐 수 있어(쿠키 차단 변경) 그때마다 확인한다.
   const sync = () => {
+    warnBlocked(!storageAvailable());
     for (const el of inputs) {
       const key = el.dataset.setting;
       if (el.type === 'checkbox') el.checked = settings[key];
@@ -95,7 +105,7 @@ export function bindSettings(root, settings, onChange) {
         settings[key] = v;
       }
       show(key);
-      saveSettings(settings);
+      if (!saveSettings(settings)) warnBlocked(true);
       onChange(key);
     };
     el.addEventListener(el.type === 'range' ? 'input' : 'change', handler);

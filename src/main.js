@@ -251,6 +251,7 @@ function openCloset() {
   player.pos.y = world.heightAt(START.x, START.z);
   closet.open();
   setScreen('closet');
+  $('closet-title')?.focus({ preventScroll: true });
 }
 
 function closeCloset() {
@@ -258,6 +259,7 @@ function closeCloset() {
   game.state = 'title';
   env.setHour(game.titleHour);
   setScreen('title');
+  $('closet-btn')?.focus({ preventScroll: true });
 }
 
 const WEAR_VERB = { coat: '입어', hat: '써', glasses: '써', pack: '메' };
@@ -269,6 +271,7 @@ function foundOutfit(item) {
   sound.play('pickup');
   const label = itemLabel(item);
   hud.toast(`${label}${objParticle(label)} 주웠다! 바로 ${WEAR_VERB[item.slot]} 봤다. 처음 화면 '옷장'에서 언제든 바꿀 수 있다.`, 'good');
+  if (!wardrobe.storeOk) hud.toast('브라우저 저장소가 막혀 있어 주운 옷은 이번 세션에만 남는다.', 'warn');
 }
 
 // 새 판·이어하기·2~4장이 함께 쓰는 준비: 그늘이·타이머·이야기·온라인 상태와 화면을 판 시작 상태로 돌린다.
@@ -329,7 +332,7 @@ function startGame() {
   later(3.8, () => hud.toast('화살표가 가까운 배전함을 가리킨다. 비상함에서 찾은 퓨즈 하나가 있다.'));
   later(6.4, () => !game.driving && hud.toast('은신처 앞에 낡은 트럭이 남아 있다. 연료가 있으면 운전할 수 있다.'));
   // 아직 옷가지를 하나도 줍지 않았을 때만 존재를 알려 준다.
-  if (drops.spawn(world, wardrobe, START) && wardrobe.foundCount === 0) {
+  if (drops.spawn(world, wardrobe, START, { truck: car.pos, radius: PLAYER_R }) && wardrobe.foundCount === 0) {
     later(9.5, () => hud.toast('누군가 남긴 옷가지 꾸러미가 빛난다. 주운 옷은 옷장에 남는다.'));
   }
   flushStory();
@@ -450,7 +453,7 @@ function resumeGame() {
     // 구역을 켠 뒤 무전이 오기 전에 탭이 닫혔다면 그 무전을 이어서 튼다(이미 본 장면은 다시 나오지 않는다).
     later(1.2, () => queueStory({ zones: world.poweredZones }));
   }
-  drops.spawn(world, wardrobe, player.pos);
+  drops.spawn(world, wardrobe, player.pos, { truck: car.pos, radius: PLAYER_R });
   flushStory();
 }
 
@@ -812,8 +815,9 @@ function openSettings() {
   if (!$('settings') || settingsFrom || game.contextLost || (game.state !== 'title' && game.state !== 'pause')) return;
   settingsFrom = game.state;
   settingsUi?.sync();
-  recordsUi?.refresh();
+  recordsUi?.refresh({ inRun: settingsFrom !== 'title' });
   pwaUi?.render();
+  renderOnlineControls();
   setScreen('settings');
   $('settings-title')?.focus();
 }
@@ -1510,7 +1514,7 @@ function togglePlace() {
   }
   if (!game.onlineLive) {
     if (online.available && hud.hasOnlineUi) {
-      if (!online.enabled) hud.toast('온라인 보급품이 꺼져 있다. 처음 화면에서 켤 수 있다.');
+      if (!online.enabled) hud.toast('온라인 보급품이 꺼져 있다. 처음 화면의 설정에서 켤 수 있다.');
       else if (game.onlinePaused) hud.toast('온라인 보급품이 잠시 꺼져 있다.');
       else hud.toast('다른 생존자와 연결되지 않아 지금은 남길 수 없다.');
     }
@@ -1591,20 +1595,20 @@ async function placeCache(kind) {
   hud.toast(`${OBJ[kind]} 남겼다. 다른 생존자 ${r.data.cache.charges}명이 하나씩 꺼내 쓸 수 있다.`, 'good');
 }
 
-// 타이틀 화면: 켜기/끄기, 내 보급품 소식, 기록 지우기
+// 처음 화면: 내 보급품 소식. 설정 화면 '온라인 보급품': 켜기/끄기, 기록 지우기(#17).
+// 켜기/끄기·지우기는 처음 화면에서 연 설정에서만 한다. 판 도중에 바꾸면 이미 받은 보급품과 어긋나기 때문이다
+// (처음 화면에 있던 때와 같은 동작).
 let summaryAt = -Infinity;
 function renderOnline() {
   const box = $('online');
   if (!box) return;
   box.classList.toggle('hidden', !online.available);
+  renderOnlineControls();
   if (!online.available) return;
   const on = online.enabled;
-  const toggle = $('online-toggle');
-  toggle.textContent = on ? '온라인 보급품 켜짐' : '온라인 보급품 꺼짐';
-  toggle.setAttribute('aria-pressed', String(on));
   const sum = $('online-summary');
   if (!on) {
-    sum.textContent = '꺼 두면 서버에 아무것도 보내지 않아요.';
+    sum.textContent = '온라인 보급품을 꺼 두었어요. 설정에서 다시 켤 수 있어요.';
     return;
   }
   if (performance.now() - summaryAt < 60000) return;
@@ -1622,6 +1626,25 @@ function renderOnline() {
   }));
 }
 
+// 설정 화면의 켜기/끄기·지우기 단추. 서버에 묻지 않고 지금 상태만 그린다.
+function renderOnlineControls() {
+  $('online-panel')?.classList.toggle('hidden', !online.available);
+  if (!online.available) return;
+  const on = online.enabled;
+  const toggle = $('online-toggle');
+  const locked = settingsFrom === 'pause';
+  if (toggle) {
+    toggle.textContent = on ? '온라인 보급품 켜짐' : '온라인 보급품 꺼짐';
+    toggle.setAttribute('aria-pressed', String(on));
+    toggle.disabled = locked;
+  }
+  if ($('online-forget')) $('online-forget').disabled = locked;
+  const msg = $('online-msg');
+  if (msg && settingsFrom) {
+    msg.textContent = locked ? '처음 화면의 설정에서 바꿀 수 있어요(판 도중에는 그대로 둬요).' : on ? '' : '꺼 두면 서버에 아무것도 보내지 않아요.';
+  }
+}
+
 async function forgetOnline() {
   if (!confirm('서버에 있는 내 온라인 기록(남긴 보급품, 꺼낸 기록, 고마워요)을 지울까요? 되돌릴 수 없어요.')) return;
   const btn = $('online-forget');
@@ -1629,7 +1652,15 @@ async function forgetOnline() {
   const r = await online.forget();
   btn.disabled = false;
   summaryAt = -Infinity;
-  $('online-summary').textContent = r.ok ? '내 온라인 기록을 지웠어요.' : `지우지 못했어요: ${onlineError(r)}`;
+  const text = r.ok ? '내 온라인 기록을 지웠어요.' : `지우지 못했어요: ${onlineError(r)}`;
+  // 결과는 누른 단추 옆(설정 화면)에 적고, 지웠으면 처음 화면의 지난 소식도 비운다.
+  const msg = $('online-msg');
+  if (!msg) {
+    $('online-summary').textContent = text;
+    return;
+  }
+  msg.textContent = text;
+  if (r.ok) $('online-summary').textContent = '';
 }
 
 // 트럭 타기·내리기
@@ -2230,7 +2261,14 @@ $('pause-settings-btn')?.addEventListener('click', openSettings);
 $('settings-close')?.addEventListener('click', closeSettings);
 if ($('settings')) {
   settingsUi = bindSettings($('settings'), settings, applySetting);
-  recordsUi = initRecordsPanel({ totalZones: world.totalZones, onChange: renderBest, mobile });
+  recordsUi = initRecordsPanel({
+    totalZones: world.totalZones, mobile, progress: { wardrobe, story, chapters },
+    onChange: () => {
+      renderBest();
+      renderChapter();
+      player.setOutfit(wardrobe.wear);
+    },
+  });
 }
 pwaUi = initPwa({ onAskInstall: openSettings });
 for (const key of ['lefty', 'fps', 'shake']) applySetting(key);
@@ -2245,11 +2283,12 @@ for (const btn of document.querySelectorAll('#place [data-kind]')) tap(btn, () =
 tap($('place-note'), cycleNote);
 tap($('place-cancel'), () => game.placing && !game.placing.busy && closePlace());
 $('online-toggle')?.addEventListener('click', () => {
+  if (settingsFrom === 'pause') return;
   online.setEnabled(!online.enabled);
   summaryAt = -Infinity;
   renderOnline();
 });
-$('online-forget')?.addEventListener('click', () => bg(forgetOnline()));
+$('online-forget')?.addEventListener('click', () => settingsFrom !== 'pause' && bg(forgetOnline()));
 addEventListener('blur', () => pauseGame(true));
 // 모바일에서 백그라운드로 간 탭은 알림 없이 종료될 수 있고, 그 전에 확실히 오는 마지막 신호가 visibilitychange(hidden)다.
 // pagehide는 데스크톱에서 탭을 닫거나 다른 페이지로 갈 때를 받는다. 장면·배전반 화면처럼 일시정지가 걸리지 않는 상태도 저장한다.
