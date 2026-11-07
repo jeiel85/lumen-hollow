@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { makeBeam, addXray, PLAYER_R } from './player.js';
-import { BOUND } from './world.js';
+import { BOUND, queryColliders } from './world.js';
 
 // 은신처 앞에 세워 둔 낡은 1톤 트럭(앞이 납작한 캡오버). 연료가 있으면 몰 수 있고, 밤에는 전조등이 그늘이를 태운다.
 // 좌표 규약은 플레이어와 같다: 방향각 a의 정면 = (sin a, cos a), a가 커지면 왼쪽으로 돈다.
@@ -24,6 +24,29 @@ export const RAM_SPEED = 6; // 이 속도 이상으로 들이받으면 그늘이
 const LAMP_FUEL = 0.3; // 짐칸 작업등(발전기)이 쓰는 연료 %/s. 연료 40%면 밤 하나 남짓 버틴다.
 const LAMP_MAX_SPEED = 1.5; // 작업등은 세워 둔 채로만 켠다. 이보다 빨리 움직이면 꺼진다.
 const SKID_MAX = 480;
+// 한 번에 움직이는 최대 거리(m, 차체 모서리 기준). 프레임 이동이 이보다 길면 잘게 나눠 움직인다.
+// 얇은 충돌체를 건너뛰려면 차체 중심이 그 한가운데를 넘어야 하므로(반폭 0.95 + 울타리 반두께 0.08),
+// 그보다 훨씬 짧게 잡아 최고속·프레임 간격을 올려도 울타리(두께 0.16)·전봇대(반지름 0.17)를 뚫지 않는다.
+const MAX_STEP = 0.3;
+const MAX_SUBSTEPS = 32;
+const SWEEP_PAD = 1; // 충돌 질의 범위 여유(m). 한 번 밀어낼 때 이보다 많이 밀리면 다음 반복에서 다시 고른다.
+// 연료통 하나가 채우는 양(%). 넘쳐 버리지 않게 통째로 들어갈 자리가 있을 때만 붓는다(연료 60% 이하).
+export const CAN_FUEL = 40;
+
+// 내릴 자리 후보(차체 좌표, lx: 오른쪽, lz: 앞쪽). 운전석(왼쪽) 문 → 조수석 문 → 뒤 → 앞 → 옆 앞뒤 → 네 모서리 순서를
+// 문에서 점점 멀리 되풀이한다. 처음 네 곳은 예전 후보와 같다.
+const EXIT_SPOTS = [];
+for (const o of [0.75, 1.3, 2.0, 3.0, 4.5]) {
+  const sx = HALF_W + o;
+  const sz = HALF_L + o;
+  const cx = HALF_W + o * 0.7;
+  const cz = HALF_L + o * 0.7;
+  EXIT_SPOTS.push(
+    [-sx, 0.3], [sx, 0.3], [0, -sz], [0, sz],
+    [-sx, -1.4], [sx, -1.4], [-sx, 1.4], [sx, 1.4],
+    [-cx, -cz], [cx, -cz], [-cx, cz], [cx, cz],
+  );
+}
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const approach = (v, target, step) => (v < target ? Math.min(target, v + step) : Math.max(target, v - step));
@@ -40,6 +63,7 @@ const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3(1, 1, 1);
 const _p = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
+const _near = [];
 
 export class Vehicle {
   constructor(scene) {
@@ -184,6 +208,18 @@ export class Vehicle {
     return this.occupied && this.fuel > 0;
   }
 
+  // 가진 연료통 중 지금 넘치지 않게 부을 수 있는 수
+  cansToPour(cans) {
+    return Math.max(0, Math.min(cans, Math.floor((100 - this.fuel) / CAN_FUEL + 1e-9)));
+  }
+
+  // 넘치지 않을 만큼 연료통을 붓고 부은 수를 돌려준다.
+  pour(cans) {
+    const n = this.cansToPour(cans);
+    this.fuel = Math.min(100, this.fuel + n * CAN_FUEL);
+    return n;
+  }
+
   // 짐칸 작업등을 켜고 끈다. 켤 수 없으면 이유('nofuel' | 'moving')를, 아니면 'on' | 'off'를 돌려준다.
   toggleLamp() {
     if (this.lamp) {
@@ -236,18 +272,60 @@ export class Vehicle {
     return true;
   }
 
-  // 내릴 자리: 운전석 쪽부터 막히지 않은 곳을 고른다.
-  exitSpot(world) {
-    const tries = [[-(HALF_W + 0.75), 0.3], [HALF_W + 0.75, 0.3], [0, -(HALF_L + 0.75)], [0, HALF_L + 0.75]];
-    for (const [lx, lz] of tries) {
-      this._world(lx, lz, _a);
-      _b.copy(_a);
-      world.collide(_b, PLAYER_R);
-      if (_b.distanceTo(_a) < 0.05 && !this.contains(_b.x, _b.z, 0.3)) return { x: _b.x, z: _b.z };
+  // 내릴 자리: 운전석 문 앞부터 둘레를 넓혀 가며, 충돌체 밖이고 문에서 벽에 막히지 않고 걸어 나갈 수 있는 곳을 고른다.
+  // 그런 곳이 없으면 null(트럭을 조금 옮겨 세워야 한다). 다만 연료가 없어 움직일 수 없거나 force면 걸어 나갈 길이
+  // 없어도 비어 있는 자리를 고른다(멈춘 트럭에 갇히지 않게). 어느 경우든 차체와 겹치는 자리는 돌려주지 않는다.
+  exitSpot(world, { force = false } = {}) {
+    for (const reach of [true, false]) {
+      if (!reach && !force && this.fuel > 0) return null;
+      for (const [lx, lz] of EXIT_SPOTS) {
+        this._world(lx, lz, _a);
+        const spot = this._freeSpot(world, _a.x, _a.z);
+        if (spot && (!reach || this._walkOut(world, lx, lz, spot))) return spot;
+      }
     }
-    this._world(tries[0][0], tries[0][1], _a);
+    if (!force) return null;
+    // 둘레 4.5m 안이 모두 막힌 경우(마을에는 없다): 운전석 쪽을 충돌체 밖으로, 다시 차체 밖으로 민다.
+    this._world(EXIT_SPOTS[0][0], EXIT_SPOTS[0][1], _a);
     world.collide(_a, PLAYER_R);
+    for (let i = 0; i < 3 && this.pushOut(_a, PLAYER_R + 0.02); i++) world.collide(_a, PLAYER_R);
     return { x: _a.x, z: _a.z };
+  }
+
+  // (x, z)에 플레이어가 설 수 있으면(정적 충돌체·마을 경계·차체와 겹치지 않으면) 그 자리, 아니면 null.
+  // 충돌체에 살짝(5cm 미만) 닿는 자리는 밀려난 곳을 쓴다.
+  _freeSpot(world, x, z) {
+    _b.set(x, 0, z);
+    world.collide(_b, PLAYER_R);
+    if (Math.hypot(_b.x - x, _b.z - z) >= 0.05) return null;
+    const sx = _b.x;
+    const sz = _b.z;
+    world.collide(_b, PLAYER_R);
+    if (_b.x !== sx || _b.z !== sz) return null;
+    if (this.distanceTo(sx, sz) < PLAYER_R + 0.05) return null;
+    return { x: sx, z: sz };
+  }
+
+  // 차체 가장자리(후보 쪽 문 앞)에서 후보 자리까지 플레이어가 지나갈 수 있는지(그 사이에 벽·울타리가 없는지).
+  _walkOut(world, lx, lz, spot) {
+    const qx = clamp(lx, -HALF_W, HALF_W);
+    const qz = clamp(lz, -HALF_L, HALF_L);
+    const len = Math.hypot(lx - qx, lz - qz);
+    if (len < 1e-6) return false;
+    const off = PLAYER_R + 0.05;
+    this._world(qx + ((lx - qx) / len) * off, qz + ((lz - qz) / len) * off, _p);
+    const dx = spot.x - _p.x;
+    const dz = spot.z - _p.z;
+    const n = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.15));
+    const r = PLAYER_R - 0.02;
+    for (let i = 0; i <= n; i++) {
+      const x = _p.x + (dx * i) / n;
+      const z = _p.z + (dz * i) / n;
+      _b.set(x, 0, z);
+      world.collide(_b, r);
+      if (Math.abs(_b.x - x) > 1e-6 || Math.abs(_b.z - z) > 1e-6) return false;
+    }
+    return true;
   }
 
   // 전조등 빛 안이면 0~1, 아니면 0
@@ -307,7 +385,7 @@ export class Vehicle {
     const fx = Math.sin(this.a);
     const fz = Math.cos(this.a);
     let vf = this.vel.x * fx + this.vel.z * fz;
-    let vl = -this.vel.x * fz + this.vel.z * fx;
+    const vl = -this.vel.x * fz + this.vel.z * fx;
 
     let thr = this.occupied && ctl ? clamp(ctl.thr, -1, 1) : 0;
     const steer = this.occupied && ctl ? clamp(ctl.steer, -1, 1) : 0;
@@ -330,68 +408,13 @@ export class Vehicle {
     if (this.braking || this.fuel <= 0) thr = 0;
     this.throttle = Math.abs(thr);
 
-    // 겹치지 않았던 이번 프레임 시작 상태(좁은 틈에 끼면 여기로 되돌린다)
-    const ox = this.pos.x;
-    const oz = this.pos.z;
-    const oa = this.a;
-
-    // 핸들: 굴러야 돌고, 빠를수록 덜 꺾인다. 후진 중에는 반대로 돈다.
-    const grip = Math.min(1, Math.abs(vf) / 3) / (1 + Math.abs(vf) * 0.045);
-    const yaw = -steer * STEER_RATE * grip * Math.sign(vf);
-    this.a = wrap(this.a + yaw * dt);
-    // 속도 벡터는 그대로 두고 차체만 돌린 뒤, 옆으로 미끄러지는 성분을 접지력만큼 잡는다.
+    // 정한 앞·옆 속도를 월드 속도로 돌려 둔 뒤 움직인다. 프레임 이동(모서리가 도는 거리 포함)이 MAX_STEP보다 길면
+    // 잘게 나눠 움직인다(최고속이나 프레임 간격을 올려도 얇은 충돌체를 건너뛰지 않게). 나눠도 속도는 늘지 않는다.
     this.vel.set(fx * vf - fz * vl, 0, fz * vf + fx * vl);
-    const nfx = Math.sin(this.a);
-    const nfz = Math.cos(this.a);
-    vf = this.vel.x * nfx + this.vel.z * nfz;
-    vl = approach(-this.vel.x * nfz + this.vel.z * nfx, 0, GRIP * dt);
-    this.slip = Math.abs(vl);
-    this.vel.set(nfx * vf - nfz * vl, 0, nfz * vf + nfx * vl);
-    this.pos.x += this.vel.x * dt;
-    this.pos.z += this.vel.z * dt;
+    const sweep = (this.vel.length() + STEER_RATE * Math.abs(steer) * REACH) * dt;
+    const n = Math.min(MAX_SUBSTEPS, Math.max(1, Math.ceil(sweep / MAX_STEP)));
+    for (let i = 0; i < n; i++) this._step(dt / n, steer, world, ev);
 
-    // 충돌: 차체를 회전된 직사각형 그대로 정적 충돌체 밖으로 밀어내고, 밀린 방향으로 튕긴다.
-    let { x: nx, z: nz, ok } = this._resolve(world);
-    if (!ok) {
-      // 차폭보다 조금 넓은 틈에서 돌다가 양쪽 벽에 끼면 미는 힘이 서로 상쇄되어 풀리지 않는다.
-      // 이번 프레임 이동을 취소하고 회전만 남겨 본다(제자리에서 조금씩 틀어 빠져나올 수 있게).
-      // 그래도 겹치면 회전까지 되돌린다. 프레임 시작 상태가 부동소수 오차로 살짝 겹쳐 있었다면
-      // 거기서 한 번 더 밀어낸다(되돌리기만 반복하면 그 자리에 영영 갇힌다).
-      this.pos.x = ox;
-      this.pos.z = oz;
-      if (!this._resolve(world).ok) {
-        this.pos.x = ox;
-        this.pos.z = oz;
-        this.a = oa;
-        this._resolve(world);
-      }
-      const hit = this.vel.length();
-      if (hit > 3.5 && this.crashCool <= 0) {
-        ev.crash = hit;
-        this.crashCool = 0.4;
-      }
-      this.vel.set(0, 0, 0);
-      nx = 0;
-      nz = 0;
-    }
-    const push = Math.hypot(nx, nz);
-    if (push > 1e-5) {
-      const ux = nx / push;
-      const uz = nz / push;
-      const vn = this.vel.x * ux + this.vel.z * uz;
-      if (vn < 0) {
-        // 세게 부딪히면 조금 튕기고, 느리게 밀고 있을 때는 튕기지 않고 벽을 따라 미끄러진다
-        // (저속에서 튕기면 앞뒤 방향이 번갈아 바뀌어 핸들이 반대로 먹고, 틈에 끼어 못 빠져나온다).
-        const bounce = -vn > 2 ? 1.25 : 1;
-        this.vel.x -= ux * vn * bounce;
-        this.vel.z -= uz * vn * bounce;
-        this.vel.multiplyScalar(Math.exp(-dt * 2.5));
-        if (-vn > 3.5 && this.crashCool <= 0) {
-          ev.crash = -vn;
-          this.crashCool = 0.4;
-        }
-      }
-    }
     const gy = world.heightAt(this.pos.x, this.pos.z);
     this.pos.y += (gy - this.pos.y) * (1 - Math.exp(-dt * 14));
 
@@ -420,7 +443,120 @@ export class Vehicle {
     return ev;
   }
 
+  // 한 걸음(h초): 핸들만큼 돌고, 옆미끄러짐을 접지력만큼 잡고, 움직인 뒤 정적 충돌체 밖으로 밀어낸다.
+  _step(h, steer, world, ev) {
+    // 겹치지 않았던 이 걸음의 시작 상태(좁은 틈에 끼면 여기서 다른 움직임을 찾는다)
+    const ox = this.pos.x;
+    const oz = this.pos.z;
+    const oa = this.a;
+    // 핸들: 굴러야 돌고, 빠를수록 덜 꺾인다. 후진 중에는 반대로 돈다.
+    const vf = this.vel.x * Math.sin(oa) + this.vel.z * Math.cos(oa);
+    const grip = Math.min(1, Math.abs(vf) / 3) / (1 + Math.abs(vf) * 0.045);
+    const na = wrap(oa - steer * STEER_RATE * grip * Math.sign(vf) * h);
+    // 속도 벡터는 그대로 두고 차체만 돌린 뒤, 옆으로 미끄러지는 성분을 접지력만큼 잡는다.
+    const vNew = this._gripped(na, h);
+    this.slip = vNew.slip;
+
+    // 충돌: 차체를 회전된 직사각형 그대로 정적 충돌체 밖으로 밀어낸다(한 벽이면 그 벽을 따라 미끄러진다).
+    let r = this._tryPose(world, ox + vNew.x * h, oz + vNew.z * h, na);
+    let v = vNew;
+    if (!r.ok) {
+      // 차폭보다 조금 넓은 틈에서 양쪽 벽에 끼면 미는 힘이 서로 상쇄되어 풀리지 않는다. 이 걸음을 통째로 취소하면
+      // 핸들을 그쪽으로 꺾은 채로는 그 자리에 멈춘 것처럼 보이므로, 겹치지 않는 움직임을 차례로 찾는다:
+      // 돌지 않고 이동 → 차가 향한 쪽으로만 이동 → 월드 축 하나로만 이동(축에 맞춘 골목·담을 따라) → 돌기만 → 그대로.
+      // 돌지 못하면 속도도 돌리지 않는다. 마지막 '그대로'는 시작 상태가 부동소수 오차로 살짝 겹쳐 있었을 때
+      // 거기서 한 번 더 밀어낸다.
+      const vOld = this._gripped(oa, h);
+      const fwd = (u, a) => {
+        const s = Math.sin(a);
+        const c = Math.cos(a);
+        const d = (u.x * s + u.z * c) * h;
+        return [s * d, c * d];
+      };
+      const xFirst = Math.abs(vOld.x) >= Math.abs(vOld.z);
+      const ax = [vOld.x * h, 0];
+      const az = [0, vOld.z * h];
+      const tries = [
+        [vOld, [vOld.x * h, vOld.z * h], oa],
+        [vNew, fwd(vNew, na), na],
+        [vOld, fwd(vOld, oa), oa],
+        [vOld, xFirst ? ax : az, oa],
+        [vOld, xFirst ? az : ax, oa],
+        [vNew, [0, 0], na],
+        [vOld, [0, 0], oa],
+      ];
+      let moved = tries[tries.length - 1];
+      for (const t of tries) {
+        r = this._tryPose(world, ox + t[1][0], oz + t[1][1], t[2]);
+        if (r.ok) {
+          moved = t;
+          break;
+        }
+      }
+      v = moved[0];
+      this.vel.set(v.x, 0, v.z);
+      // 빠진 이동 성분 쪽으로 가던 속도만 지운다(벽 쪽으로 미는 성분이 사라지고 나머지로 미끄러진다).
+      const cx = v.x * h - moved[1][0];
+      const cz = v.z * h - moved[1][1];
+      const cl = Math.hypot(cx, cz);
+      if (cl > 1e-9) {
+        const ux = cx / cl;
+        const uz = cz / cl;
+        const vn = this.vel.x * ux + this.vel.z * uz;
+        if (vn > 0) {
+          this.vel.x -= ux * vn;
+          this.vel.z -= uz * vn;
+          this._crash(vn, ev);
+        }
+      }
+      if (!r.ok) return;
+    } else {
+      this.vel.set(v.x, 0, v.z);
+    }
+    const push = Math.hypot(r.x, r.z);
+    if (push > 1e-5) {
+      const ux = r.x / push;
+      const uz = r.z / push;
+      const vn = this.vel.x * ux + this.vel.z * uz;
+      if (vn < 0) {
+        // 세게 부딪히면 조금 튕기고, 느리게 밀고 있을 때는 튕기지 않고 벽을 따라 미끄러진다
+        // (저속에서 튕기면 앞뒤 방향이 번갈아 바뀌어 핸들이 반대로 먹고, 틈에 끼어 못 빠져나온다).
+        const bounce = -vn > 2 ? 1.25 : 1;
+        this.vel.x -= ux * vn * bounce;
+        this.vel.z -= uz * vn * bounce;
+        this.vel.multiplyScalar(Math.exp(-h * 2.5));
+        this._crash(-vn, ev);
+      }
+    }
+  }
+
+  // 지금 속도를 방향 a의 차체 기준으로 보고 옆미끄러짐 성분을 접지력만큼(h초) 잡은 속도. this.vel은 건드리지 않는다.
+  _gripped(a, h) {
+    const s = Math.sin(a);
+    const c = Math.cos(a);
+    const vf = this.vel.x * s + this.vel.z * c;
+    const vl = approach(-this.vel.x * c + this.vel.z * s, 0, GRIP * h);
+    return { x: s * vf - c * vl, z: c * vf + s * vl, slip: Math.abs(vl) };
+  }
+
+  _crash(hit, ev) {
+    if (hit > 3.5 && this.crashCool <= 0) {
+      ev.crash = hit;
+      this.crashCool = 0.4;
+    }
+  }
+
+  // 차체를 (x, z, 방향 a)에 놓고 겹침을 푼다. _resolve의 결과를 돌려준다.
+  _tryPose(world, x, z, a) {
+    this.pos.x = x;
+    this.pos.z = z;
+    this.a = a;
+    return this._resolve(world);
+  }
+
   // 모서리에 여러 충돌체가 겹치면 몇 번 반복해 푼다. ok가 거짓이면 끝내 겹침이 남은 것(끼임).
+  // 반복마다 그 자리 둘레의 충돌체를 새로 고르므로, 한 번에 SWEEP_PAD보다 많이 밀려도 다음 반복이 잡는다.
+  // ok는 아무것도 밀어내지 않은(그래서 고른 범위를 벗어나지 않은) 반복이 있을 때만 참이다.
   _resolve(world) {
     let x = 0;
     let z = 0;
@@ -448,7 +584,10 @@ export class Vehicle {
     let tx = 0;
     let tz = 0;
     let depth = 0;
-    for (const col of world.colliders) {
+    const cols = world.colliders;
+    const near = queryColliders(cols, px - carX - SWEEP_PAD, pz - carZ - SWEEP_PAD, px + carX + SWEEP_PAD, pz + carZ + SWEEP_PAD, _near);
+    for (let k = 0; k < near.length; k++) {
+      const col = cols[near[k]];
       if (col.t === 0) {
         const ex = (col.x1 - col.x0) / 2;
         const ez = (col.z1 - col.z0) / 2;

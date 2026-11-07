@@ -58,3 +58,5 @@ jobs:
         run: node tests/e2e/chapters.mjs 'http://127.0.0.1:8000/?debug' 960 540
       - name: Resume and fail
         run: node tests/e2e/resume.mjs 'http://127.0.0.1:8000/?debug' 960 540
+      - name: Truck
+        run: node tests/e2e/truck.mjs

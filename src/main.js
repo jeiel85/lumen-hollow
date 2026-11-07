@@ -1520,12 +1520,9 @@ async function forgetOnline() {
 
 // 트럭 타기·내리기
 function enterCar() {
-  let poured = 0;
-  while (player.cans > 0 && car.fuel < 90) {
-    car.fuel = Math.min(100, car.fuel + 40);
-    player.cans--;
-    poured++;
-  }
+  // 넘쳐 버리지 않을 만큼만 붓는다(연료 60% 이하일 때 한 통씩, src/vehicle.js CAN_FUEL).
+  const poured = car.pour(player.cans);
+  player.cans -= poured;
   if (poured) {
     sound.play('pour');
     hud.toast(`연료통 ${poured}개를 부었다. 연료 ${Math.round(car.fuel)}%`, 'good');
@@ -1551,8 +1548,14 @@ function seatInCar() {
   hud.setDriving(true);
 }
 
-function leaveCar() {
-  const spot = car.exitSpot(world);
+// force가 거짓이면(플레이어가 내리기를 눌렀을 때) 문 앞이 모두 막혀 있으면 내리지 않고 알린다(옮겨 세우면 된다).
+// 처음 화면으로 나가거나 장을 시작할 때는 force로 반드시 내린다.
+function leaveCar(force = true) {
+  const spot = car.exitSpot(world, { force });
+  if (!spot) {
+    hud.toast('문 앞이 막혀 내릴 수 없다. 트럭을 조금 옮겨 세우자.', 'warn');
+    return;
+  }
   game.driving = false;
   car.occupied = false;
   car.reverse = false;
@@ -1589,7 +1592,7 @@ function interact(dt) {
     if (done) {
       game.hold = 0;
       game.holdLock = true;
-      leaveCar();
+      leaveCar(false);
     }
     return;
   }
@@ -1624,7 +1627,8 @@ function interact(dt) {
       hud.prompt('트럭 — 연료가 바닥났다. 연료통이 필요하다', 0);
       return;
     }
-    const pour = player.cans > 0 && car.fuel < 90 ? ` · 연료통 ${player.cans}개 붓기` : '';
+    const cans = car.cansToPour(player.cans);
+    const pour = cans ? ` · 연료통 ${cans}개 붓기` : player.cans > 0 ? ' · 연료가 넉넉해 연료통은 아껴 둔다' : '';
     const done = holdProgress(dt, 0.5);
     hud.prompt(`${how} 트럭 타기${pour}`, Math.min(1, game.hold / 0.5));
     if (done) {
