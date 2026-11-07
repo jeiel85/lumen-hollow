@@ -21,7 +21,7 @@ import { Dialogue } from './dialogue.js';
 import { SCENES, FINALE } from './script.js';
 import { Chapters } from './chapters.js';
 import { Minimap } from './minimap.js';
-import { captureRun, writeRun, readRun, clearRun, restoreWorld, describeRun } from './runsave.js';
+import { captureRun, writeRun, readRun, clearRun, restoreWorld, describeRun, RUN_KEY } from './runsave.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -35,18 +35,24 @@ if (document.body.dataset.slowLoad) {
   $('title').classList.remove('hidden');
 }
 
-function showFatal(message, err) {
+// 오류 화면이 떠 있는 동안은 판을 멈춘다(화면이 가려진 채로 그늘이에게 공격받지 않게, #14).
+let halted = false;
+let booted = false; // 시작 준비가 끝났는지(그 뒤의 오류는 일시적일 수 있어 '계속하기'를 준다)
+
+function showFatal(message, err, { canContinue = false } = {}) {
   console.error(err);
+  halted = true;
   // 배포 직후 캐시된 옛 index.html과 섞일 수 있어, 새로 추가된 요소는 없을 수도 있다고 보고 다룬다.
   const errTitle = $('error-title');
-  if (errTitle) errTitle.textContent = '실행할 수 없어요';
+  if (errTitle) errTitle.textContent = canContinue ? '문제가 생겼어요' : '실행할 수 없어요';
   $('error-text').textContent = message;
+  $('error-continue')?.classList.toggle('hidden', !canContinue);
   $('error').classList.remove('hidden');
   $('title').classList.add('hidden');
 }
 
-addEventListener('error', (e) => showFatal(`게임 실행 중 오류가 발생했습니다: ${e.message}`, e.error));
-addEventListener('unhandledrejection', (e) => showFatal(`게임 실행 중 오류가 발생했습니다: ${e.reason}`, e.reason));
+addEventListener('error', (e) => showFatal(`게임 실행 중 오류가 발생했습니다: ${e.message}`, e.error, { canContinue: booted }));
+addEventListener('unhandledrejection', (e) => showFatal(`게임 실행 중 오류가 발생했습니다: ${e.reason}`, e.reason, { canContinue: booted }));
 
 let renderer;
 try {
@@ -278,12 +284,13 @@ function beginRun({ chapter = false } = {}) {
   storyQueue.length = 0;
   storyCam.on = false;
   storyCam.zoom = null;
+  dialogue.reset();
   story.resetRun();
   Object.assign(game, {
     state: 'play', nights: 0, hold: 0, holdKey: null, peaceful: false, won: false, shake: 0, hintFlash: false,
     driving: false, holdLock: false, zoomBoost: 0, hintLoad: false, returned: 0, hintTold: false,
     run: game.run + 1, startedAt: game.time, onlineLive: false, onlinePaused: false, cacheTaken: 0, cacheBusy: false,
-    savedAt: game.time, chapter: 0,
+    savedAt: game.time, chapter: 0, otherTab: false, pendingTake: null,
   });
   if (!chapter) {
     chapters.end();
@@ -359,18 +366,37 @@ function cancelNewGame() {
 const SAVE_EVERY = 15; // 게임 시간(초)
 const RUN_STATES = new Set(['play', 'pause', 'story', 'grid']);
 
+// 같은 판을 두 탭에서 하면 나중에 저장한 탭이 다른 탭의 진행을 덮는다(#14). 다른 탭이 판 저장을 바꾸면
+// 이 탭은 저장을 멈추고 알린다(이 탭에서 새 판을 시작하거나 이어하기를 다시 누르면 풀린다).
+addEventListener('storage', (e) => {
+  if (e.key !== RUN_KEY || e.storageArea !== localStorage) return;
+  if (game.state === 'title') {
+    renderRun();
+    return;
+  }
+  if (game.otherTab || game.chapter || !RUN_STATES.has(game.state)) return;
+  game.otherTab = true;
+  hud.toast('다른 탭에서 이 판을 하고 있다. 이 탭의 진행은 이제 저장하지 않는다.', 'warn');
+});
+
 function saveRun() {
   // 끝난 판, 승리 뒤 산책, 처음 화면·옷장에서는 저장하지 않는다. 2~4장은 진행을 lumen.chapters·lumen.story에 바로 남기고
   // 1장 판 저장(이어하기)은 건드리지 않는다.
-  if (game.chapter || !RUN_STATES.has(game.state) || game.won || game.peaceful || !player.alive) return;
+  if (game.chapter || !RUN_STATES.has(game.state) || game.won || game.peaceful || !player.alive || game.otherTab) return;
   game.savedAt = game.time;
   let data;
+  // 남기기 요청이 오가는 중이면 가방은 요청 전 그대로 저장한다. 그 사이 탭이 죽어도 물건을 잃지 않는다
+  // (서버에 남았다면 하나를 더 가진 쪽으로 어긋난다 — 잃는 쪽보다 낫다, #14).
+  const inFlight = game.placing?.busy ? game.placing.kind : null;
   try {
+    if (inFlight) reserve(inFlight, +1);
     data = captureRun({ world, player, car, env, game, shades });
   } catch (err) {
     // 저장 형식이 게임 상태를 따라가지 못한 버그다. 판은 계속하되, 고칠 수 있게 기록을 남긴다.
     console.error('[run] 판을 저장하지 못했습니다.', err);
     return;
+  } finally {
+    if (inFlight) reserve(inFlight, -1);
   }
   writeRun(data);
 }
@@ -404,6 +430,7 @@ function resumeGame() {
   game.nights = run.nights;
   game.returned = run.returned;
   game.cacheTaken = run.cacheTaken;
+  if (run.pendingTake) bg(settleTake(run.pendingTake, game.run));
   // 저장된 촛불 단서(알려 준 퓨즈 자리)를 다시 켠다. beginRun이 지난 촛불을 치운 뒤라야 한다.
   for (const l of world.loot) if (l.hinted) wisps.candle(l, world.heightAt(l.x, l.z));
   shades.banished = run.banished;
@@ -476,6 +503,7 @@ function pauseGame(on) {
   if (on && game.state === 'play') {
     if (game.placing && !game.placing.busy) closePlace();
     game.state = 'pause';
+    hud.renderLog($('pause-log'));
     setScreen('pause');
     saveRun();
   } else if (!on && game.state === 'pause' && !game.contextLost) {
@@ -498,6 +526,7 @@ function endButtons({ walk = false, retry = true, next = false, journal = false 
 function endGame(won) {
   game.won = won;
   game.state = 'end';
+  const prevBest = loadBest(world.totalZones);
   saveBest();
   clearRun(); // 끝난 판은 이어 갈 수 없다
   hud.prompt(null);
@@ -515,7 +544,19 @@ function endGame(won) {
     $('end-text').textContent = `버틴 밤 ${game.nights}번 · 복구한 구역 ${zones} · ${sent} ${shades.banished}.`;
     endButtons();
   }
+  const best = $('end-best');
+  if (best) best.textContent = bestLine(prevBest);
   setScreen('end');
+}
+
+// 끝 화면의 기록 비교: 이번 판이 지난 최고 기록을 넘었으면 무엇을 넘었는지, 아니면 지금 최고 기록(#14)
+function bestLine(prev) {
+  const news = [];
+  if (game.won && (!prev.winDay || env.day < prev.winDay)) news.push(prev.winDay ? `가장 빠른 복구(전에는 ${prev.winDay}일)` : '처음으로 마을을 되살렸다');
+  if (game.nights > prev.nights) news.push(`가장 오래 버틴 밤(전에는 ${prev.nights}번)`);
+  if (world.poweredZones > prev.zones) news.push(`가장 많이 밝힌 구역(전에는 ${prev.zones}곳)`);
+  if (news.length) return `신기록 — ${news.join(' · ')}`;
+  return hasRecords(prev) ? `최고 기록 · ${describeBest(prev, world.totalZones)}` : '';
 }
 
 function continueWalk() {
@@ -543,6 +584,7 @@ function backToTitle() {
   world.setTruckLamp(car.pos.x, car.pos.z, false);
   wisps.clear();
   storyQueue.length = 0;
+  dialogue.reset();
   game.state = 'title';
   game.run++; // 아직 오지 않은 보급품 응답은 버린다
   game.onlineLive = false;
@@ -808,6 +850,36 @@ function applyQuality() {
   if (game.ready) warmUp();
 }
 
+// 저사양 기기 화질 자동 조정(#1·#10): 플레이 중 6초 평균이 40fps 아래로 두 번 이어지면 화질을 한 단계 낮춘다.
+// 올리지는 않는다(오르내림 반복을 막고, 높이는 건 사용자가 고른다). 셰이더를 다시 컴파일하는 동안·탭이 가려진 동안은 재지 않는다.
+// ?debug에서는 끈다: 시험이 lumen.step()으로 메인 스레드를 오래 붙잡으면 실제 화면 갱신이 멈춰 느린 기기로 보인다.
+const autoQ = { frames: 0, since: 0, slow: 0, off: params.has('debug') };
+function watchQuality(now) {
+  if (autoQ.off || game.state !== 'play' || game.warming || document.hidden) {
+    autoQ.frames = 0;
+    autoQ.since = now;
+    return;
+  }
+  autoQ.frames++;
+  const span = now - autoQ.since;
+  if (span < 6000) return;
+  const fps = (autoQ.frames * 1000) / span;
+  autoQ.frames = 0;
+  autoQ.since = now;
+  autoQ.slow = fps < 40 ? autoQ.slow + 1 : 0;
+  if (autoQ.slow < 2) return;
+  autoQ.slow = 0;
+  const next = settings.quality === 'high' ? 'mid' : settings.quality === 'mid' ? 'low' : null;
+  if (!next) {
+    autoQ.off = true;
+    return;
+  }
+  settings.quality = next;
+  saveSettings(settings);
+  applyQuality();
+  hud.toast(`화면이 느려 화질을 '${next === 'mid' ? '보통' : '낮음'}'으로 낮췄다. 설정에서 바꿀 수 있다.`);
+}
+
 function applySetting(key) {
   switch (key) {
     case 'volume':
@@ -815,6 +887,7 @@ function applySetting(key) {
       sound.setVolume(settings.volume, settings.ambience);
       break;
     case 'quality':
+      autoQ.off = true; // 손으로 고른 화질은 이번 실행 동안 자동으로 바꾸지 않는다
       applyQuality();
       break;
     case 'zoom':
@@ -1149,6 +1222,7 @@ function chapterFail() {
   hud.tags([]);
   $('end-title').textContent = '어둠에 삼켜졌다';
   $('end-text').textContent = `${chapters.label} — 찾은 기록과 돌려보낸 그림자는 그대로 남는다. 불빛 곁에서 다시 해 보자.`;
+  if ($('end-best')) $('end-best').textContent = '';
   endButtons();
   setScreen('end');
 }
@@ -1161,6 +1235,7 @@ function finishStory() {
   sound.play('win');
   $('end-title').textContent = `《${FINALE.title}》`;
   $('end-text').textContent = FINALE.text;
+  if ($('end-best')) $('end-best').textContent = '';
   endButtons({ retry: false, journal: true });
   setScreen('end');
 }
@@ -1311,9 +1386,11 @@ function grantShared(kind) {
 async function takeCache(c) {
   const run = game.run;
   game.cacheBusy = true;
+  game.pendingTake = { id: c.id, kind: c.kind };
   const r = await online.use(c.id);
   if (run !== game.run) return;
   game.cacheBusy = false;
+  game.pendingTake = null;
   if (!r.ok) {
     hud.toast(onlineError(r, c), r.error === 'used_today' ? '' : 'warn');
     return;
@@ -1329,6 +1406,22 @@ async function takeCache(c) {
     game.hintThanks = true;
     later(1.6, () => hud.toast('상자 앞에서 다시 길게 누르면 남긴 사람에게 고마워요를 보낼 수 있다.'));
   }
+}
+
+// 꺼내기 요청이 오가는 사이 탭이 닫혔던 판을 이어 할 때: 같은 상자를 다시 꺼내 본다. 성공하면 그때 받고,
+// '오늘 이미 꺼냈다'(409 used_today)면 앞 요청이 서버에서 이뤄진 것이니 그 물건을 준다. 그 밖의 실패는 받지 않은 것이다.
+async function settleTake(t, run) {
+  if (!online.enabled) return;
+  game.pendingTake = t;
+  const r = await online.use(t.id);
+  if (run !== game.run) return;
+  game.pendingTake = null;
+  if (r.ok || r.error === 'used_today') {
+    if (r.ok) game.cacheTaken++;
+    grantShared(KIND_NAMES[r.data?.kind] ? r.data.kind : t.kind);
+    hud.toast('지난번에 꺼내던 보급품을 마저 받았다.', 'good');
+  }
+  saveRun();
 }
 
 async function sendThanks(c) {
@@ -1483,6 +1576,7 @@ async function placeCache(kind) {
   const run = game.run;
   reserve(kind, -1);
   p.busy = true;
+  p.kind = kind;
   refreshPlace();
   const r = await online.place(p.spot.slot, kind, p.note);
   if (run !== game.run) return; // 새 판의 인벤토리에는 손대지 않는다
@@ -1910,9 +2004,11 @@ const fpsMeter = { frames: 0, since: 0 };
 // 화면 갱신 루프. frame()은 다시 예약하지 않아서, 디버그 step()이 frame()을 직접 불러도 루프가 늘지 않는다.
 function loop(now) {
   requestAnimationFrame(loop);
+  if (!halted) watchQuality(now); // 실제 화면 갱신만 잰다(디버그 step의 가짜 시각은 빼고)
   frame(now);
 }
 function frame(now) {
+  if (halted) return;
   // rAF 타임스탬프가 직전 performance.now()보다 앞설 수 있어 음수 dt를 막는다.
   const raw = Math.min(0.05, Math.max(0, (now - last) / 1000));
   last = now;
@@ -1982,9 +2078,15 @@ function frame(now) {
     dialogue.update(raw);
     if (storyCam.on) camGoal.set(storyCam.x, 0, storyCam.z);
     else camGoal.copy(player.pos);
-    camFocus.lerp(camGoal, 1 - Math.exp(-raw * 2.4));
     const boost = (storyCam.zoom ?? game.zoomTarget) - game.zoomTarget;
-    game.zoomBoost += (boost - game.zoomBoost) * (1 - Math.exp(-raw * 2));
+    // 움직임 줄이기: 카메라가 미끄러지지 않고 바로 자른다(#20)
+    if (dialogue.reduce.matches) {
+      camFocus.copy(camGoal);
+      game.zoomBoost = boost;
+    } else {
+      camFocus.lerp(camGoal, 1 - Math.exp(-raw * 2.4));
+      game.zoomBoost += (boost - game.zoomBoost) * (1 - Math.exp(-raw * 2));
+    }
   } else if (game.state === 'title') {
     dt = raw;
     game.time += dt;
@@ -1999,6 +2101,7 @@ function frame(now) {
     camFocus.copy(player.pos); // 그림자·광원 선택 기준을 주인공 주변으로
   }
   game.clock += dt;
+  if (game.state !== 'pause' && game.state !== 'story') hud.tickToasts(raw);
   game.shake = Math.max(0, game.shake - raw * 1.6);
 
   updateCamera(raw);
@@ -2155,7 +2258,7 @@ if (params.has('debug')) {
     THREE, scene, camera, renderer, world, env, post, player, shades, car, wisps, game, input, hud, startGame,
     saveRun, resumeGame, readRun: () => readRun(world), backToTitle, pauseGame,
     wardrobe, drops, closet, openCloset, closeCloset, board, openGrid, closeGrid, online, caches,
-    story, dialogue, storyQueue, playScene, openDoc, queueStory, chapters, startChapter, minimap, get ground() { return ground; },
+    story, dialogue, storyQueue, playScene, openDoc, queueStory, chapters, startChapter, minimap, autoQ, get ground() { return ground; },
     // sec초를 dt초 간격으로 진행한다. 실제 화면처럼 걷기·충돌을 보려면 dt를 1/60로 준다(최대 0.05, frame의 상한).
     step(sec, dt = 0.05) {
       const ms = Math.min(50, Math.max(1, dt * 1000));
@@ -2200,6 +2303,18 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   setContextLost(false);
 });
 $('gl-reload')?.addEventListener('click', () => location.reload());
+// 일시적인 오류였다면 이어서 할 수 있게: 오류 화면을 닫고 판은 일시정지로 둔다(바로 그늘이 앞에 서지 않게).
+$('error-continue')?.addEventListener('click', () => {
+  $('error').classList.add('hidden');
+  halted = false;
+  last = performance.now();
+  if (game.state === 'play' || game.state === 'grid') {
+    if (game.state === 'grid') closeGrid();
+    pauseGame(true);
+  } else if (game.state === 'title') {
+    $('title').classList.remove('hidden');
+  }
+});
 
 // ---------------------------------------------------------------- 시작 준비
 
@@ -2245,6 +2360,7 @@ renderRun();
 renderChapter();
 env.setHour(Number(params.get('hour')) || 16.5);
 document.body.classList.add('ready');
+booted = true;
 requestAnimationFrame(loop);
 warmUp().then(() => {
   game.ready = true;

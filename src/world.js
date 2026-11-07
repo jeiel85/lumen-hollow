@@ -101,6 +101,8 @@ function makeSignAtlas() {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     const size = text.length > 3 ? 36 : 44;
+    // 한글 글꼴은 주요 운영체제에 다 있다(윈도 맑은 고딕, 애플 SD 산돌고딕, 안드로이드 Noto Sans CJK). 없는 기기(한글 글꼴 없는 리눅스)는
+    // 빈 상자가 될 수 있어, 간판 글귀만 담은 부분 글꼴을 함께 둘지는 Backlog(#25).
     g.font = `800 ${size}px "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", "Noto Sans CJK KR", sans-serif`;
     g.fillText(text, x + cw / 2, y + ch / 2 + 2, cw - 24);
   });
