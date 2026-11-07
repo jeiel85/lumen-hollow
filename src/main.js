@@ -528,7 +528,8 @@ function endGame(won) {
   game.state = 'end';
   const prevBest = loadBest(world.totalZones);
   saveBest();
-  clearRun(); // 끝난 판은 이어 갈 수 없다
+  // 끝난 판은 이어 갈 수 없다. 다른 탭이 이 판을 이어 가는 중이면 그 탭의 저장은 지우지 않는다(#38 리뷰).
+  if (!game.otherTab) clearRun();
   hud.prompt(null);
   if (game.placing && !game.placing.busy) closePlace();
   const zones = `${world.poweredZones}/${world.totalZones}`;
@@ -1383,16 +1384,33 @@ function grantShared(kind) {
   sound.play('pickup');
 }
 
+// 결과를 알 수 없는 실패: 요청이 서버에 닿았는지 모른다(연결 끊김·시간 초과·서버 오류). 이때는 걸려 있는 꺼내기를
+// 지우지 않고 남겨, 다시 물었을 때 맞춘다(#38 리뷰).
+const unknownOutcome = (r) => r.error === 'network' || r.error === 'timeout' || r.status >= 500;
+
 async function takeCache(c) {
   const run = game.run;
   game.cacheBusy = true;
+  // 같은 상자의 앞선 꺼내기가 결과를 모른 채 남아 있으면, 이번 요청의 '오늘 이미 꺼냈다'는 그 요청이 이뤄졌다는 뜻이다.
+  const retry = game.pendingTake?.id === c.id;
   game.pendingTake = { id: c.id, kind: c.kind };
   const r = await online.use(c.id);
   if (run !== game.run) return;
   game.cacheBusy = false;
+  if (unknownOutcome(r)) {
+    hud.toast(onlineError(r, c), 'warn');
+    return;
+  }
   game.pendingTake = null;
-  if (!r.ok) {
+  if (!r.ok && !(retry && r.error === 'used_today')) {
     hud.toast(onlineError(r, c), r.error === 'used_today' ? '' : 'warn');
+    return;
+  }
+  if (!r.ok) {
+    // 앞선 요청이 서버에서 이뤄졌다: 그 물건을 준다(상자 남은 수는 모르니 그대로 둔다).
+    game.cacheTaken++;
+    grantShared(c.kind);
+    hud.toast('지난번에 꺼내던 보급품을 마저 받았다.', 'good');
     return;
   }
   game.cacheTaken++;
@@ -1411,13 +1429,14 @@ async function takeCache(c) {
 // 꺼내기 요청이 오가는 사이 탭이 닫혔던 판을 이어 할 때: 같은 상자를 다시 꺼내 본다. 성공하면 그때 받고,
 // '오늘 이미 꺼냈다'(409 used_today)면 앞 요청이 서버에서 이뤄진 것이니 그 물건을 준다. 그 밖의 실패는 받지 않은 것이다.
 async function settleTake(t, run) {
+  game.pendingTake = t; // 온라인이 꺼져 있어도 지우지 않는다(다음에 다시 묻는다)
   if (!online.enabled) return;
-  game.pendingTake = t;
   const r = await online.use(t.id);
   if (run !== game.run) return;
+  if (unknownOutcome(r)) return; // 결과를 모르면 남겨 두고, 다음 저장·이어하기에서 다시 묻는다
   game.pendingTake = null;
   if (r.ok || r.error === 'used_today') {
-    if (r.ok) game.cacheTaken++;
+    game.cacheTaken++; // 앞 요청이 이뤄졌든 이번에 받았든 한 번 꺼낸 것이다(앞 요청은 세지 못한 채 닫혔다)
     grantShared(KIND_NAMES[r.data?.kind] ? r.data.kind : t.kind);
     hud.toast('지난번에 꺼내던 보급품을 마저 받았다.', 'good');
   }
@@ -2266,7 +2285,7 @@ if (params.has('debug')) {
     THREE, scene, camera, renderer, world, env, post, player, shades, car, wisps, game, input, hud, sound, startGame,
     saveRun, resumeGame, readRun: () => readRun(world), backToTitle, pauseGame,
     wardrobe, drops, closet, openCloset, closeCloset, board, openGrid, closeGrid, online, caches,
-    story, dialogue, storyQueue, playScene, openDoc, queueStory, chapters, startChapter, minimap, autoQ, get ground() { return ground; },
+    story, dialogue, storyQueue, playScene, openDoc, queueStory, chapters, startChapter, minimap, autoQ, takeCache, get ground() { return ground; },
     // sec초를 dt초 간격으로 진행한다. 실제 화면처럼 걷기·충돌을 보려면 dt를 1/60로 준다(최대 0.05, frame의 상한).
     step(sec, dt = 0.05) {
       const ms = Math.min(50, Math.max(1, dt * 1000));
