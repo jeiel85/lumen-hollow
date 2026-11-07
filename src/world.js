@@ -132,38 +132,145 @@ export function makePoolTexture() {
   return t;
 }
 
-// 원(반지름 r) vs 정적 충돌체 목록(t: 0 축 정렬 상자, t: 1 원). p를 직접 밀어낸다. 마을과 2~4장 무대가 함께 쓴다.
-export function pushOut(colliders, p, r) {
-  for (const c of colliders) {
-    if (c.t === 0) {
-      if (p.x < c.x0 - r || p.x > c.x1 + r || p.z < c.z0 - r || p.z > c.z1 + r) continue;
-      const nx = Math.min(Math.max(p.x, c.x0), c.x1);
-      const nz = Math.min(Math.max(p.z, c.z0), c.z1);
-      const dx = p.x - nx;
-      const dz = p.z - nz;
-      const d2 = dx * dx + dz * dz;
-      if (d2 >= r * r) continue;
-      if (d2 > 1e-8) {
-        const d = Math.sqrt(d2);
-        p.x = nx + (dx / d) * r;
-        p.z = nz + (dz / d) * r;
-      } else {
-        const l = p.x - c.x0, rr = c.x1 - p.x, u = p.z - c.z0, dd = c.z1 - p.z;
-        const m = Math.min(l, rr, u, dd);
-        if (m === l) p.x = c.x0 - r;
-        else if (m === rr) p.x = c.x1 + r;
-        else if (m === u) p.z = c.z0 - r;
-        else p.z = c.z1 + r;
+// ---------------------------------------------------------------- 충돌체 격자
+// 정적 충돌체(t: 0 축 정렬 상자, t: 1 원)를 한 변 GRID_CELL m 칸에 나눠 담아, 질의 근처 칸에 걸친 것만 훑는다
+// (마을은 충돌체가 약 930개라 매번 전부 훑으면 트럭·플레이어 충돌이 그만큼 돈다).
+// 충돌체는 만든 뒤 움직이지 않고 목록 끝에 더해지기만 한다(이야기 소품이 마을 생성 뒤에 더해진다).
+// 그래서 목록 길이나 마지막 충돌체가 달라졌을 때만 다시 만든다. 목록 배열(마을·2~4장 무대)마다 따로 둔다.
+// 충돌체를 제자리에서 옮기거나 바꿔 끼우면 격자가 따라가지 못한다(그럴 땐 목록을 새로 만든다).
+const GRID_CELL = 4;
+const GRID_MIN = 48; // 이보다 적으면 격자 없이 전부 훑는다(2~4장 무대처럼 작은 목록)
+const grids = new WeakMap();
+
+function gridOf(colliders) {
+  const n = colliders.length;
+  let g = grids.get(colliders);
+  if (g && g.n === n && g.last === colliders[n - 1]) return g;
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+  const box = new Float64Array(n * 4); // 충돌체마다 경계 상자(x0, z0, x1, z1)
+  for (let i = 0; i < n; i++) {
+    const c = colliders[i];
+    const b = c.t === 0 ? [c.x0, c.z0, c.x1, c.z1] : [c.x - c.r, c.z - c.r, c.x + c.r, c.z + c.r];
+    box.set(b, i * 4);
+    x0 = Math.min(x0, b[0]);
+    z0 = Math.min(z0, b[1]);
+    x1 = Math.max(x1, b[2]);
+    z1 = Math.max(z1, b[3]);
+  }
+  const cols = Math.max(1, Math.floor((x1 - x0) / GRID_CELL) + 1);
+  const rows = Math.max(1, Math.floor((z1 - z0) / GRID_CELL) + 1);
+  const cellX = (x) => Math.min(cols - 1, Math.max(0, Math.floor((x - x0) / GRID_CELL)));
+  const cellZ = (z) => Math.min(rows - 1, Math.max(0, Math.floor((z - z0) / GRID_CELL)));
+  // 칸마다 충돌체 번호(오름차순)를 이어 붙인 배열(start[k]..start[k+1])
+  const start = new Int32Array(cols * rows + 1);
+  const each = (i, fn) => {
+    const ca = cellX(box[i * 4]), cb = cellX(box[i * 4 + 2]);
+    const ra = cellZ(box[i * 4 + 1]), rb = cellZ(box[i * 4 + 3]);
+    for (let r = ra; r <= rb; r++) for (let c = ca; c <= cb; c++) fn(r * cols + c);
+  };
+  for (let i = 0; i < n; i++) each(i, (k) => start[k + 1]++);
+  for (let k = 0; k < cols * rows; k++) start[k + 1] += start[k];
+  const items = new Int32Array(start[cols * rows]);
+  const fill = start.slice(0, cols * rows);
+  for (let i = 0; i < n; i++) each(i, (k) => { items[fill[k]++] = i; });
+  g = { n, last: colliders[n - 1], x0, z0, x1, z1, cols, rows, cellX, cellZ, start, items, seen: new Uint32Array(n), stamp: 0 };
+  grids.set(colliders, g);
+  return g;
+}
+
+// 사각형 [x0, x1]×[z0, z1]에 걸친 칸에 든 충돌체 번호를 목록 순서(오름차순)로 out에 담아 돌려준다.
+// 칸 단위로 고르므로 실제로는 닿지 않는 것도 섞여 있다(정확한 판정은 부르는 쪽이 한다).
+export function queryColliders(colliders, x0, z0, x1, z1, out = []) {
+  out.length = 0;
+  const n = colliders.length;
+  if (n < GRID_MIN) {
+    for (let i = 0; i < n; i++) out.push(i);
+    return out;
+  }
+  const g = gridOf(colliders);
+  if (x1 < g.x0 || x0 > g.x1 || z1 < g.z0 || z0 > g.z1) return out;
+  const ca = g.cellX(x0), cb = g.cellX(x1), ra = g.cellZ(z0), rb = g.cellZ(z1);
+  if (++g.stamp === 0xffffffff) {
+    g.seen.fill(0);
+    g.stamp = 1;
+  }
+  const { start, items, seen, stamp } = g;
+  for (let r = ra; r <= rb; r++) {
+    for (let c = ca; c <= cb; c++) {
+      const k = r * g.cols + c;
+      for (let j = start[k]; j < start[k + 1]; j++) {
+        const i = items[j];
+        if (seen[i] === stamp) continue;
+        seen[i] = stamp;
+        out.push(i);
       }
-    } else {
-      const dx = p.x - c.x;
-      const dz = p.z - c.z;
-      const rr = c.r + r;
-      const d2 = dx * dx + dz * dz;
-      if (d2 >= rr * rr || d2 < 1e-8) continue;
+    }
+  }
+  // 칸마다는 이미 오름차순이라 한 칸이면 그대로, 여러 칸이면 삽입 정렬(보통 수십 개 안쪽)
+  if (ca !== cb || ra !== rb) {
+    for (let a = 1; a < out.length; a++) {
+      const v = out[a];
+      let b = a - 1;
+      while (b >= 0 && out[b] > v) {
+        out[b + 1] = out[b];
+        b--;
+      }
+      out[b + 1] = v;
+    }
+  }
+  return out;
+}
+
+// 원 p(반지름 r)를 충돌체 c 하나에서 밀어낸다.
+function pushOne(c, p, r) {
+  if (c.t === 0) {
+    if (p.x < c.x0 - r || p.x > c.x1 + r || p.z < c.z0 - r || p.z > c.z1 + r) return;
+    const nx = Math.min(Math.max(p.x, c.x0), c.x1);
+    const nz = Math.min(Math.max(p.z, c.z0), c.z1);
+    const dx = p.x - nx;
+    const dz = p.z - nz;
+    const d2 = dx * dx + dz * dz;
+    if (d2 >= r * r) return;
+    if (d2 > 1e-8) {
       const d = Math.sqrt(d2);
-      p.x = c.x + (dx / d) * rr;
-      p.z = c.z + (dz / d) * rr;
+      p.x = nx + (dx / d) * r;
+      p.z = nz + (dz / d) * r;
+    } else {
+      const l = p.x - c.x0, rr = c.x1 - p.x, u = p.z - c.z0, dd = c.z1 - p.z;
+      const m = Math.min(l, rr, u, dd);
+      if (m === l) p.x = c.x0 - r;
+      else if (m === rr) p.x = c.x1 + r;
+      else if (m === u) p.z = c.z0 - r;
+      else p.z = c.z1 + r;
+    }
+  } else {
+    const dx = p.x - c.x;
+    const dz = p.z - c.z;
+    const rr = c.r + r;
+    const d2 = dx * dx + dz * dz;
+    if (d2 >= rr * rr || d2 < 1e-8) return;
+    const d = Math.sqrt(d2);
+    p.x = c.x + (dx / d) * rr;
+    p.z = c.z + (dz / d) * rr;
+  }
+}
+
+const PUSH_MARGIN = 0.5;
+const _near = [];
+
+// 원(반지름 r) vs 정적 충돌체 목록. p를 직접 밀어낸다. 마을과 2~4장 무대가 함께 쓴다.
+// 목록 전체를 차례로 밀어내는 것과 결과가 같다: 격자로 고른 후보를 목록 순서대로 밀다가, 원이 질의 범위
+// (처음 자리 ± r + PUSH_MARGIN) 밖으로 밀려나면 남은 충돌체를 목록에서 차례로 마저 훑는다.
+export function pushOut(colliders, p, r) {
+  const m = r + PUSH_MARGIN;
+  const qx0 = p.x - m, qx1 = p.x + m, qz0 = p.z - m, qz1 = p.z + m;
+  const near = queryColliders(colliders, qx0, qz0, qx1, qz1, _near);
+  for (let k = 0; k < near.length; k++) {
+    const i = near[k];
+    pushOne(colliders[i], p, r);
+    if (p.x - r < qx0 || p.x + r > qx1 || p.z - r < qz0 || p.z + r > qz1) {
+      for (let j = i + 1; j < colliders.length; j++) pushOne(colliders[j], p, r);
+      return;
     }
   }
 }
