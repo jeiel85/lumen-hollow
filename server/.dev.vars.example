@@ -7,3 +7,8 @@ ALLOWED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000
 ADMIN_TOKEN=local-dev-admin-token-change-me-0123456789
 # 로컬에서 14일 판단 화면을 여러 날로 보고 싶을 때 출시 시각을 바꾼다(운영 값은 wrangler.admin.toml)
 # LAUNCH_AT=2026-11-03T00:00:00Z
+# 2단계 남용 대응을 로컬에서 시험할 때(운영 값은 wrangler.toml). Turnstile 공식 시험용 비밀값은 늘 통과한다
+# (1x0000000000000000000000000000000AA, 늘 실패는 2x0000000000000000000000000000000AA).
+# RUN_TOKEN_REQUIRED=true
+# HUMAN_CHECK_REQUIRED=true
+# TURNSTILE_SECRET=1x0000000000000000000000000000000AA

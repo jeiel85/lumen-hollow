@@ -9,12 +9,20 @@ workers_dev = true
 # 운영에는 배포 주소만 둔다. 로컬에서 돌린 게임이 운영 기록(성공 지표)을 오염시키지 않게 하기 위해서다.
 # 로컬 개발용 출처는 .dev.vars의 ALLOWED_ORIGINS가 이 값을 덮어쓴다(.dev.vars.example 참고).
 ALLOWED_ORIGINS = "https://jeiel85.github.io"
+# 2단계 남용 대응(docs/online-caches.md 10절). 남용이 실제로 보일 때만 "true"로 바꿔 배포한다. 기본은 끔.
+# RUN_TOKEN_REQUIRED: 두기 요청에 판 토큰(목록 응답의 runToken)이 있어야 하고, 받은 지 3분 뒤부터만 받는다.
+# HUMAN_CHECK_REQUIRED: 두기 요청에 Turnstile 토큰(humanToken)이 있어야 한다. 비밀값 TURNSTILE_SECRET도 넣어야 한다.
+# 클라이언트가 두 값을 보내도록 바뀐 뒤에 켠다(server/README.md '2단계 남용 대응 켜기').
+RUN_TOKEN_REQUIRED = "false"
+HUMAN_CHECK_REQUIRED = "false"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "lumen-hollow-caches"
 # 운영 D1(2026-11-06 생성, 위치 APAC). 로컬 개발(--local)은 이 값을 쓰지 않는다.
 database_id = "e0949202-1be3-4d95-ab6d-b0af5f18e1c0"
+# 스키마 변경: npx wrangler d1 migrations apply lumen-hollow-caches --remote (server/README.md '스키마 바꾸기')
+migrations_dir = "migrations"
 
 # 분당 요청 한도(IP 해시 기준, 근사치이며 Cloudflare 위치마다 따로 센다). 하루 한도는 D1(rate_daily)이 엄격하게 센다.
 # namespace_id는 이 계정 안에서 카운터를 구분하는 임의의 정수다.

@@ -1,43 +1,21 @@
 // 운영 대시보드 화면. API는 같은 출처의 /api/summary(server/src/admin.js), 결정은 DECISIONS.md D-003.
 // 서버에서 온 값은 모두 textContent로 넣는다(innerHTML을 쓰지 않는다).
+// DOM을 쓰지 않는 부분(요청 순서·응답 해석·문구)은 logic.js에 있고 test/dashboard.test.mjs가 확인한다.
+import { MIN_TOKEN_LENGTH, createGate, fetchSummary, decisionView, cronView, storyView, fmt, pct } from './logic.js';
 
 const KEY = 'lumen-admin.token';
-const MIN_TOKEN_LENGTH = 32;
-const DAY = 24 * 60 * 60 * 1000;
 const SVG = 'http://www.w3.org/2000/svg';
 const $ = (id) => document.getElementById(id);
-
-const MESSAGES = {
-  admin_not_configured: '서버에 ADMIN_TOKEN이 아직 없어요. server/README.md의 운영 대시보드 배포 순서를 보세요.',
-  misconfigured: '서버 설정(LAUNCH_AT 또는 D1 연결)이 빠졌어요.',
-  db_unavailable: 'D1 조회에 실패했어요. 무료 한도를 넘었거나 D1 장애일 수 있어요. npx wrangler tail -c wrangler.admin.toml로 원인을 보세요.',
-  bad_range: '기간 값이 잘못됐어요.',
-  internal: '서버 오류가 났어요. npx wrangler tail -c wrangler.admin.toml로 원인을 보세요.',
-};
-
-// [이름, 이유, 할 일] — docs/online-caches.md 14.2절. 판단일 전에는 '14일째에도 이대로면'을 붙인다.
-const VERDICT = {
-  continue: ['계속', '남의 것을 쓴 플레이어와 쓰인 비율이 기준을 넘었어요', '랜턴 등 2단계로 넘어갑니다'],
-  review: ['재검토', '둔 사람은 있는데 쓰인 비율이 20% 미만이에요', '수명·노출을 조정해 한 번 더 측정합니다'],
-  stop: ['중단', '둔 플레이어가 5명 미만이에요', '킬 스위치로 끄고, 30일 뒤 데이터를 지울지 정합니다'],
-  between: ['기준 사이', '어느 기준에도 딱 맞지 않아요', '수치를 보고 직접 정합니다'],
-};
 
 const KIND = { bandage: '붕대', fuel: '연료', battery: '배터리' };
 const ACTION = { place: '두기', use: '쓰기' };
 
-const num = new Intl.NumberFormat('ko-KR');
-const when = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' });
 const clock = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-const fmt = (n) => (n === null || n === undefined ? '—' : num.format(n));
-const pct = (n) => (n === null || n === undefined ? '—' : `${n}%`);
 
 let token = null;
 let range = 'launch';
 let last = null;
-// 요청마다 번호를 올린다. 로그아웃하거나 새 요청을 보내면 앞 요청의 응답은 버린다(로그아웃 뒤 지표가 다시 그려지지 않게).
-let generation = 0;
-let inflight = null;
+const gate = createGate();
 
 // ---------------------------------------------------------------- 토큰 보관
 
@@ -59,13 +37,15 @@ function keepToken(value, persist) {
   }
 }
 
+function setBusy(busy) {
+  document.body.classList.toggle('loading', busy);
+  $('refresh').disabled = busy;
+}
+
 // 진행 중인 요청을 끊고, 이미 도착 중인 응답도 쓰지 않게 한다.
 function cancelLoad() {
-  generation += 1;
-  inflight?.abort();
-  inflight = null;
-  document.body.classList.remove('loading');
-  $('refresh').disabled = false;
+  gate.cancel();
+  setBusy(false);
 }
 
 function dropToken() {
@@ -112,48 +92,29 @@ function showError(message) {
 
 async function load(nextRange = range) {
   if (!token) return;
-  cancelLoad();
-  const mine = generation;
-  const controller = new AbortController();
-  inflight = controller;
-  const current = () => mine === generation;
-  document.body.classList.add('loading');
-  $('refresh').disabled = true;
+  const ticket = gate.start();
+  setBusy(true);
   try {
-    let res;
-    let body;
-    try {
-      res = await fetch(`/api/summary?range=${encodeURIComponent(nextRange)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-        signal: controller.signal,
-      });
-      body = await res.json().catch(() => null);
-    } catch {
-      // 일부러 끊은 요청(로그아웃·새 요청)은 오류가 아니다.
-      if (current()) showError('서버에 닿지 못했어요. 네트워크를 확인하고 다시 시도하세요.');
-      return;
-    }
-    if (!current()) return;
-    if (res.status === 401) {
+    const r = await fetchSummary(fetch, { token, range: nextRange, ticket });
+    if (r.type === 'stale') return;
+    if (r.type === 'unauthorized') {
       dropToken();
       showLogin('토큰이 맞지 않아요.');
       return;
     }
-    if (!res.ok || !body) {
-      showError(MESSAGES[body?.error] ?? `서버 오류가 났어요(HTTP ${res.status}).`);
+    if (r.type === 'error') {
+      showError(r.message);
       return;
     }
-    last = body;
-    range = body.period.range;
+    last = r.body;
+    range = r.body.period.range;
     showBoard();
     $('board-error').hidden = true;
-    render(body);
+    render(r.body);
   } finally {
-    if (current()) {
-      inflight = null;
-      document.body.classList.remove('loading');
-      $('refresh').disabled = false;
+    if (ticket.current) {
+      ticket.finish();
+      setBusy(false);
     }
   }
 }
@@ -191,56 +152,19 @@ function renderStatus(s) {
   setMeter($('st-live-meter'), s.live.total, s.maxActiveTotal, '살아 있는 보급품 / 전체 상한');
   $('st-kinds').textContent = Object.entries(KIND).map(([k, name]) => `${name} ${fmt(s.live[k] ?? 0)}`).join(' · ');
 
-  const note = $('st-cron-note');
-  if (s.cron === 'ok') {
-    setState($('st-cron'), 'good', '✓', '정상');
-    note.textContent = `마지막 집계 날짜 ${s.lastAggregateDay}(UTC)`;
-  } else if (s.cron === 'pending') {
-    setState($('st-cron'), 'warn', '…', '첫 실행 전');
-    note.textContent = '출시 뒤 첫 03:17 UTC(한국 시간 12:17)에 처음 돕니다.';
-  } else {
-    setState($('st-cron'), 'bad', '⚠', '늦음 — 확인 필요');
-    note.textContent = s.lastAggregateDay
-      ? `마지막 집계가 ${s.lastAggregateDay}(UTC)예요. 정리 작업이 돌지 않았을 수 있어요(npx wrangler tail로 확인).`
-      : '집계 기록이 없어요. 정리 작업(cron)이 한 번도 돌지 않았을 수 있어요.';
-  }
+  const cron = cronView(s);
+  setState($('st-cron'), cron.kind, cron.icon, cron.text);
+  $('st-cron-note').textContent = cron.note;
 }
 
 // ---------------------------------------------------------------- 14일 판단
 
 function renderDecision(d, now) {
-  if (d.expired) {
-    $('dc-when').textContent = `판단 기간(${when.format(d.from)} ~ ${when.format(d.endsAt)}) 기록이 보존 기간(90일)을 지나 지워지기 시작했어요.`;
-    setMeter($('dc-days'), d.criteria.days, d.criteria.days);
-    $('dc-verdict').replaceChildren(
-      document.createTextNode('다시 계산하지 않아요'),
-      el('span', 'muted small', ' — 남은 기록으로 세면 판정이 틀어집니다. 판단일에 남겨 둔 결정 기록을 보세요.'),
-    );
-    $('dc-criteria').replaceChildren();
-    return;
-  }
-  const elapsed = Math.max(0, now - d.from);
-  const dayNo = Math.min(d.criteria.days, Math.floor(elapsed / DAY) + 1);
-  const left = Math.ceil((d.endsAt - now) / DAY);
-  $('dc-when').textContent = d.final
-    ? `판단 기간이 끝났어요: ${when.format(d.from)} ~ ${when.format(d.endsAt)}`
-    : `출시 ${dayNo}일째 · 판단일 ${when.format(d.endsAt)} (${left}일 남음)`;
-  setMeter($('dc-days'), Math.min(elapsed / DAY, d.criteria.days), d.criteria.days);
-
-  const [name, reason, action] = VERDICT[d.verdict] ?? [d.verdict, '', ''];
-  $('dc-verdict').replaceChildren(
-    document.createTextNode(d.final ? `판정: ${name}` : `지금 수치로는: ${name}`),
-    el('span', 'muted small', ` — ${reason}. ${d.final ? '' : '14일째에도 이대로면 '}${action}.`),
-  );
-
-  const m = d.metrics;
-  const c = d.criteria;
-  const rows = [
-    ['남의 것을 쓴 플레이어(계속 기준)', m.takers, c.continueTakers, `${fmt(m.takers)} / ${c.continueTakers}명`, m.takers >= c.continueTakers],
-    ['쓰인 보급품 비율(계속 기준)', m.usedPct ?? 0, c.continueUsedPct, `${pct(m.usedPct)} / ${c.continueUsedPct}%`, (m.usedPct ?? -1) >= c.continueUsedPct],
-    ['둔 플레이어(중단을 피하는 최소)', m.placers, c.stopPlacers, `${fmt(m.placers)} / ${c.stopPlacers}명`, m.placers >= c.stopPlacers],
-  ];
-  $('dc-criteria').replaceChildren(...rows.map(([label, value, target, shown, met]) => {
+  const v = decisionView(d, now);
+  $('dc-when').textContent = v.when;
+  setMeter($('dc-days'), v.meter.value, v.meter.max);
+  $('dc-verdict').replaceChildren(document.createTextNode(v.headline), el('span', 'muted small', v.note));
+  $('dc-criteria').replaceChildren(...v.criteria.map(({ label, value, target, shown, met }) => {
     const li = el('li');
     const head = el('div', 'row');
     head.append(el('span', 'name', label), el('span', 'value', shown));
@@ -296,7 +220,7 @@ function renderAbuse(a) {
 function renderKpis(m, partial) {
   $('period-partial').hidden = !partial;
   const tiles = [
-    ['접속 플레이어', fmt(m.players), '온라인을 켠 채 게임을 연 사람'],
+    ['접속 플레이어', fmt(m.players), '온라인을 켠 채 게임을 연 ID(근사값)'],
     ['둔 플레이어', fmt(m.placers), `보급품 ${fmt(m.places)}개`],
     ['남의 것을 쓴 플레이어', fmt(m.takers), `사용 ${fmt(m.uses)}번`],
     ['쓰인 보급품 비율', pct(m.usedPct), `${fmt(m.usedCaches)} / ${fmt(m.places)}개가 남에게 쓰임`],
@@ -443,6 +367,39 @@ function renderDaily(days) {
   }));
 }
 
+// ---------------------------------------------------------------- 이야기 진행
+
+function emptyRow(cols, text) {
+  const tr = el('tr');
+  const td = el('td', 'empty', text);
+  td.colSpan = cols;
+  tr.append(td);
+  return tr;
+}
+
+function renderStory(story) {
+  const v = storyView(story);
+  if (!v) {
+    $('story-note').textContent = '이야기 집계 표가 아직 없어요(마이그레이션 0001을 적용하세요).';
+    $('story-chapters').replaceChildren(emptyRow(3, '없음'));
+    $('story-scenes').replaceChildren(emptyRow(4, '없음'));
+    return;
+  }
+  const note = $('story-note');
+  note.className = v.full ? 'error small' : 'muted small';
+  note.textContent = `${v.from}(UTC)부터 센 값. ${v.today}`;
+  $('story-chapters').replaceChildren(...(v.chapters.length === 0 ? [emptyRow(3, '없음')] : v.chapters.map((c) => {
+    const tr = el('tr');
+    tr.append(el('td', '', `${c.id}장`), el('td', 'num', fmt(c.entered)), el('td', 'num', fmt(c.cleared)));
+    return tr;
+  })));
+  $('story-scenes').replaceChildren(...(v.scenes.length === 0 ? [emptyRow(4, '없음')] : v.scenes.map((s) => {
+    const tr = el('tr');
+    tr.append(el('td', 'hash', s.id), el('td', 'num', fmt(s.n)), el('td', 'num', fmt(s.skipped)), el('td', 'num', pct(s.skippedPct)));
+    return tr;
+  })));
+}
+
 // ---------------------------------------------------------------- 전체
 
 function render(d) {
@@ -452,6 +409,7 @@ function render(d) {
   renderAbuse(d.abuse);
   renderKpis(d.period.metrics, d.period.partial);
   renderDaily(d.daily);
+  renderStory(d.story);
   for (const b of document.querySelectorAll('.filters button')) b.setAttribute('aria-pressed', String(b.dataset.range === d.period.range));
   $('cost').textContent = d.cost.rowsRead === null
     ? '이번 조회가 읽은 D1 행 수: 알 수 없음'

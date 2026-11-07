@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createApp } from '../src/app.js';
-import { createAdmin, verdict, DECISION } from '../src/admin.js';
+import { createAdmin, verdict, cronState, DECISION } from '../src/admin.js';
 import { RULES } from '../src/rules.js';
 import { BLOCKED_SLOTS } from '../src/slots.js';
 import { createD1 } from './d1.mjs';
@@ -46,7 +46,7 @@ function setup({ env: extra = {} } = {}) {
     const res = await admin.fetch(new Request(`https://admin.test${path}`, { method, headers }), env);
     return { status: res.status, body: await res.json(), headers: res.headers };
   }
-  return { clock, db, game, gameEnv, adminEnv, call, place, use, thank, visit };
+  return { clock, db, game, admin, gameEnv, adminEnv, call, place, use, thank, visit };
 }
 
 // 출시 날(UTC 11-06)에 p1이 둘, p2가 하나를 두고 p2·p3이 꺼내 쓴다. 다음 날 p1이 하나 더 두고, p4가 처음 들어온다.
@@ -270,6 +270,117 @@ test('본인 삭제한 소유자는 둔 플레이어·남용 목록에서 빠진
   assert.deepEqual(r.abuse.topOwners, []);
 });
 
+test('정리 작업 상태: 실행 기록(cron_runs)으로 마지막 성공·실패를 본다', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const s = setup();
+  await seed(s);
+  await s.game.scheduled(s.gameEnv);
+  const okAt = s.clock.t;
+  let st = (await s.call()).body.status;
+  assert.equal(st.cron, 'ok');
+  assert.deepEqual(st.cronLog, { lastRun: { at: okAt, ok: true, ms: 0, deleted: 0, error: null }, lastSuccessAt: okAt, lastFailure: null });
+
+  // 다음 날 실행이 실패한다(D1 오류). 실패 시각·이유가 보이고, 마지막 성공은 그대로다.
+  s.clock.t += DAY;
+  const failAt = s.clock.t;
+  const broken = { ...s.db, batch: async (stmts) => (stmts.some((x) => x.sql.includes('DELETE FROM uses')) ? Promise.reject(new Error('D1_ERROR: boom')) : s.db.batch(stmts)) };
+  await assert.rejects(s.game.scheduled({ ...s.gameEnv, DB: broken }));
+  st = (await s.call()).body.status;
+  assert.equal(st.cron, 'failed');
+  assert.deepEqual(st.cronLog.lastRun, { at: failAt, ok: false, ms: 0, deleted: null, error: 'D1_ERROR: boom' });
+  assert.equal(st.cronLog.lastSuccessAt, okAt);
+  assert.equal(st.lastAggregateDay, '2026-11-06', '집계 날짜만 봤다면 정상으로 보였을 상황');
+
+  // 다시 성공하면 정상이고, 최근 실패는 남아 보인다.
+  s.clock.t += HOUR;
+  await s.game.scheduled(s.gameEnv);
+  st = (await s.call()).body.status;
+  assert.equal(st.cron, 'ok');
+  assert.deepEqual(st.cronLog.lastFailure, { at: failAt, error: 'D1_ERROR: boom' });
+
+  // 하루 넘게(26시간) 성공이 없으면 늦음
+  s.clock.t += 26 * HOUR + 1;
+  assert.equal((await s.call()).body.status.cron, 'late');
+});
+
+test('정리 작업 상태 판정: 기록이 없으면 집계 날짜로 본다', () => {
+  const t = Date.UTC(2026, 10, 10, 12);
+  assert.equal(cronState(t, t - HOUR, null, null), 'pending');
+  assert.equal(cronState(t, t - 3 * DAY, null, null), 'late');
+  assert.equal(cronState(t, t - 3 * DAY, '2026-11-08', null), 'ok');
+  assert.equal(cronState(t, t - 3 * DAY, '2026-11-07', null), 'late');
+  assert.equal(cronState(t, t - 3 * DAY, '2026-11-09', { lastRun: null, lastSuccessAt: null, lastFailure: null }), 'ok', '표는 있지만 아직 안 돎');
+  assert.equal(cronState(t, t - 3 * DAY, '2026-11-09', { lastRun: { ok: true }, lastSuccessAt: t - 26 * HOUR, lastFailure: null }), 'ok');
+  assert.equal(cronState(t, t - 3 * DAY, '2026-11-09', { lastRun: { ok: true }, lastSuccessAt: t - 26 * HOUR - 1, lastFailure: null }), 'late');
+  assert.equal(cronState(t, t - 3 * DAY, '2026-11-09', { lastRun: { ok: false }, lastSuccessAt: t - HOUR, lastFailure: null }), 'failed');
+});
+
+test('마이그레이션 0001 전(cron_runs·story_daily 없음)에도 나머지 화면은 그대로 나온다', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const s = setup();
+  await seed(s);
+  await s.game.scheduled(s.gameEnv);
+  s.db.raw.exec('DROP TABLE cron_runs; DROP TABLE story_daily;');
+  const r = await s.call();
+  assert.equal(r.status, 200);
+  assert.equal(r.body.status.cronLog, null);
+  assert.equal(r.body.status.cron, 'ok', '집계 날짜로 판정');
+  assert.equal(r.body.story, null);
+  assert.equal(r.body.period.metrics.places, 4);
+  assert.equal(console.error.mock.callCount(), 1, '원인은 로그로 남긴다');
+});
+
+test('이야기 진행: 고른 기간의 UTC 날짜부터 장·장면별로 합하고, 오늘 상한 사용을 보여 준다', async () => {
+  const s = setup();
+  const story = async (events) => {
+    const res = await s.game.fetch(new Request('https://api.test/v1/story', {
+      method: 'POST', headers: { Origin: ORIGIN, 'CF-Connecting-IP': '203.0.113.50', 'Content-Type': 'application/json' }, body: JSON.stringify({ events }),
+    }), s.gameEnv);
+    assert.equal(res.status, 200);
+  };
+  await story([{ kind: 'scene', id: 'arrival' }, { kind: 'scene', id: 'arrival', skipped: true }, { kind: 'chapter', id: '2' }]);
+  s.clock.t += DAY;
+  await story([{ kind: 'scene', id: 'arrival' }, { kind: 'scene', id: 'dusk', skipped: true }, { kind: 'clear', id: '2' }]);
+  const all = (await s.call()).body.story;
+  assert.equal(all.from, '2026-11-06');
+  assert.deepEqual(all.rows, [
+    { kind: 'scene', id: 'arrival', n: 3, skipped: 1 },
+    { kind: 'chapter', id: '2', n: 1, skipped: 0 },
+    { kind: 'clear', id: '2', n: 1, skipped: 0 },
+    { kind: 'scene', id: 'dusk', n: 1, skipped: 1 },
+  ]);
+  assert.deepEqual(all.today, { events: 3, max: RULES.storyMaxEventsPerDay, full: false });
+  const day = (await s.call('/api/summary?range=1d')).body.story;
+  assert.equal(day.from, '2026-11-06', '최근 24시간의 시작이 어제 날짜라 어제 행도 들어간다(UTC 날짜 단위)');
+  s.clock.t += 2 * DAY;
+  const later = (await s.call('/api/summary?range=1d')).body.story;
+  assert.deepEqual([later.rows, later.today.events], [[], 0]);
+});
+
+test('분당 한도(RL_ADMIN): 토큰 확인 전에 걸고, 키는 원문 IP가 아니다', async () => {
+  const s = setup();
+  const keys = [];
+  let allow = true;
+  const RL_ADMIN = { limit: async ({ key }) => { keys.push(key); return { success: allow }; } };
+  const env = { ...s.adminEnv, RL_ADMIN };
+  const req = (auth) => s.admin.fetch(new Request('https://admin.test/api/summary', { headers: { Authorization: auth, 'CF-Connecting-IP': '198.51.100.77' } }), env);
+  assert.equal((await req(`Bearer ${TOKEN}`)).status, 200);
+  assert.equal((await req('Bearer wrong')).status, 401);
+  assert.equal(keys.length, 2);
+  assert.equal(keys[0], keys[1], '같은 IP는 같은 키');
+  assert.match(keys[0], /^[0-9a-f]{32}$/);
+  assert.ok(!keys[0].includes('198.51.100.77'));
+  allow = false;
+  for (const auth of [`Bearer ${TOKEN}`, 'Bearer wrong', '']) {
+    const r = await req(auth);
+    assert.equal(r.status, 429);
+    assert.equal(r.headers.get('Retry-After'), '60');
+    assert.deepEqual(await r.json(), { error: 'rate' });
+  }
+  const unset = await s.admin.fetch(new Request('https://admin.test/api/summary', { headers: { Authorization: `Bearer ${TOKEN}` } }), { ...env, ADMIN_TOKEN: undefined });
+  assert.equal(unset.status, 503, '토큰이 설정되지 않았으면 한도보다 먼저 닫힌다');
+});
+
 test('D1 조회가 실패하면 503 db_unavailable', async (t) => {
   const s = setup();
   t.mock.method(console, 'error', () => {});
@@ -280,10 +391,20 @@ test('D1 조회가 실패하면 503 db_unavailable', async (t) => {
   assert.equal(console.error.mock.callCount(), 1, '원인은 로그로 남긴다');
 });
 
+// 기댓값은 원래 문장 수 11 × 2 = 22로 적혀 있었다. 조회 문장(cron_runs·story_daily)이 늘어도 '모든 문장의 합'이라는
+// 뜻이 그대로 확인되도록, 실제로 보낸 문장 수를 세어 비교한다.
 test('D1이 읽은 행 수를 알려 주면 합해서 보여 준다', async () => {
   const s = setup();
   assert.equal((await s.call()).body.cost.rowsRead, null, '모르면 null');
-  const counting = { ...s.db, batch: async (stmts) => (await s.db.batch(stmts)).map((r) => ({ ...r, meta: { rows_read: 2 } })) };
+  let sent = 0;
+  const counting = {
+    ...s.db,
+    batch: async (stmts) => {
+      sent += stmts.length;
+      return (await s.db.batch(stmts)).map((r) => ({ ...r, meta: { rows_read: 2 } }));
+    },
+  };
   const r = await s.call('/api/summary', { env: { ...s.adminEnv, DB: counting } });
-  assert.equal(r.body.cost.rowsRead, 22);
+  assert.ok(sent >= 11);
+  assert.equal(r.body.cost.rowsRead, 2 * sent);
 });

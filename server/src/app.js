@@ -1,13 +1,20 @@
-// 공유 보급품 API (v1). 설계: docs/online-caches.md 7~13절.
+// 공유 보급품 API (v1). 설계: docs/online-caches.md 7~13절, 이야기 진행 집계·판 토큰·rules는 18절.
 // 서버는 남의 경험을 바꾸는 상태(남은 횟수·수명·슬롯·고마워요)만 지킨다. 한 판 안의 밸런스는 클라이언트 몫이다.
-import { RULES } from './rules.js';
+import { RULES, publicRules } from './rules.js';
 import { LAYOUT, SLOT_COUNT, BLOCKED_SLOTS } from './slots.js';
 
 const BLOCKED = new Set(BLOCKED_SLOTS);
 const PID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const ID_RE = /^c_[a-z2-7]{26}$/;
+const STORY_ID_RE = /^[a-z0-9]{1,24}$/;
+const RUN_TOKEN_RE = /^(\d{13})\.[0-9a-f]{32}$/;
+const TURNSTILE_VERIFY = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+const TURNSTILE_MAX = 2048; // Turnstile 토큰 최대 길이(공식 문서)
+const CLOCK_SKEW_MS = 60 * 1000;
 const B32 = 'abcdefghijklmnopqrstuvwxyz234567';
 const enc = new TextEncoder();
+// 환경 변수 플래그는 문자열 "true"일 때만 켠다(빠지거나 오타면 꺼진 채).
+const flag = (v) => v === true || v === 'true';
 
 class HttpError extends Error {
   constructor(status, code) {
@@ -25,10 +32,24 @@ async function sha256(text) {
   return hex(await crypto.subtle.digest('SHA-256', enc.encode(text)));
 }
 
-// IP는 그날 날짜를 섞은 HMAC으로만 다룬다. 날짜가 바뀌면 같은 IP라도 다른 키가 된다.
-async function ipKey(secret, day, ip) {
+async function hmacHex(secret, text) {
   const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  return hex(await crypto.subtle.sign('HMAC', key, enc.encode(`${day}|${ip}`))).slice(0, 32);
+  return hex(await crypto.subtle.sign('HMAC', key, enc.encode(text)));
+}
+
+// IP는 그날 날짜를 섞은 HMAC으로만 다룬다. 날짜가 바뀌면 같은 IP라도 다른 키가 된다.
+const ipKey = async (secret, day, ip) => (await hmacHex(secret, `${day}|${ip}`)).slice(0, 32);
+
+// 판 토큰: 목록을 준 시각과 그 서명. 2단계 남용 대응(설계 10절)에서 두기를 이 시각 3분 뒤부터만 받는다.
+// 접두사 'run|'로 IP 키(날짜|IP)와 서명 대상이 겹치지 않게 한다.
+const runToken = async (secret, issuedAt) => `${issuedAt}.${(await hmacHex(secret, `run|${issuedAt}`)).slice(0, 32)}`;
+
+// 길이가 같은 두 문자열을 끝까지 비교한다(첫 차이에서 멈추지 않는다).
+function sameText(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 function newId() {
@@ -84,10 +105,13 @@ const publicCache = (r) => ({
   id: r.id, slot: r.slot, kind: r.kind, note: r.note, charges: r.charges, thanks: r.thanks, expiresAt: r.expires_at,
 });
 
-export function createApp({ now = () => Date.now(), rules = RULES } = {}) {
+// verify: Turnstile 확인 요청에 쓰는 fetch(테스트에서 바꿔 끼운다).
+export function createApp({ now = () => Date.now(), rules = RULES, verify = (url, init) => fetch(url, init) } = {}) {
   let listMemo = { at: -Infinity, body: null };
   let warned = false;
   let warnedRl = false;
+  let warnedHuman = false;
+  const shared = publicRules(rules);
 
   function configured(env) {
     const ok = env.DB && env.IP_HASH_SECRET;
@@ -135,12 +159,15 @@ export function createApp({ now = () => Date.now(), rules = RULES } = {}) {
 
   // ---------------------------------------------------------------- 목록
 
+  // 응답마다 붙이는 것: 지금 시각, 규칙 수치(클라이언트 안내 문구용), 판 토큰(2단계 대응을 켰을 때 두기에 필요).
+  // 판 토큰은 강제 여부와 상관없이 늘 준다. 켜는 순간 이미 판을 시작한 클라이언트도 토큰을 갖고 있게 하기 위해서다.
   async function list(env, url, t) {
     const layout = Number(url.searchParams.get('layout'));
-    if (layout !== LAYOUT) return { enabled: true, now: t, caches: [] }; // 다른 배치 버전에는 보급품이 없다
-    if (t - listMemo.at < rules.listMemoMs && listMemo.body) return { ...listMemo.body, now: t };
+    if (layout !== LAYOUT) return { enabled: true, now: t, caches: [], rules: shared }; // 다른 배치 버전에는 보급품이 없다
+    const stamp = async (body) => ({ ...body, now: t, rules: shared, runToken: await runToken(env.IP_HASH_SECRET, t) });
+    if (t - listMemo.at < rules.listMemoMs && listMemo.body) return stamp(listMemo.body);
     const db = env.DB;
-    if (!(await enabled(db))) return { enabled: false, now: t, caches: [] };
+    if (!(await enabled(db))) return { enabled: false, now: t, caches: [], rules: shared };
     const { results } = await db.prepare(
       `SELECT id, slot, kind, note, charges, thanks, expires_at FROM caches
        WHERE layout = ?1 AND removed_at IS NULL AND expires_at > ?2 AND charges > 0
@@ -148,18 +175,59 @@ export function createApp({ now = () => Date.now(), rules = RULES } = {}) {
     ).bind(LAYOUT, t, rules.maxActiveTotal).all();
     const body = { enabled: true, caches: results.map(publicCache) };
     listMemo = { at: t, body };
-    return { ...body, now: t };
+    return stamp(body);
+  }
+
+  // ---------------------------------------------------------------- 2단계 남용 대응 (기본 꺼짐)
+
+  async function checkRunToken(env, value, t) {
+    const m = typeof value === 'string' ? RUN_TOKEN_RE.exec(value) : null;
+    if (!m) throw new HttpError(403, 'run_token');
+    const issuedAt = Number(m[1]);
+    if (!sameText(value, await runToken(env.IP_HASH_SECRET, issuedAt))) throw new HttpError(403, 'run_token');
+    if (issuedAt > t + CLOCK_SKEW_MS || t - issuedAt > rules.runTokenMaxAgeMs) throw new HttpError(403, 'run_token');
+    if (t - issuedAt < rules.runTokenMinAgeMs) throw new HttpError(403, 'too_early');
+  }
+
+  // Cloudflare Turnstile 서버 확인. 원문 IP(remoteip)는 보내지 않는다.
+  async function checkHuman(env, value) {
+    if (!env.TURNSTILE_SECRET) {
+      if (!warnedHuman) {
+        warnedHuman = true;
+        console.error('[caches] HUMAN_CHECK_REQUIRED가 켜졌지만 TURNSTILE_SECRET이 없습니다. 두기 요청에 503을 돌려줍니다.');
+      }
+      throw new HttpError(503, 'misconfigured');
+    }
+    if (typeof value !== 'string' || value.length === 0 || value.length > TURNSTILE_MAX) throw new HttpError(403, 'human_check');
+    let result;
+    try {
+      const res = await verify(TURNSTILE_VERIFY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret: env.TURNSTILE_SECRET, response: value }),
+      });
+      result = await res.json();
+    } catch (err) {
+      console.error('[caches] Turnstile 확인 요청 실패', err);
+      throw new HttpError(503, 'human_check_unavailable');
+    }
+    if (result?.success !== true) throw new HttpError(403, 'human_check');
   }
 
   // ---------------------------------------------------------------- 두기
 
   async function place(env, request, t, user, ip) {
-    const b = await readJson(request, rules.maxBodyBytes);
+    const human = flag(env.HUMAN_CHECK_REQUIRED);
+    // 사람 확인을 켜면 본문에 Turnstile 토큰(최대 2048자)이 더 들어온다.
+    const b = await readJson(request, rules.maxBodyBytes + (human ? TURNSTILE_MAX : 0));
     const { layout, slot, kind, note } = b;
     if (layout !== LAYOUT) throw new HttpError(400, 'bad_layout');
     if (!Number.isInteger(slot) || slot < 0 || slot >= SLOT_COUNT || BLOCKED.has(slot)) throw new HttpError(400, 'bad_slot');
     if (!rules.kinds.includes(kind)) throw new HttpError(400, 'bad_kind');
     if (!Number.isInteger(note) || note < 0 || note >= rules.noteCount) throw new HttpError(400, 'bad_note');
+    // 2단계 대응은 D1을 건드리기 전에 확인한다(거절된 요청이 한도·쓰기를 쓰지 않게).
+    if (flag(env.RUN_TOKEN_REQUIRED)) await checkRunToken(env, b.runToken, t);
+    if (human) await checkHuman(env, b.humanToken);
     const db = env.DB;
     const day = utcDay(t);
     const id = newId();
@@ -317,9 +385,68 @@ export function createApp({ now = () => Date.now(), rules = RULES } = {}) {
     listMemo.at = -Infinity;
   }
 
+  // ---------------------------------------------------------------- 이야기 진행 집계
+
+  // 누가 보냈는지는 남기지 않는다(플레이어 ID·IP 없음). UTC 날짜·종류·id마다 횟수와 건너뛴 횟수만 더한다.
+  // 하루 전체 상한(storyMaxEventsPerDay)을 넘으면 그날은 더 세지 않는다. 남용이 게임의 D1 쓰기 한도를 다 쓰지 못하게 하기 위해서다.
+  // 상한 확인과 더하기는 한 batch(트랜잭션)에서 한다: ① 그날 받은 사건 수(kind='total' 행)를 올리되, 넘치면 '가득 참'(상한+1)으로 둔다
+  // → ② 가득 차지 않았을 때만 id별 행을 더한다. 이미 가득 찬 날의 요청은 ①도 행을 바꾸지 않아 D1에 쓰지 않는다.
+  async function story(env, request, t) {
+    const b = await readJson(request, rules.storyMaxBodyBytes);
+    const events = b.events;
+    if (!Array.isArray(events) || events.length === 0 || events.length > rules.storyMaxEvents) throw new HttpError(400, 'bad_events');
+    const counts = new Map();
+    for (const e of events) {
+      const ok = e && typeof e === 'object' && rules.storyKinds.includes(e.kind) && typeof e.id === 'string' && STORY_ID_RE.test(e.id);
+      const skipped = e?.skipped ?? false;
+      // 건너뛰기는 장면에만 있다.
+      if (!ok || typeof skipped !== 'boolean' || (skipped && e.kind !== 'scene')) throw new HttpError(400, 'bad_event');
+      const key = `${e.kind}|${e.id}`;
+      const c = counts.get(key) ?? { kind: e.kind, id: e.id, n: 0, skipped: 0 };
+      c.n += 1;
+      if (skipped) c.skipped += 1;
+      counts.set(key, c);
+    }
+    const db = env.DB;
+    const day = utcDay(t);
+    const cap = rules.storyMaxEventsPerDay;
+    const res = await db.batch([
+      db.prepare(
+        `INSERT INTO story_daily (day, kind, id, n, skipped) VALUES (?1, 'total', '', ?2, 0)
+         ON CONFLICT (day, kind, id) DO UPDATE SET n = CASE WHEN n + excluded.n <= ?3 THEN n + excluded.n ELSE ?3 + 1 END
+         WHERE n <= ?3`,
+      ).bind(day, events.length, cap),
+      ...[...counts.values()].map((c) => db.prepare(
+        `INSERT INTO story_daily (day, kind, id, n, skipped)
+         SELECT ?1, ?2, ?3, ?4, ?5 WHERE (SELECT n FROM story_daily WHERE day = ?1 AND kind = 'total' AND id = '') <= ?6
+         ON CONFLICT (day, kind, id) DO UPDATE SET n = n + excluded.n, skipped = skipped + excluded.skipped`,
+      ).bind(day, c.kind, c.id, c.n, c.skipped, cap)),
+      db.prepare("SELECT n FROM story_daily WHERE day = ?1 AND kind = 'total' AND id = ''").bind(day),
+    ]);
+    const total = res.at(-1).results[0]?.n ?? 0;
+    return { accepted: total <= cap ? events.length : 0 };
+  }
+
   // ---------------------------------------------------------------- 정리 작업 (하루 한 번)
 
-  // 순서: ① 만료 표시 → ② 지난 며칠 집계 → ③ 오래된 사용·고마워요·접속 기록 삭제 → ④ 자식 기록이 없는 오래된 보급품 삭제 → ⑤ 한도 카운터 삭제
+  // 실행 결과를 cron_runs에 남긴다(최근 cronRunsKept번만). 대시보드가 마지막 성공·실패를 보여 준다.
+  // 성공을 남기지 못하면 예외를 던져 Cloudflare의 Cron 실행 기록에도 실패로 드러나게 한다.
+  async function recordRun(db, at, ok, deleted, err) {
+    const message = err ? String(err?.message ?? err).slice(0, 200) : null;
+    try {
+      await db.batch([
+        db.prepare('INSERT INTO cron_runs (at, ok, ms, deleted, error) VALUES (?1, ?2, ?3, ?4, ?5)')
+          .bind(at, ok ? 1 : 0, Math.max(0, now() - at), deleted, message),
+        db.prepare('DELETE FROM cron_runs WHERE id <= (SELECT id FROM cron_runs ORDER BY id DESC LIMIT 1 OFFSET ?1)').bind(rules.cronRunsKept),
+      ]);
+    } catch (e) {
+      console.error('[caches] 정리 작업 결과를 기록하지 못했습니다', e);
+      if (ok) throw e;
+    }
+  }
+
+  // 순서: ① 만료 표시 → ② 지난 며칠 집계 → ③ 오래된 사용·고마워요·접속 기록 삭제 → ④ 자식 기록이 없는 오래된 보급품 삭제
+  // → ⑤ 한도 카운터·오래된 이야기 집계 삭제. 모두 한 batch(트랜잭션)라 중간에 실패하면 아무것도 바뀌지 않는다.
   async function cleanup(env) {
     if (!env.DB) throw new Error('DB 바인딩이 없습니다.');
     const db = env.DB;
@@ -343,7 +470,7 @@ export function createApp({ now = () => Date.now(), rules = RULES } = {}) {
          (?1, 'seen', (SELECT count(*) FROM seen WHERE day = ?1))`,
       ).bind(utcDay(s), s, e));
     }
-    stmts.push(
+    const deletes = [
       db.prepare('DELETE FROM uses WHERE used_at < ?1').bind(cutoff),
       db.prepare('DELETE FROM thanks WHERE at < ?1').bind(cutoff),
       db.prepare('DELETE FROM seen WHERE day < ?1').bind(utcDay(cutoff)),
@@ -353,8 +480,18 @@ export function createApp({ now = () => Date.now(), rules = RULES } = {}) {
            AND NOT EXISTS (SELECT 1 FROM thanks WHERE cache_id = caches.id)`,
       ).bind(cutoff),
       db.prepare('DELETE FROM rate_daily WHERE day < ?1').bind(utcDay(t - rules.rateKeepDays * DAY_MS)),
-    );
-    await db.batch(stmts);
+      db.prepare('DELETE FROM story_daily WHERE day < ?1').bind(utcDay(t - rules.storyKeepDays * DAY_MS)),
+    ];
+    let deleted;
+    try {
+      const res = await db.batch([...stmts, ...deletes]);
+      deleted = res.slice(-deletes.length).reduce((sum, r) => sum + (r.meta?.changes ?? 0), 0);
+    } catch (err) {
+      await recordRun(db, t, false, null, err);
+      throw err;
+    }
+    await recordRun(db, t, true, deleted, null);
+    return { deleted };
   }
 
   // ---------------------------------------------------------------- 라우팅
@@ -396,6 +533,9 @@ export function createApp({ now = () => Date.now(), rules = RULES } = {}) {
       }
       if (route[0] === 'me' && route.length === 1 && m === 'GET') {
         return json(200, await me(env, t, await player(request)), cors);
+      }
+      if (route[0] === 'story' && route.length === 1 && m === 'POST') {
+        return json(200, await story(env, request, t), cors);
       }
       throw new HttpError(404, 'not_found');
     } catch (err) {
