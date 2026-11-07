@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { load, save } from './storage.js';
-import { makeBeaconMaterial } from './world.js';
+import { load, save, storageAvailable } from './storage.js';
+import { makeBeaconMaterial, BOUND } from './world.js';
 
 // 옷장: 비옷 색·모자·안경·배낭. 능력치는 없는 순수 외형이다.
 // free 항목은 처음부터 갖고 있고, 나머지는 마을에 떨어진 꾸러미를 주워 영구히 얻는다.
@@ -61,6 +61,8 @@ export class Wardrobe {
   constructor() {
     this.owned = new Set();
     this.wear = { ...DEFAULT_WEAR };
+    // 저장소가 막힌 브라우저(사생활 보호 모드 등)면 false. 주운 옷은 이 페이지 동안만 남고, 옷장·습득 안내가 알린다.
+    this.storeOk = storageAvailable();
     this._load();
   }
 
@@ -87,7 +89,7 @@ export class Wardrobe {
   }
 
   _save() {
-    save(KEY, JSON.stringify({ v: 1, owned: [...this.owned], wear: this.wear }));
+    this.storeOk = save(KEY, JSON.stringify({ v: 1, owned: [...this.owned], wear: this.wear }));
   }
 
   has(id) {
@@ -120,6 +122,16 @@ export class Wardrobe {
     this.wear[it.slot] = id;
     this._save();
     return true;
+  }
+
+  // 기록 파일 가져오기(records.js): 옷가지를 더하고 옷차림을 바꾼 뒤 한 번에 저장한다. 검증은 부르는 쪽이 했다.
+  absorb(owned, wear) {
+    for (const id of owned) if (itemById(id) && !this.has(id) && this.owned.size < MAX_OWNED) this.owned.add(id);
+    for (const [slot, id] of Object.entries(wear)) {
+      const it = itemById(id);
+      if (it && it.slot === slot && this.has(id)) this.wear[slot] = id;
+    }
+    this._save();
   }
 }
 
@@ -235,7 +247,89 @@ export function disposeTree(root) {
 // ---------------------------------------------------------------- 마을에 떨어진 꾸러미
 
 const DROP_COUNT = 3;
+const PICK_REACH = 0.8; // 걸어서 줍는 거리(main의 drops.take 1.0m)보다 조금 안쪽
+const TRUCK_CLEAR = 3.5; // 세워 둔 트럭(약 2×4.2m) 둘레에는 놓지 않는다
 const tmp = new THREE.Vector3();
+
+// ---------------------------------------------------------------- 걸어서 닿는 곳
+// 마을 이동 한계(BOUND) 안을 CELL 칸으로 나눠, 정적 충돌체를 플레이어 반지름만큼 부풀려 막힌 칸을 찍고,
+// 출발점에서 상하좌우로 이어진 칸을 찾는다. 울타리 안쪽·연못 가장자리·건물 사이 막힌 틈처럼 걸어서 못 가는 자리를 거른다.
+// 대각선으로는 잇지 않아(부푼 충돌체 두 모서리 사이로 새지 않게) 실제보다 조금 보수적이다. 트럭처럼 움직이는 것은 넣지 않는다.
+const CELL = 0.4;
+
+export class ReachMap {
+  constructor(colliders, from, r, bound = BOUND) {
+    const n = Math.floor((bound * 2) / CELL) + 1;
+    this.n = n;
+    this.bound = bound;
+    const blocked = new Uint8Array(n * n);
+    const idx = (v) => (v + bound) / CELL;
+    for (const c of colliders) {
+      const box = c.t === 0;
+      const x0 = box ? c.x0 - r : c.x - c.r - r;
+      const x1 = box ? c.x1 + r : c.x + c.r + r;
+      const z0 = box ? c.z0 - r : c.z - c.r - r;
+      const z1 = box ? c.z1 + r : c.z + c.r + r;
+      const rr = box ? r * r : (c.r + r) ** 2;
+      for (let i = Math.max(0, Math.ceil(idx(x0))); i <= Math.min(n - 1, Math.floor(idx(x1))); i++) {
+        const x = i * CELL - bound;
+        for (let j = Math.max(0, Math.ceil(idx(z0))); j <= Math.min(n - 1, Math.floor(idx(z1))); j++) {
+          const z = j * CELL - bound;
+          const dx = box ? x - Math.min(Math.max(x, c.x0), c.x1) : x - c.x;
+          const dz = box ? z - Math.min(Math.max(z, c.z0), c.z1) : z - c.z;
+          if (dx * dx + dz * dz < rr) blocked[i * n + j] = 1;
+        }
+      }
+    }
+    this.blocked = blocked;
+    this.reach = new Uint8Array(n * n);
+    // 출발점 칸이 충돌체에 걸쳐 막혔으면 2m 안의 가장 가까운 빈 칸에서 시작한다.
+    const s = this._find(from.x, from.z, 2, (k) => !blocked[k]);
+    if (s < 0) return;
+    const reach = this.reach;
+    const queue = new Int32Array(n * n);
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = s;
+    reach[s] = 1;
+    const visit = (k) => {
+      if (reach[k] || blocked[k]) return;
+      reach[k] = 1;
+      queue[tail++] = k;
+    };
+    while (head < tail) {
+      const k = queue[head++];
+      const i = (k / n) | 0;
+      const j = k - i * n;
+      if (i > 0) visit(k - n);
+      if (i < n - 1) visit(k + n);
+      if (j > 0) visit(k - 1);
+      if (j < n - 1) visit(k + 1);
+    }
+  }
+
+  // (x, z)에서 rad 안의 칸 가운데 ok를 만족하는 가장 가까운 칸 번호(없으면 -1)
+  _find(x, z, rad, ok) {
+    const { n, bound } = this;
+    let best = -1;
+    let bd = rad * rad;
+    for (let i = Math.max(0, Math.ceil((x - rad + bound) / CELL)); i <= Math.min(n - 1, Math.floor((x + rad + bound) / CELL)); i++) {
+      for (let j = Math.max(0, Math.ceil((z - rad + bound) / CELL)); j <= Math.min(n - 1, Math.floor((z + rad + bound) / CELL)); j++) {
+        const d = (i * CELL - bound - x) ** 2 + (j * CELL - bound - z) ** 2;
+        if (d <= bd && ok(i * n + j)) {
+          bd = d;
+          best = i * n + j;
+        }
+      }
+    }
+    return best;
+  }
+
+  // 출발점에서 걸어가 (x, z)의 rad 안에 설 수 있는가
+  near(x, z, rad = PICK_REACH) {
+    return this._find(x, z, rad, (k) => this.reach[k] === 1) >= 0;
+  }
+}
 
 const shuffled = (arr) => {
   const a = arr.slice();
@@ -268,22 +362,51 @@ export class OutfitDrops {
   }
 
   // 아직 없는 옷가지 중 최대 3개를 시작 지점에서 먼 수색 지점 근처, 서로 떨어진 곳에 놓는다.
-  spawn(world, wardrobe, avoid) {
+  // avoid는 플레이어가 서 있는 곳(새 판은 시작 지점)이고, 거기서 걸어서 닿는 자리만 쓴다.
+  // truck: 세워 둔 트럭 위치(옆이나 밑에 놓지 않는다). radius: 플레이어 충돌 반지름(player.js PLAYER_R).
+  spawn(world, wardrobe, avoid, { truck = null, radius = 0.36 } = {}) {
     this.clear();
+    const reach = this.reachFrom(world, avoid, radius);
     const pool = shuffled(wardrobe.lockedItems);
     const spots = shuffled(world.loot.filter((l) => Math.hypot(l.x - avoid.x, l.z - avoid.z) > 16));
     const placed = [];
     for (const it of pool) {
       if (placed.length >= DROP_COUNT) break;
-      const spot = spots.find((s) => placed.every((p) => Math.hypot(p.x - s.x, p.z - s.z) > 14));
-      if (!spot) break;
-      const a = Math.random() * Math.PI * 2;
-      tmp.set(spot.x + Math.cos(a) * 1.3, 0, spot.z + Math.sin(a) * 1.3);
-      for (let i = 0; i < 3; i++) world.collide(tmp, 0.55);
-      placed.push({ x: tmp.x, z: tmp.z });
-      this._add(it, tmp.x, world.heightAt(tmp.x, tmp.z), tmp.z);
+      let at = null;
+      for (const s of spots) {
+        if (!placed.every((p) => Math.hypot(p.x - s.x, p.z - s.z) > 14)) continue;
+        at = this._spotNear(world, s, reach, truck);
+        if (at) break;
+      }
+      if (!at) break;
+      placed.push(at);
+      this._add(it, at.x, world.heightAt(at.x, at.z), at.z);
     }
     return this.list.length;
+  }
+
+  // 충돌체는 마을을 지을 때 정해지고(판마다 물건만 섞는다) 이야기 소품이 그 뒤에 더해지므로,
+  // 충돌체 수와 출발 칸이 같으면 지난번 지도를 다시 쓴다.
+  reachFrom(world, from, radius) {
+    const key = `${world.colliders.length}:${Math.round(from.x / CELL)}:${Math.round(from.z / CELL)}:${radius}`;
+    if (this._reachKey !== key) {
+      this._reach = new ReachMap(world.colliders, from, radius);
+      this._reachKey = key;
+    }
+    return this._reach;
+  }
+
+  // 수색 지점에서 1.3m 떨어진 여덟 방향 가운데, 충돌체 밖으로 밀어낸 뒤에도 걸어서 집을 수 있는 첫 자리
+  _spotNear(world, s, reach, truck) {
+    const a0 = Math.random() * Math.PI * 2;
+    for (let k = 0; k < 8; k++) {
+      const a = a0 + (k * Math.PI) / 4;
+      tmp.set(s.x + Math.cos(a) * 1.3, 0, s.z + Math.sin(a) * 1.3);
+      for (let i = 0; i < 3; i++) world.collide(tmp, 0.55);
+      if (truck && Math.hypot(tmp.x - truck.x, tmp.z - truck.z) < TRUCK_CLEAR) continue;
+      if (reach.near(tmp.x, tmp.z)) return { x: tmp.x, z: tmp.z };
+    }
+    return null;
   }
 
   _add(item, x, y, z) {
@@ -341,9 +464,59 @@ export class OutfitDrops {
 
 // ---------------------------------------------------------------- 옷장 화면
 
-const PREVIEW_DIR = new THREE.Vector3(1, 0.55, 1).normalize();
-// 고른 부위가 잘 보이게 돌려 세울 각도(카메라 방위 π/4 기준). 배낭은 등이 보이게.
-const SHOW_YAW = { coat: Math.PI / 4 + 0.5, hat: Math.PI / 4 + 0.35, glasses: Math.PI / 4 + 0.15, pack: Math.PI / 4 + Math.PI - 0.5 };
+// 미리보기 카메라: 인물(허리 높이)에서 방위 az 쪽으로 20m, 높이 비율은 게임 카메라보다 낮게(0.55).
+// 기본 방위는 게임 카메라와 같은 π/4(+x·+z 쪽)다.
+const BASE_AZ = Math.PI / 4;
+const VIEW_DIST = 20;
+// 고른 부위가 잘 보이게 돌려 세울 각도(카메라 방위 기준). 배낭은 등이 보이게.
+const SHOW_YAW = { coat: 0.5, hat: 0.35, glasses: 0.15, pack: Math.PI - 0.5 };
+
+export function previewDir(az, out = new THREE.Vector3()) {
+  return out.set(Math.sin(az) * Math.SQRT2, 0.55, Math.cos(az) * Math.SQRT2).normalize();
+}
+
+// ---------------------------------------------------------------- 미리보기 시선
+// 은신처 앞 시작 지점은 고정 시드 마을이라 기본 방위가 늘 트여 있지만(tests/node/wardrobe.test.mjs),
+// 처음 화면의 트럭은 지난 판에 세워 둔 자리에 그대로 있어 인물을 가릴 수 있다. 그래서 열 때마다
+// 카메라에서 인물의 발·허리·머리로 광선을 쏘아, 그림자를 드리우는 불투명한 물체(건물·나무·소품·트럭)에 먼저 닿으면
+// 가려진 것으로 보고 방위를 좌우로 조금씩 돌려 본다.
+const VIEW_TRY = [0, -0.35, 0.35, -0.7, 0.7, -1.05, 1.05, -1.4, 1.4];
+const VIEW_PROBES = [0.35, 0.95, 1.55];
+const ray = new THREE.Raycaster();
+const vDir = new THREE.Vector3();
+const vFrom = new THREE.Vector3();
+const vTo = new THREE.Vector3();
+
+// scene에서 skip(주인공) 밑을 뺀, 지금 보이고 그림자를 드리우는 메시
+export function viewBlockers(scene, skip) {
+  const out = [];
+  scene.traverseVisible((o) => {
+    if (!o.isMesh || !o.castShadow) return;
+    for (let p = o; p; p = p.parent) if (p === skip) return;
+    out.push(o);
+  });
+  return out;
+}
+
+// feet(발 위치)에 선 인물이 방위 az의 미리보기 카메라에서 가리지 않고 보이는가
+export function viewClear(blockers, feet, az) {
+  previewDir(az, vDir);
+  vFrom.set(feet.x, feet.y + 0.9, feet.z).addScaledVector(vDir, VIEW_DIST);
+  for (const h of VIEW_PROBES) {
+    vTo.set(feet.x, feet.y + h, feet.z).sub(vFrom);
+    const dist = vTo.length();
+    ray.set(vFrom, vTo.normalize());
+    ray.far = dist - 0.3; // 인물 바로 앞(발밑 연석 등)은 가림으로 치지 않는다
+    if (ray.intersectObjects(blockers, false).length) return false;
+  }
+  return true;
+}
+
+// 가리지 않는 방위. 다 가려지면 기본 방위.
+export function chooseView(blockers, feet) {
+  for (const d of VIEW_TRY) if (viewClear(blockers, feet, BASE_AZ + d)) return BASE_AZ + d;
+  return BASE_AZ;
+}
 
 export class Closet {
   constructor(wardrobe, onChange) {
@@ -351,12 +524,14 @@ export class Closet {
     this.onChange = onChange;
     this.tab = 'coat';
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 80);
-    this.yaw = Math.PI / 4 + 0.5;
+    this.az = null; // 이번에 열었을 때 고른 카메라 방위(첫 프레임에 정한다)
+    this.yaw = BASE_AZ + SHOW_YAW.coat;
     this.hold = 0;
     this.holdYaw = null;
     this.tabsEl = document.getElementById('closet-tabs');
     this.gridEl = document.getElementById('closet-grid');
     this.countEl = document.getElementById('closet-count');
+    this.storeEl = document.getElementById('closet-store'); // 새로 생긴 요소라 옛 HTML에는 없을 수 있다
     // 배포 직후 캐시된 옛 HTML과 섞이면 옷장 요소가 없다. 그때는 화면 없이 꾸러미·저장만 동작한다.
     this.ok = !!(this.tabsEl && this.gridEl && this.countEl);
     if (!this.ok) return;
@@ -377,12 +552,12 @@ export class Closet {
   }
 
   _showSlot(slot) {
-    this.holdYaw = SHOW_YAW[slot];
+    this.holdYaw = (this.az ?? BASE_AZ) + SHOW_YAW[slot];
     this.hold = 2.5;
   }
 
   open() {
-    this.yaw = SHOW_YAW.coat;
+    this.az = null;
     this.hold = 0;
     this.holdYaw = null;
     this.render();
@@ -392,6 +567,7 @@ export class Closet {
     if (!this.ok) return;
     const w = this.wardrobe;
     this.countEl.textContent = `모은 옷가지 ${w.foundCount} / ${w.findableCount}`;
+    if (this.storeEl) this.storeEl.textContent = w.storeOk ? '' : '이 브라우저는 저장소를 막아 두어 옷장이 이번 세션에만 남아요(사생활 보호 모드 등).';
     this.tabsEl.replaceChildren(...SLOTS.map((s) => {
       const b = document.createElement('button');
       b.type = 'button';
@@ -407,8 +583,13 @@ export class Closet {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = `closet-item${on ? ' on' : ''}${owned ? '' : ' locked'}`;
+      // 잠긴 항목은 disabled 대신 aria-disabled로 두어 스크린리더·Tab이 건너뛰지 않고 '마을에서 찾기'와 설명을 읽게 한다.
+      // data-id가 없어 눌러도 아무 일이 없다.
       if (owned) b.dataset.id = it.id;
-      else b.disabled = true;
+      else {
+        b.setAttribute('aria-disabled', 'true');
+        b.setAttribute('aria-describedby', 'closet-note');
+      }
       b.setAttribute('aria-pressed', String(on));
       const sw = document.createElement('span');
       sw.className = 'swatch';
@@ -427,6 +608,14 @@ export class Closet {
 
   // 미리보기: 천천히 돌다가, 부위를 고르면 그쪽을 잠시 보여 준다. 화면 방향에 맞춰 인물을 패널 반대편에 둔다.
   update(dt, player) {
+    if (this.az === null) {
+      // 열고 나서 첫 프레임: 주인공이 시작 지점에 선 뒤라 여기서 시선을 고른다.
+      let scene = player.root;
+      while (scene.parent) scene = scene.parent;
+      scene.updateMatrixWorld();
+      this.az = chooseView(viewBlockers(scene, player.root), player.pos);
+      this.yaw = this.az + SHOW_YAW.coat;
+    }
     if (this.hold > 0) {
       this.hold -= dt;
       let d = ((this.holdYaw - this.yaw + Math.PI) % (Math.PI * 2)) - Math.PI;
@@ -453,7 +642,7 @@ export class Closet {
     cam.updateProjectionMatrix();
     tmp.copy(player.pos);
     tmp.y += 0.9;
-    cam.position.copy(tmp).addScaledVector(PREVIEW_DIR, 20);
+    cam.position.copy(tmp).addScaledVector(previewDir(this.az, vDir), VIEW_DIST);
     cam.lookAt(tmp);
     cam.updateMatrixWorld();
   }
