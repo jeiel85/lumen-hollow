@@ -79,6 +79,29 @@ r = await B.ev(`localStorage.removeItem('lumen.run'); T.start(); const P = lumen
   return { saved, state: lumen.game.state, bandages: P.bandages }`);
 check('걸려 있던 꺼내기가 서버에서 이뤄졌으면(used_today) 이어할 때 그 물건을 준다', r.saved === 'bandage' && r.state === 'play' && r.bandages === 2, r);
 
+// #38 리뷰: 결과를 모르는 실패(연결 끊김)는 걸려 있는 꺼내기를 남기고, 같은 상자를 다시 꺼낼 때 used_today면 그 물건을 준다
+r = await B.ev(`const P = lumen.player; const id = 'c_' + 'b'.repeat(26);
+  lumen.online.use = async () => ({ ok: false, status: 0, error: 'network' });
+  lumen.game.pendingTake = { id, kind: 'fuel' }; lumen.saveRun();
+  const c = { id, kind: 'bandage', charges: 3 };
+  const before = P.bandages;
+  await lumen.takeCache(c);
+  const kept = lumen.game.pendingTake?.id === id;
+  const saved = JSON.parse(localStorage.getItem('lumen.run')).run.pendingTake?.id === id;
+  lumen.online.use = async () => ({ ok: false, status: 409, error: 'used_today' });
+  await lumen.takeCache(c);
+  return { kept, saved, granted: P.bandages - before, cleared: lumen.game.pendingTake === null }`);
+check('결과를 모르는 꺼내기는 남고, 다시 꺼낼 때 used_today면 그 물건을 받는다', r.kept && r.saved && r.granted === 1 && r.cleared, r);
+
+// #38 리뷰: 다른 탭이 이어 가는 판을, 밀려난 탭의 끝(쓰러짐)이 지우지 않는다
+r = await B.ev(`T.start(); lumen.saveRun();
+  window.dispatchEvent(new StorageEvent('storage', { key: 'lumen.run', storageArea: localStorage }));
+  localStorage.setItem('lumen.run', 'other-tab-run');
+  lumen.player.hp = 0; lumen.player.alive = false; lumen.step(0.2);
+  return { state: lumen.game.state, kept: localStorage.getItem('lumen.run') === 'other-tab-run' }`);
+check('밀려난 탭에서 판이 끝나도 다른 탭의 저장은 지우지 않는다', r.state === 'end' && r.kept, r);
+await B.ev(`localStorage.removeItem('lumen.run'); lumen.backToTitle(); lumen.step(0.2); return 1`);
+
 // #14: 오류 화면 동안 판이 멈추고, 계속하기를 누르면 일시정지로 돌아온다
 r = await B.ev(`T.skip(); const t0 = lumen.game.time;
   setTimeout(() => { throw new Error('시험 오류'); }, 0); await new Promise((res) => setTimeout(res, 30));
