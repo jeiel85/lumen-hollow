@@ -346,7 +346,13 @@ body.calm .gcell.tripped { animation: none; }
 .story-box[data-who="me"] .story-who { color: #b9e0ff; }
 .radio-wave { display: none; align-items: flex-end; gap: 2px; height: 12px; }
 .story-box[data-who="other"] .story-who { color: #c9d4d0; }
-.story-box[data-who="gran"] .radio-wave, .story-box[data-who="other"] .radio-wave { display: inline-flex; }
+.story-box[data-who="pharm"] .story-who { color: #b8e6cf; }
+.story-box[data-who="mom"] .story-who { color: #ffd9b8; }
+.story-box[data-who="owner"] .story-who { color: #ffb8a8; }
+.story-box[data-who="jeong"] .story-who, .story-box[data-who="patient"] .story-who { color: #d6e0c2; }
+.story-box[data-who="kid"] .story-who, .story-box[data-who="doha"] .story-who { color: #ffe48a; }
+/* 무전으로 들리는 줄에만 전파 표시(대면 장면의 육성에는 없다) */
+.story-box[data-radio="1"] .radio-wave { display: inline-flex; }
 .radio-wave i { width: 3px; border-radius: 1px; background: currentColor; animation: wave 0.9s ease-in-out infinite; }
 .radio-wave i:nth-child(1) { height: 5px; }
 .radio-wave i:nth-child(2) { height: 11px; animation-delay: -0.3s; }
@@ -373,24 +379,28 @@ body.calm .gcell.tripped { animation: none; }
 .doc-note { margin: 0; max-width: 46ch; text-align: center; font-size: 14px; line-height: 1.6; font-style: italic; color: var(--dim); }
 .kind-clipboard { border-top: 18px solid #8a6a48; font-variant-numeric: tabular-nums; }
 .kind-poster { background: #f1e6c8; }
-.kind-poster .paper-body p:nth-child(3) { font-size: 17px; font-weight: 700; text-align: center; margin: 14px 0; }
-.kind-poster .paper-body p:last-child { text-align: right; }
+.kind-poster .paper-body p:nth-child(2) { font-size: 17px; font-weight: 700; text-align: center; margin: 14px 0; }
+.paper-body p.sign { text-align: right; }
 .kind-chalk { background: #24382d; color: #ecebe2; border: 10px solid #7a5a40; border-radius: 6px; font-family: var(--font); transform: rotate(0.5deg); }
 .kind-chalk .paper-where { color: #a8b8a8; }
-.kind-chalk .paper-body p:first-child { color: #a8b8a8; font-size: 13px; }
 .kind-brass { background: linear-gradient(160deg, #caa452, #8f6a2b); color: #2e2110; text-align: center; border-radius: 6px; transform: none; letter-spacing: 0.03em; box-shadow: inset 0 0 0 3px rgba(60, 40, 10, 0.45), 0 24px 60px rgba(0, 0, 0, 0.5); }
 .kind-brass .paper-where { color: #4d3816; }
 .kind-brass .paper-body p:last-child { margin-top: 14px; font-weight: 700; font-size: 16px; }
 .kind-diary { background: #f6f1e3; }
-.kind-diary .paper-body p:nth-child(odd) { margin: 12px 0 2px; font-weight: 700; font-size: 13px; color: #6f6150; }
 .kind-letter { background: #f3ecdd repeating-linear-gradient(transparent, transparent 27px, rgba(150, 130, 100, 0.25) 28px); }
-.kind-letter .paper-body p:last-child { text-align: right; }
 .kind-radio { background: #e4e9e6; font-family: var(--font); transform: none; }
 .kind-radio .paper-body p { line-height: 1.65; }
 .kind-radio .line b { margin-right: 4px; color: #8a5a20; font-size: 13px; }
 .kind-radio .who-me b { color: #2f5a6a; }
 .kind-radio .who-other b { color: #4e5a56; }
 .kind-radio .who-nar { font-style: italic; color: #5b5a55; }
+.kind-radio .who-pharm b, .kind-radio .who-mom b, .kind-radio .who-owner b, .kind-radio .who-jeong b,
+.kind-radio .who-patient b, .kind-radio .who-kid b, .kind-radio .who-doha b { color: #5a4a6a; }
+/* 3장 맞춰 보기: 두 기록의 17번을 나란히, 뒤집은 사진 뒷면 */
+.paper-body p.sec { margin: 14px 0 4px; font-family: var(--font); font-size: 11px; letter-spacing: 0.16em; color: #8a7a62; }
+.paper-body p.sec:first-child { margin-top: 0; }
+.paper-body p.match { padding: 4px 8px; border-left: 3px solid #b5463c; background: rgba(181, 70, 60, 0.08); }
+.paper-body p.flipped { margin-top: 16px; padding-top: 12px; border-top: 1px dashed rgba(90, 70, 50, 0.35); font-style: italic; }
 
 /* ---------- 이야기: 수첩 ---------- */
 .journal-card { width: min(780px, 100%); text-align: left; padding: 20px 24px 22px; }
@@ -404,6 +414,8 @@ button.jrow:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px;
 .jrow small { font-size: 11.5px; color: var(--dim); }
 li.jrow.locked { opacity: 0.55; color: var(--dim); }
 li.jrow.open small { color: #9fd6ff; }
+.journal-list .jhead { margin: 8px 0 0; font-size: 11px; letter-spacing: 0.16em; color: var(--warm); }
+.journal-list .jhead:first-child { margin-top: 0; }
 .journal-foot { align-items: center; margin-top: 12px; }
 
 @media (orientation: landscape) and (max-height: 540px) {
@@ -417,4 +429,24 @@ li.jrow.open small { color: #9fd6ff; }
   .story-box { padding: 12px 16px 16px; }
   .story-text { font-size: 15.5px; }
   .paper { padding: 20px 20px 18px; }
+}
+
+/* ---------- 2~4장 ---------- */
+/* 장 안에서는 구역·배전반·퓨즈·연료 대신 목표 문구를 보인다. */
+body.chapter-mode .hud .zones, body.chapter-mode #power-btn, body.chapter-mode .inv .item:not(:nth-child(2)) { display: none; }
+.objective { position: absolute; top: calc(var(--edge-t) + 46px); left: var(--edge-l); max-width: min(440px, calc(100vw - 2 * var(--edge-l))); margin: 0; padding: 7px 12px; border-radius: 10px; background: var(--glass); border: 1px solid var(--line); font-size: 13px; line-height: 1.45; color: var(--ink); }
+.npc-tags { position: absolute; inset: 0; overflow: hidden; }
+.npc-tag { position: absolute; left: 0; top: 0; padding: 2px 8px; border-radius: 8px; background: rgba(8, 13, 15, 0.62); border: 1px solid var(--line); font-size: 11.5px; color: var(--warm); white-space: nowrap; }
+.chapter-card { position: fixed; inset: 0; z-index: 7; display: grid; place-items: center; background: #020405; pointer-events: none; animation: cardIn 0.35s ease both; }
+.chapter-card.out { opacity: 0; transition: opacity 0.9s ease; }
+.chapter-card p { margin: 0; padding: 0 24px; text-align: center; font-family: "Nanum Myeongjo", "NanumMyeongjo", "AppleMyungjo", "Noto Serif KR", "Batang", serif; font-size: clamp(22px, 5vw, 34px); letter-spacing: 0.12em; color: #efe6d2; }
+@keyframes cardIn { from { opacity: 0; } }
+@media (orientation: portrait) and (max-width: 600px) {
+  .objective { top: auto; bottom: calc(var(--edge-b) + 168px); font-size: 12px; }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  .objective { top: calc(var(--edge-t) + 40px); left: auto; right: var(--edge-r); max-width: 300px; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chapter-card, .chapter-card.out { animation: none; transition-duration: 0.2s; }
 }

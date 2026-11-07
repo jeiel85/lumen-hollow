@@ -20,6 +20,9 @@ for (const s of SCENES) for (const id of s.unlocks ?? []) UNLOCKED_BY.set(id, s.
 // 수첩에 남는 글(급수탑처럼 장면으로 보는 곳은 빼고)
 export const DOCS = CLUES.filter((c) => !c.scene);
 
+// 몇 장의 장면·기록인지(script.js의 ch, 빠지면 1장)
+export const chapterOf = (item) => item.ch ?? 1;
+
 export function sceneById(id) {
   return SCENE_BY_ID.get(id) ?? null;
 }
@@ -28,8 +31,10 @@ export function clueById(id) {
   return CLUE_BY_ID.get(id) ?? null;
 }
 
-// 숲 너머 북서쪽(화면 위쪽) 호수. 마을 이동 한계(±87)와 숲(±118) 밖이라 걸어서는 못 가고 장면에서만 보인다.
-const LAKE = { x: -162, z: -162, r: 34 };
+// 숲 너머 북서쪽(화면 위쪽) 호수. 마을 이동 한계(±87)와 숲(±118) 밖이라 1장에서는 장면에서만 보이고,
+// 2장(src/chapters.js)에서 선착장과 섬을 걷는다. ISLAND는 섬의 걸을 수 있는 반경, PIER는 섬 부두가 뻗는 방향(남동, 마을 쪽).
+export const LAKE = { x: -162, z: -162, r: 34 };
+export const ISLAND = { r: 9.2, pier: 13.6, top: 0.5 };
 const LANTERN_Y = 10.2;
 const SHORE = 0x7d8d5b;
 const PINES = [0x56704a, 0x63784a, 0x4b6243, 0x77874c];
@@ -86,7 +91,7 @@ export class Story {
     this.lightLevel = 0;
 
     const b = new Builder();
-    for (const clue of CLUES) this._place(b, clue);
+    for (const clue of CLUES) if (chapterOf(clue) === 1) this._place(b, clue);
     this._lake(b);
     const mesh = new THREE.Mesh(b.build(), world.staticMat);
     mesh.castShadow = true;
@@ -116,20 +121,21 @@ export class Story {
     return !!by && this.seen.has(by);
   }
 
-  get foundDocs() {
-    return DOCS.filter((c) => this.found.has(c.id)).length;
+  // ch장까지의 수첩 글 가운데 주운 것. ch를 빼면 1장만 센다.
+  foundDocs(ch = 1) {
+    return DOCS.filter((c) => chapterOf(c) <= ch && this.found.has(c.id)).length;
   }
 
   get hasProgress() {
     return this.seen.size > 0;
   }
 
-  // 사건(event)에 맞춰 아직 안 본 장면 id를 순서대로 돌려준다.
+  // 사건(event)에 맞춰 아직 안 본 1장 장면 id를 순서대로 돌려준다. 2~4장 장면은 src/chapters.js가 직접 튼다.
   // event: 'start' | 'dusk' | 'dawn' | 'win' | { zones: n }
   scenesFor(event) {
     const out = [];
     for (const s of SCENES) {
-      if (this.seen.has(s.id)) continue;
+      if (this.seen.has(s.id) || chapterOf(s) !== 1) continue;
       if (typeof event === 'object' ? typeof s.when === 'object' && s.when.zones <= event.zones : s.when === event) out.push(s.id);
     }
     return out;
@@ -150,6 +156,14 @@ export class Story {
     this._save();
     this.refresh();
     return true;
+  }
+
+  // 2~4장 진행을 처음부터 다시 할 때: 그 장들의 장면·기록만 지운다.
+  forgetChapters() {
+    for (const s of SCENES) if (chapterOf(s) > 1) this.seen.delete(s.id);
+    for (const c of CLUES) if (chapterOf(c) > 1) this.found.delete(c.id);
+    this._save();
+    this.refresh();
   }
 
   // 수첩의 "이야기 처음부터". 판 도중에는 부르지 않는다(main이 처음 화면에서만 허용).
@@ -403,20 +417,24 @@ export class Story {
     b.add(geo.cyl(40), L.x, 0.012, L.z, L.r * 2 + 5, 0.02, L.r * 2 + 5, 0xb8a882);
     const water = new THREE.Mesh(
       new THREE.CylinderGeometry(L.r, L.r, 0.04, 48),
-      new THREE.MeshStandardMaterial({ color: 0x35565e, roughness: 0.16, metalness: 0.05 }),
+      new THREE.MeshStandardMaterial({ color: 0x406a74, roughness: 0.28, metalness: 0.05 }),
     );
     water.position.set(L.x, 0.035, L.z);
     water.receiveShadow = true;
     water.frustumCulled = false;
     this.root.add(water);
 
-    // 섬과 등대
+    // 섬과 등대. 2장에서 걷는 땅이라 걸을 수 있는 반경(ISLAND.r)보다 조금 넓게 깐다. 윗면 높이는 ISLAND.top.
     const rng = new Rng(1926);
-    b.add(geo.cyl(14), L.x, 0.2, L.z, 11, 0.4, 10, 0x8f8a7c);
-    b.add(geo.cyl(14), L.x, 0.42, L.z, 9, 0.12, 8.2, 0x7d8d5b);
-    for (let i = 0; i < 12; i++) {
-      const an = (i / 12) * Math.PI * 2 + rng.range(-0.2, 0.2);
-      b.add(geo.ico(0), L.x + Math.cos(an) * 5.2, 0.3, L.z + Math.sin(an) * 4.8, rng.range(1, 1.8), rng.range(0.6, 1.0), rng.range(1, 1.6), 0x8c887e, an);
+    const R = ISLAND.r;
+    b.add(geo.cyl(28), L.x, 0.22, L.z, (R + 1.7) * 2, 0.44, (R + 1.5) * 2, 0x8f8a7c);
+    b.add(geo.cyl(28), L.x, 0.45, L.z, (R + 0.5) * 2, 0.1, (R + 0.4) * 2, 0x7d8d5b);
+    const PIER_AN = Math.PI / 4; // 섬 부두 방향(남동). 바윗돌은 그쪽을 비운다.
+    for (let i = 0; i < 22; i++) {
+      const an = (i / 22) * Math.PI * 2 + rng.range(-0.1, 0.1);
+      if (Math.abs(Math.atan2(Math.sin(an - PIER_AN), Math.cos(an - PIER_AN))) < 0.42) continue;
+      const rr = R + 1.2 + rng.range(-0.3, 0.3);
+      b.add(geo.ico(0), L.x + Math.cos(an) * rr, 0.32, L.z + Math.sin(an) * rr, rng.range(1.1, 2.0), rng.range(0.6, 1.1), rng.range(1, 1.7), 0x8c887e, an);
     }
     const lx = L.x;
     const lz = L.z;
@@ -436,13 +454,76 @@ export class Story {
     b.add(geo.cyl(10), lx, LANTERN_Y + 0.85, lz, 1.95, 0.12, 1.95, 0x2f3437);
     b.add(geo.cone(12), lx, LANTERN_Y + 1.45, lz, 2.1, 1.1, 2.1, 0x8a3a32);
     b.add(geo.sphere(8, 6), lx, LANTERN_Y + 2.1, lz, 0.32, 0.32, 0.32, 0x2f3437);
-    // 등대지기 오두막
-    const hf = new Frame(lx + 3.4, lz - 1.2, -Math.PI / 4);
-    hf.add(b, geo.box(), 0, 1.6, 0, 3.0, 2.2, 2.4, 0xe2d6bd);
-    hf.add(b, geo.gable(), 0, 3.25, 0, 2.4, 1.1, 3.0, 0xe2d6bd, Math.PI / 2);
-    hf.add(b, geo.box(), 0, 3.3, 0.68, 3.4, 0.1, 1.5, 0x6d4e42, 0, 0.75);
-    hf.add(b, geo.box(), 0, 3.3, -0.68, 3.4, 0.1, 1.5, 0x6d4e42, 0, -0.75);
-    hf.add(b, geo.box(), 0.6, 1.4, 1.22, 0.7, 1.4, 0.05, 0x4b3a32);
+    // 등대 당직실(등대지기 오두막). 정면(+z)이 카메라 쪽(남동)을 본다. 앞 처마 밑에 밥상이 있다.
+    const hf = new Frame(lx + 4.6, lz - 2.4, Math.PI / 4);
+    hf.add(b, geo.box(), 0, 1.6, 0, 3.4, 2.2, 2.6, 0xe2d6bd);
+    hf.add(b, geo.gable(), 0, 3.25, 0, 2.6, 1.1, 3.4, 0xe2d6bd, Math.PI / 2);
+    hf.add(b, geo.box(), 0, 3.3, 0.74, 3.8, 0.1, 1.62, 0x6d4e42, 0, 0.75);
+    hf.add(b, geo.box(), 0, 3.3, -0.74, 3.8, 0.1, 1.62, 0x6d4e42, 0, -0.75);
+    hf.add(b, geo.box(), 0.7, 1.4, 1.32, 0.7, 1.4, 0.05, 0x4b3a32);
+    hf.add(b, geo.box(), -0.9, 1.95, 1.32, 0.8, 0.5, 0.05, 0x9fc4c8); // 창
+    // 처마와 기둥, 밥상(두 그릇과 뚜껑), 걸상
+    hf.add(b, geo.box(), 0, 2.72, 2.15, 3.6, 0.08, 1.7, 0x6d4e42, 0, -0.12);
+    for (const sx of [-1.65, 1.65]) hf.add(b, geo.box(), sx, 1.6, 2.85, 0.12, 2.2, 0.12, 0x5d4a3a);
+    hf.add(b, geo.box(), 0.75, 0.82, 2.25, 1.3, 0.06, 0.8, 0x9a6e4c);
+    for (const [tx, tz] of [[0.2, -0.3], [1.3, -0.3], [0.2, 0.3], [1.3, 0.3]]) hf.add(b, geo.box(), tx, 0.65, 2.25 + tz, 0.07, 0.32, 0.07, 0x6e543d);
+    for (const bx of [0.5, 1.0]) {
+      hf.add(b, geo.cyl(10), bx, 0.9, 2.2, 0.32, 0.12, 0.32, 0xe9e4d6);
+      hf.add(b, geo.sphere(8, 4), bx, 0.96, 2.2, 0.3, 0.14, 0.3, 0x8a9aa0);
+    }
+    hf.add(b, geo.box(), 0.75, 0.62, 3.05, 1.1, 0.08, 0.32, 0x8a6a48);
+    this.hut = hf;
+    // 섬 뒤편 소나무 몇 그루(실루엣)
+    for (const [ox, oz, sc] of [[-5.6, -4.4, 1.2], [-3.2, -6.4, 1.0], [-6.8, -1.2, 0.9], [1.2, -7.0, 1.1]]) {
+      const tx = lx + ox;
+      const tz = lz + oz;
+      b.add(geo.cyl(5), tx, 0.5 + 0.4 * sc, tz, 0.24 * sc, 0.8 * sc, 0.24 * sc, 0x6b4e3a);
+      for (let k = 0; k < 3; k++) {
+        const r = (1.8 - k * 0.45) * sc;
+        b.add(geo.cone(7), tx, 0.5 + 0.7 * sc + k * 0.85 * sc + 0.75 * sc, tz, r, 1.6 * sc, r, PINES[k], k * 0.4);
+      }
+    }
+    // 사람이 지내던 섬: 부두 계단에서 등대·당직실로 가는 돌길, 풀, 장작더미와 빨랫줄, 물통.
+    // 호숫가 숲과 다른 난수를 써서 숲 배치는 그대로 둔다.
+    const deco = new Rng(1031);
+    const stone = (x, z, s) => b.add(geo.cyl(7), x, ISLAND.top + 0.015, z, s, 0.04, s * 0.8, 0x9a968a, deco.range(0, 3));
+    for (let t = R - 1.4; t > 2.0; t -= 0.85) stone(lx + t * Math.SQRT1_2 + deco.range(-0.25, 0.25), lz + t * Math.SQRT1_2 + deco.range(-0.25, 0.25), deco.range(0.55, 0.75));
+    for (let k = 1; k <= 4; k++) {
+      const t = k / 5;
+      const px = lx + 4.2 * Math.SQRT1_2 + (hf.px(0, 2.6) - lx - 4.2 * Math.SQRT1_2) * t;
+      const pz = lz + 4.2 * Math.SQRT1_2 + (hf.pz(0, 2.6) - lz - 4.2 * Math.SQRT1_2) * t;
+      stone(px + deco.range(-0.2, 0.2), pz + deco.range(-0.2, 0.2), deco.range(0.5, 0.7));
+    }
+    for (let i = 0; i < 46; i++) {
+      const an = deco.range(0, Math.PI * 2);
+      const rr = deco.range(2.4, R - 0.4);
+      const x = lx + Math.cos(an) * rr;
+      const z = lz + Math.sin(an) * rr;
+      if (Math.abs(Math.atan2(Math.sin(an - PIER_AN), Math.cos(an - PIER_AN))) < 0.28) continue;
+      if (Math.hypot(x - hf.x, z - hf.z) < 3.4) continue;
+      const s = deco.range(0.5, 0.9);
+      b.add(geo.cone(5), x, ISLAND.top + 0.12 * s, z, 0.32 * s, 0.26 * s, 0.32 * s, deco.pick([0x6f8a4a, 0x7d9652, 0x627c42]), deco.range(0, 3));
+    }
+    // 당직실 옆: 장작더미, 빨랫줄(수건 두 장), 물통
+    for (let k = 0; k < 3; k++) hf.add(b, geo.cyl(6), -2.6, 0.62 + k * 0.2, -0.6 + k * 0.08, 0.2, 1.2, 0.2, 0x8a6a48, 0, Math.PI / 2);
+    for (let k = 0; k < 4; k++) hf.add(b, geo.cyl(6), -2.6, 0.62, -0.95 + k * 0.24, 0.2, 1.2, 0.2, 0x7a5a3e, 0, Math.PI / 2);
+    for (const sx of [-0.8, 1.2]) hf.add(b, geo.box(), sx, 1.3, -2.4, 0.08, 1.6, 0.08, 0x5d4a3a);
+    hf.add(b, geo.box(), 0.2, 2.05, -2.4, 2.0, 0.02, 0.02, 0xd9d4c8);
+    hf.add(b, geo.box(), -0.25, 1.75, -2.4, 0.5, 0.6, 0.02, 0xe9e4d6);
+    hf.add(b, geo.box(), 0.6, 1.8, -2.4, 0.45, 0.5, 0.02, 0x8fb0c0);
+    hf.add(b, geo.cyl(10), 2.3, 0.85, 0.6, 0.6, 0.7, 0.6, 0x3f6a8a);
+    hf.add(b, geo.cyl(10), 2.3, 1.21, 0.6, 0.62, 0.04, 0.62, 0x335874);
+
+    // 섬 부두: 돌계단을 내려가 물 위로 뻗은 나무 부두. 계단 위 고정등과 부두 보관함은 2장(src/chapters.js)이 쓴다.
+    const pf = new Frame(lx, lz, PIER_AN);
+    for (let k = 0; k < 3; k++) pf.add(b, geo.box(), 0, 0.42 - k * 0.07, R - 0.9 + k * 0.62, 2.6, 0.2, 0.66, 0x9a968a);
+    pf.add(b, geo.box(), 0, 0.42, (R + 0.6 + ISLAND.pier) / 2, 2.0, 0.12, ISLAND.pier - R - 0.6, 0x8f6c4e);
+    for (let k = R + 0.8; k < ISLAND.pier; k += 1) pf.add(b, geo.box(), 0, 0.49, k, 2.02, 0.02, 0.06, 0x6e543d);
+    for (const sx of [-0.9, 0.9]) for (const pz of [R + 1.2, (R + ISLAND.pier) / 2 + 0.5, ISLAND.pier - 0.2]) pf.add(b, geo.cyl(6), sx, 0.3, pz, 0.16, 1.0, 0.16, 0x5a4232);
+    // 부두 난간 기둥의 구명환
+    pf.add(b, geo.cyl(12), -1.02, 0.95, R + 1.7, 0.62, 0.62, 0.12, 0xd8452f, 0, Math.PI / 2);
+    pf.add(b, geo.cyl(12), -1.03, 0.95, R + 1.7, 0.36, 0.64, 0.13, 0x3a3f44, 0, Math.PI / 2);
+    this.islandPier = pf;
 
     // 등대 유리방(불이 켜지면 빛난다)과 할머니의 등잔
     this.lampMat = new THREE.MeshBasicMaterial({ color: 0x1a2124 });
@@ -494,13 +575,21 @@ export class Story {
     for (const s of [-0.75, 0.75]) for (const lz2 of [0, 3.4, 7.2]) df.add(b, geo.cyl(6), s, 0.3, lz2, 0.16, 1.0, 0.16, 0x5a4232);
     df.add(b, geo.cyl(6), 0.75, 1.0, 7.2, 0.14, 1.2, 0.14, 0x5a4232);
     df.add(b, geo.box(), 0.75, 1.68, 7.2, 0.22, 0.26, 0.22, 0x2f3437);
-    // 나룻배: 선체, 안쪽, 가로 의자, 노
-    df.add(b, geo.box(), 1.75, 0.2, 5.0, 1.05, 0.38, 2.6, 0x7a4f36);
-    df.add(b, geo.box(), 1.75, 0.27, 5.0, 0.85, 0.3, 2.3, 0x4f3627);
-    df.add(b, geo.box(), 1.75, 0.32, 6.4, 0.7, 0.3, 0.5, 0x7a4f36, 0, 0.3);
-    df.add(b, geo.box(), 1.75, 0.38, 4.8, 0.9, 0.06, 0.3, 0x9a6e4c);
-    df.add(b, geo.box(), 1.3, 0.42, 4.6, 0.06, 0.05, 2.2, 0xa8835c, 0.3);
-    df.add(b, geo.box(), 2.2, 0.42, 4.6, 0.06, 0.05, 2.2, 0xa8835c, -0.3);
+    // 나룻배: 선체, 안쪽, 가로 의자, 노. 2장에서 섬으로 건너가므로 따로 움직이는 메시로 둔다.
+    const bb = new Builder();
+    bb.add(geo.box(), 0, 0.2, 0, 1.05, 0.38, 2.6, 0x7a4f36);
+    bb.add(geo.box(), 0, 0.27, 0, 0.85, 0.3, 2.3, 0x4f3627);
+    bb.add(geo.box(), 0, 0.32, 1.4, 0.7, 0.3, 0.5, 0x7a4f36, 0, 0.3);
+    bb.add(geo.box(), 0, 0.38, -0.2, 0.9, 0.06, 0.3, 0x9a6e4c);
+    bb.add(geo.box(), -0.45, 0.42, -0.4, 0.06, 0.05, 2.2, 0xa8835c, 0.3);
+    bb.add(geo.box(), 0.45, 0.42, -0.4, 0.06, 0.05, 2.2, 0xa8835c, -0.3);
+    this.boat = new THREE.Mesh(bb.build(), this.world.staticMat);
+    this.boat.castShadow = true;
+    this.boat.receiveShadow = true;
+    this.boatHome = { x: df.px(1.75, 5.0), z: df.pz(1.75, 5.0), a: df.a };
+    this.dockPier = df;
+    this.root.add(this.boat);
+    this.parkBoat();
 
     // 호숫가 숲. 마을 숲(±118)과 따로 결정적 난수를 써서 마을 배치는 그대로 둔다.
     let placed = 0;
@@ -522,11 +611,19 @@ export class Story {
     }
   }
 
+  // 나룻배를 마을 쪽 선착장에 매어 둔다.
+  parkBoat() {
+    const h = this.boatHome;
+    this.boat.position.set(h.x, 0, h.z);
+    this.boat.rotation.set(0, h.a, 0);
+  }
+
   // 판을 새로 시작할 때: 등대는 꺼진 채, 할머니의 등잔만 켜져 있다.
   resetRun() {
     this.lit = false;
     this.lightLevel = 0;
     this.beamPivot.visible = false;
+    this.parkBoat();
   }
 
   setLighthouse(on) {

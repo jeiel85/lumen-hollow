@@ -35,6 +35,7 @@
       "./vendor/three/three.core.js": "./vendor/three/three.core.js?v=r187",
       "./src/audio.js": "./src/audio.js?v=__BUILD__",
       "./src/caches.js": "./src/caches.js?v=__BUILD__",
+      "./src/chapters.js": "./src/chapters.js?v=__BUILD__",
       "./src/dialogue.js": "./src/dialogue.js?v=__BUILD__",
       "./src/env.js": "./src/env.js?v=__BUILD__",
       "./src/grid.js": "./src/grid.js?v=__BUILD__",
@@ -77,6 +78,8 @@
       </div>
     </div>
     <div id="fps" class="fps mono hidden" aria-hidden="true"></div>
+    <p id="objective" class="objective hidden" aria-live="polite"></p>
+    <div id="npc-tags" class="npc-tags" aria-hidden="true"></div>
     <div class="hud-bottom">
       <div class="stats">
         <div class="bar hp"><span class="label">체력</span><div class="track"><div id="hp-fill" class="fill"></div></div></div>
@@ -121,6 +124,7 @@
         <h1>Lumen Hollow</h1>
         <p class="tagline">그날 밤, 세상의 불이 꺼졌다. 어둠 속에서 무언가가 다가온다.<br>낮에는 퓨즈를 모으고, 꺼진 구역에 하나씩 다시 불을 밝혀라.</p>
         <div id="title-actions" class="title-actions">
+          <button id="chapter-btn" class="btn hidden" type="button" disabled>다음 장</button>
           <button id="resume-run-btn" class="btn hidden" type="button" disabled>이어하기</button>
           <button id="start-btn" class="btn" type="button" disabled>불러오는 중…</button>
         </div>
@@ -194,6 +198,8 @@
     <div class="card small">
       <h2 id="end-title"></h2>
       <p id="end-text" class="tagline"></p>
+      <button id="next-chapter-btn" class="btn hidden" type="button">다음 장으로</button>
+      <button id="end-journal-btn" class="btn hidden" type="button">수첩 펼치기</button>
       <button id="continue-btn" class="btn hidden" type="button">불 켜진 마을 산책하기</button>
       <button id="restart-btn" class="btn" type="button">다시 하기</button>
       <button id="title-btn" class="btn ghost" type="button">처음 화면으로</button>
@@ -261,8 +267,8 @@
       </div>
       <p id="journal-progress" class="hint"></p>
       <div class="journal-grid">
-        <div class="group"><h3>마을에 남은 기록</h3><ol id="journal-clues" class="journal-list"></ol></div>
-        <div class="group"><h3>무전</h3><ol id="journal-scenes" class="journal-list"></ol></div>
+        <div class="group"><h3>남은 기록</h3><ol id="journal-clues" class="journal-list"></ol></div>
+        <div class="group"><h3>무전과 장면</h3><ol id="journal-scenes" class="journal-list"></ol></div>
       </div>
       <div class="row-btns journal-foot">
         <button id="journal-reset" class="chip danger" type="button">이야기 처음부터</button>
@@ -293,6 +299,7 @@
         <p id="doc-hand" class="paper-hand"></p>
       </article>
       <p id="doc-note" class="doc-note"></p>
+      <button id="doc-flip" class="btn hidden" type="button">사진 뒤집기</button>
       <button id="doc-close" class="btn" type="button">닫기</button>
     </div>
   </section>
@@ -304,6 +311,8 @@
       <button id="error-reload" class="btn ghost" type="button" onclick="location.reload()">새로고침</button>
     </div>
   </section>
+
+  <div id="chapter-card" class="chapter-card hidden" aria-live="polite"><p id="chapter-card-text"></p></div>
 
   <div id="gl-notice" class="notice hidden" role="status">
     <span>그래픽 장치가 초기화되어 잠시 멈췄어요. 복구되면 이어서 할 수 있어요.</span>

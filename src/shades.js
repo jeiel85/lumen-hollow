@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BOUND, LOAD_PER_SHADE } from './world.js';
+import { LOAD_PER_SHADE } from './world.js';
 import { RAM_SPEED } from './vehicle.js';
 
 // 그늘이(Shade): 밤에만 나타나는 그림자 형체. 빛에 닿으면 물러나고 오래 비추면 흩어진다.
@@ -67,49 +67,68 @@ export class Shades {
       g.add(body, head);
       g.visible = false;
       scene.add(g);
-      this.list.push({ g, mat, eyeMat, glowMat, arms, body, head, active: false, state: 'idle', x: 0, z: 0, vx: 0, vz: 0, fade: 0, burn: 0, cool: 0, seed: Math.random() * 100 });
+      this.list.push({ g, mat, eyeMat, glowMat, arms, body, head, active: false, state: 'idle', x: 0, z: 0, vx: 0, vz: 0, fade: 0, burn: 0, cool: 0, seed: Math.random() * 100, tag: null, tough: 1, path: null });
     }
     this.spawnTimer = 2;
     this.banished = 0;
   }
 
+  // 저절로 깨어나는 그늘이 수(목표 그늘이는 빼고 센다)
   get activeCount() {
-    return this.list.filter((s) => s.active).length;
+    return this.list.filter((s) => s.active && !s.tag).length;
+  }
+
+  // 이야기가 정한 그늘이(4장 마지막 밤). tag는 흩어질 때 returned에 실려 누구에게 돌아가는지 가린다.
+  // path의 점들을 차례로 지나 플레이어에게 다가오고, tough만큼 오래 비춰야 흩어지며, 멀리 있어도 사라지지 않는다.
+  // 생김새는 다른 그늘이와 같다(누구의 그림자인지는 돌아간 창으로만 알린다).
+  spawnTarget(x, z, tag, { path = [], tough = 3 } = {}) {
+    const s = this.list.find((e) => !e.active);
+    if (!s) return false;
+    Object.assign(s, { active: true, state: 'rise', x, z, vx: 0, vz: 0, fade: 0, burn: 0, cool: 0, tag, tough, path: path.map((p) => ({ ...p })) });
+    s.g.visible = true;
+    return true;
+  }
+
+  hasTarget(tag) {
+    return this.list.some((s) => s.active && s.tag === tag && s.state !== 'die');
   }
 
   clear() {
     for (const s of this.list) {
       s.active = false;
       s.g.visible = false;
+      s.tag = null;
     }
   }
 
+  // 플레이어에게서 world.spawnRange(기본 15~23m) 떨어진, 빛 밖의 갈 수 있는 땅에서 깨어난다.
   _spawn(px, pz, world) {
     const s = this.list.find((e) => !e.active);
     if (!s) return;
+    const [d0, d1] = world.spawnRange ?? [15, 23];
     for (let tries = 0; tries < 10; tries++) {
       const a = Math.random() * Math.PI * 2;
-      const d = 15 + Math.random() * 8;
+      const d = d0 + Math.random() * (d1 - d0);
       const x = px + Math.cos(a) * d;
       const z = pz + Math.sin(a) * d;
-      if (Math.abs(x) > BOUND || Math.abs(z) > BOUND) continue;
+      if (!world.inBounds(x, z)) continue;
       if (world.lightAt(x, z)) continue;
-      Object.assign(s, { active: true, state: 'rise', x, z, vx: 0, vz: 0, fade: 0, burn: 0, cool: 0 });
+      Object.assign(s, { active: true, state: 'rise', x, z, vx: 0, vz: 0, fade: 0, burn: 0, cool: 0, tag: null, tough: 1, path: null });
       s.g.visible = true;
       return;
     }
   }
 
-  // ctx: { player, world, night, nights, spawning, car, driving }
+  // ctx: { player, world, night, nights, spawning, car, driving, cap }. cap은 저절로 깨어나는 그늘이 수의 상한(빠지면 밤마다 늘어난다).
   update(dt, t, ctx) {
-    const { player, world, night, nights, spawning, car, driving } = ctx;
+    const { player, world, night, nights, spawning, car, driving, cap } = ctx;
     const px = player.pos.x;
     const pz = player.pos.z;
     // returned: 이번 프레임에 흩어져 주인에게 돌아가는 그림자 자리(빛줄기 연출·깨어남 단서용)
     const events = { hits: 0, banished: 0, rammed: 0, nearest: Infinity, burning: 0, pressing: 0, returned: [] };
     const ramming = driving && Math.abs(car.speed) >= RAM_SPEED;
 
-    const target = spawning ? Math.min(5 + nights * 2, 14) : 0;
+    const target = spawning ? cap ?? Math.min(5 + nights * 2, 14) : 0;
     this.spawnTimer -= dt;
     if (spawning && this.spawnTimer <= 0 && this.activeCount < target) {
       this._spawn(px, pz, world);
@@ -119,7 +138,7 @@ export class Shades {
 
     for (const s of this.list) {
       if (!s.active) continue;
-      if (!spawning && night < 0.6 && s.state !== 'die') s.state = 'die';
+      if (!spawning && night < 0.6 && s.state !== 'die' && !s.tag) s.state = 'die';
 
       const dx = px - s.x;
       const dz = pz - s.z;
@@ -129,13 +148,25 @@ export class Shades {
       if (s.state === 'rise') {
         s.fade = Math.min(1, s.fade + dt / 1.3);
         if (s.fade >= 1) s.state = 'stalk';
-      } else if (s.state === 'stalk' && d > FAR) {
+      } else if (s.state === 'stalk' && d > FAR && !s.tag) {
         s.state = 'die';
       } else if (s.state === 'stalk') {
         const lunge = d < 5 ? 4.6 : base;
         const wob = Math.sin(t * 0.8 + s.seed) * 0.45;
         let ux = dx / d;
         let uz = dz / d;
+        // 정해진 길이 있으면 그 점들을 먼저 지난다(골대를 돌아 들어오는 식).
+        const way = s.path?.[0];
+        if (way) {
+          const wx = way.x - s.x;
+          const wz = way.z - s.z;
+          const wd = Math.hypot(wx, wz);
+          if (wd < 1.3) s.path.shift();
+          else {
+            ux = wx / wd;
+            uz = wz / wd;
+          }
+        }
         const rx = ux - uz * wob;
         const rz = uz + ux * wob;
         const rl = Math.hypot(rx, rz);
@@ -187,11 +218,11 @@ export class Shades {
         const rammed = ramming && car.contains(s.x, s.z, 0.45);
         if (rammed) events.rammed++;
         const touching = driving ? car.distanceTo(s.x, s.z) < 0.45 : d < 0.85;
-        if (s.burn >= 1 || rammed) {
+        if (s.burn >= s.tough || rammed) {
           s.state = 'die';
           events.banished++;
           this.banished++;
-          events.returned.push({ x: s.x, z: s.z });
+          events.returned.push({ x: s.x, z: s.z, tag: s.tag });
         } else if (touching && s.cool <= 0 && player.alive) {
           if (player.hurt(15, s.x, s.z)) events.hits++;
           s.cool = 1.3;
@@ -203,6 +234,7 @@ export class Shades {
         if (s.fade <= 0) {
           s.active = false;
           s.g.visible = false;
+          s.tag = null;
           continue;
         }
       }
@@ -211,10 +243,11 @@ export class Shades {
       const hover = Math.sin(t * 2.1 + s.seed) * 0.07;
       s.g.position.set(s.x, world.heightAt(s.x, s.z) + 0.05 + hover, s.z);
       s.g.rotation.y = Math.atan2(dx, dz);
-      const jitter = s.burn > 0.05 ? 1 - s.burn * 0.5 * (0.5 + 0.5 * Math.sin(t * 40 + s.seed)) : 1;
+      const burnt = s.burn / s.tough;
+      const jitter = burnt > 0.05 ? 1 - burnt * 0.5 * (0.5 + 0.5 * Math.sin(t * 40 + s.seed)) : 1;
       s.mat.opacity = 0.88 * s.fade * jitter;
       s.eyeMat.opacity = s.fade;
-      s.glowMat.opacity = s.fade * (0.55 + 0.25 * Math.sin(t * 3 + s.seed)) * (1 - Math.min(1, s.burn));
+      s.glowMat.opacity = s.fade * (0.55 + 0.25 * Math.sin(t * 3 + s.seed)) * (1 - Math.min(1, burnt));
       const squash = s.state === 'die' ? 0.4 + 0.6 * s.fade : 1;
       s.g.scale.set(1 + (1 - squash) * 0.6, squash, 1 + (1 - squash) * 0.6);
       for (let i = 0; i < 2; i++) s.arms[i].rotation.x = Math.sin(t * 3 + s.seed + i * 1.6) * 0.25 - (d < 4 ? 0.9 : 0.2);

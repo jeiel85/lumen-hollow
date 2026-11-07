@@ -15,7 +15,10 @@ export class Hud {
       loadWrap: $('load-wrap'), load: $('load-fill'), loadLabel: $('load-label'),
       storyPointer: $('story-pointer'), storyPointerDist: $('story-pointer-dist'),
       drop: $('drop-btn'), place: $('place'), placeSub: $('place-sub'), placeNote: $('place-note-text'),
+      objective: $('objective'), tags: $('npc-tags'),
     };
+    this._chapter = false;
+    this._tagEls = [];
     this._walkKeys = this.el.keys?.textContent ?? '';
     this._driving = false;
     this._online = false;
@@ -29,6 +32,10 @@ export class Hud {
 
   _applyKeys() {
     if (!this.el.keys) return;
+    if (this._chapter) {
+      this.el.keys.textContent = 'WASD 이동 · 마우스 조준 · F/클릭 손전등 · E 길게 상호작용 · Q 붕대 · 휠 줌 · Esc 일시정지';
+      return;
+    }
     this.el.keys.textContent = this._driving
       ? 'W 가속 · S 브레이크·후진 · A/D 핸들 · F 작업등 · E 길게 내리기 · Tab 배전반 · Esc 일시정지'
       : this._walkKeys + (this._online ? ' · G 보급품 남기기' : '');
@@ -61,6 +68,38 @@ export class Hud {
     this.el.hud.classList.toggle('hidden', !on);
   }
 
+  // 2~4장: 구역·배전반·퓨즈·연료 대신 지금의 목표를 보인다. info가 null이면 1장 화면으로 돌아간다.
+  setChapter(info) {
+    this._chapter = Boolean(info);
+    document.body.classList.toggle('chapter-mode', this._chapter);
+    this.el.objective?.classList.toggle('hidden', !this._chapter);
+    if (!this._chapter) this.tags([]);
+    this._applyKeys();
+  }
+
+  setObjective(text) {
+    if (this.el.objective) this._set('objective', this.el.objective, text ? `목표 · ${text}` : '');
+  }
+
+  // 가까운 인물 위의 이름표. list: [{ text, x, y }] 화면 픽셀 좌표
+  tags(list) {
+    const box = this.el.tags;
+    if (!box) return;
+    while (this._tagEls.length < list.length) {
+      const el = document.createElement('span');
+      el.className = 'npc-tag';
+      box.append(el);
+      this._tagEls.push(el);
+    }
+    this._tagEls.forEach((el, i) => {
+      const t = list[i];
+      el.classList.toggle('hidden', !t);
+      if (!t) return;
+      if (el.textContent !== t.text) el.textContent = t.text;
+      el.style.transform = `translate(${Math.round(t.x)}px, ${Math.round(t.y)}px) translate(-50%, -100%)`;
+    });
+  }
+
   showTouch(on) {
     this.el.touch.classList.toggle('hidden', !on);
   }
@@ -88,10 +127,10 @@ export class Hud {
     el.textContent = text;
   }
 
-  update({ day, hour, zonesOn, zonesTotal, hp, battery, fuses, bandages, flashOn, cans, driving, fuel, powerUsed, powerCap, tripped, load }) {
+  update({ day, dayLabel, hour, zonesOn, zonesTotal, hp, battery, fuses, bandages, flashOn, cans, driving, fuel, powerUsed, powerCap, tripped, load }) {
     const hh = Math.floor(hour);
     const mm = Math.floor((hour - hh) * 6) * 10;
-    this._set('day', this.el.day, `${day}일차`);
+    this._set('day', this.el.day, dayLabel ?? `${day}일차`);
     this._set('time', this.el.time, `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`);
     const phase = phaseName(hour);
     this._set('phase', this.el.phase, phase);
