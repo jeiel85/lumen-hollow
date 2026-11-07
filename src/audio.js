@@ -13,6 +13,7 @@ export class Sound {
     this.volume = 1; // 설정 화면의 전체 음량(0~1)
     this.ambience = 1; // 비·밤 저음 같은 환경음 배율(0~1). 그늘이 접근 속삭임은 경고음이라 여기에 묶지 않는다.
     this.engine = null; // 운전하는 동안만 있는 엔진·타이어 소리 노드
+    this.started = false; // AudioContext가 한 번이라도 돌기 시작했는지
     this.resumeFailed = false;
   }
 
@@ -127,6 +128,11 @@ export class Sound {
   // 전화가 오거나 백그라운드로 가면 AudioContext가 멈춘다. iOS Safari는 'interrupted'(그 밖은 'suspended') 상태로
   // 남아 저절로 돌아오지 않을 수 있어서, 화면으로 돌아올 때와 다음 사용자 입력 때마다 다시 켠다.
   _watchResume() {
+    const ctx = this.ctx;
+    this.started = ctx.state === 'running';
+    ctx.addEventListener('statechange', () => {
+      if (ctx.state === 'running') this.started = true;
+    });
     const kick = () => this.resume();
     for (const type of RESUME_EVENTS) addEventListener(type, kick, { capture: true, passive: true });
     document.addEventListener('visibilitychange', () => {
@@ -321,9 +327,11 @@ export class Sound {
     }
   }
 
-  // 한 번 울리는 소리를 지금 낼 수 있는지. 멈춘(끊긴) 동안 예약한 소리는 시계가 멈춰 있어 다시 켜질 때 한꺼번에 터지므로 내지 않는다.
+  // 한 번 울리는 소리를 지금 낼 수 있는지. 한 번 돌기 시작한 뒤 멈춘(끊긴) 동안 예약한 소리는 시계가 멈춰 있어
+  // 다시 켜질 때 한꺼번에 터지므로 내지 않는다. 막 만들어 아직 돌기 전(처음 시작)에는 예약해 두면 곧 나온다.
   _live() {
-    return !!this.ctx && !this.muted && this.ctx.state === 'running';
+    if (!this.ctx || this.muted) return false;
+    return this.ctx.state === 'running' || !this.started;
   }
 
   play(name) {

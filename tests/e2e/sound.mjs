@@ -76,8 +76,19 @@ check('정리할 때 엔진 소리는 이미 거의 0(-40dB 아래)', r.downGain
 // 멈춘 AudioContext 다시 켜기
 r = await B.ev(`${RUN}
   const out = {};
+  // 막 만든 AudioContext(아직 돌기 전)에는 소리를 예약해 둔다(곧 나온다).
+  const s2 = new S.constructor();
+  s2.init();
+  let m = __audio.made;
+  s2.play('pickup');
+  out.firstPlay = { state: s2.ctx.state, made: __audio.made - m };
+  await s2.ctx.close();
   await S.ctx.suspend();
   out.suspended = S.ctx.state;
+  // 한 번 돈 뒤 멈춘 동안에는 예약하지 않는다(다시 켜질 때 한꺼번에 터지지 않게).
+  m = __audio.made;
+  S.play('pickup'); S.footstep(1, 0);
+  out.madeWhileSuspended = __audio.made - m;
   dispatchEvent(new PointerEvent('pointerdown'));
   await wait(300);
   out.afterPointer = S.ctx.state;
@@ -104,6 +115,7 @@ r = await B.ev(`${RUN}
   out.final = S.ctx.state;
   return out;`);
 check('suspend → pointerdown에 다시 켜짐', r.suspended === 'suspended' && r.afterPointer === 'running', r);
+check('멈춘 동안 소리를 쌓아 두지 않고, 막 만든 AudioContext에는 첫 소리를 예약한다', r.madeWhileSuspended === 0 && r.firstPlay.made === 2, r);
 check('suspend → 화면 복귀(visibilitychange)·keydown에 다시 켜짐', r.afterVisible === 'running' && r.afterKey === 'running', r);
 check("'interrupted' 상태에서도 입력마다 resume()을 부르고, 거절돼도 오류 화면 없이 넘어감", r.interruptedCalls === 2 && !r.fatal && r.final === 'running', r);
 
