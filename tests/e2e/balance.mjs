@@ -1,5 +1,9 @@
+// 밤 난이도 측정 도구(통과/실패 시험이 아니다): 완벽 조준 봇이 불 꺼진 길(-48, 48)에 서서 손전등을 가장 가까운 그늘이에
+// 겨누고(배터리 무한) 밤마다 60초를 버틴다. 첫 피격 시각·피격 수·생존·동시에 깨어 있던 그늘이 수를 밤마다 3번씩 잰다.
+// DECISIONS.md '밤 규칙 다시 맞춤'의 수치가 이것으로 나왔다. 과부하·단서 주기를 사람 손에 맞출 때(#21·#28) 같이 본다.
+//   node tests/e2e/balance.mjs [url] [밤 번호(0부터, 쉼표로) 기본 0,3,6]
 import { launch } from './cdp.mjs';
-const [,, url] = process.argv;
+const [,, url = 'http://127.0.0.1:8000/?debug'] = process.argv;
 const B = await launch(url, 960, 540);
 for (let i = 0; i < 60; i++) { if (await B.ev('return !!(window.lumen && lumen.game.ready)')) break; await B.sleep(500); }
 const out = {};
