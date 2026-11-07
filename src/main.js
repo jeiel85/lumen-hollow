@@ -1843,8 +1843,11 @@ function step(dt, frozen = false) {
 function stepWorld(dt, frozen) {
   for (const ev of env.advance(dt)) onTimeEvent(ev);
 
-  if (frozen) player.update(dt, game.time, { x: 0, z: 0 }, null, ground, env.night, env.rainLevel);
-  else if (game.driving) drive(dt);
+  if (frozen) {
+    // 플레이어는 서 있고, 트럭은 손을 뗀 채로 흐른다(작업등 연료·꺼짐도 그대로 — #36 리뷰)
+    player.update(dt, game.time, { x: 0, z: 0 }, null, ground, env.night, env.rainLevel);
+    onCarEvent(car.update(dt, null, world, env.night));
+  } else if (game.driving) drive(dt);
   else walk(dt);
   world.setTruckLamp(car.pos.x, car.pos.z, car.lamp && car.fuel > 0);
 
@@ -1961,7 +1964,7 @@ function frame(now) {
   }
 
   let dt = 0;
-  if (game.state === 'grid' && gridLive()) {
+  if (game.state === 'grid' && gridLive() && !game.contextLost) {
     // 배전반 앞에 서 있는 채로 세상은 흐른다(움직임·행동 입력은 받지 않는다).
     dt = raw;
     game.time += dt;
@@ -2182,6 +2185,8 @@ function setContextLost(lost) {
   // 옷장 버튼은 새로 생긴 요소라, 배포 직후 옛 HTML과 섞이면 없을 수 있다.
   if ($('closet-btn')) $('closet-btn').disabled = lost || !game.ready;
   if (lost) closeSettings();
+  // 밤에 연 배전반은 시간이 흐르므로, 그리지 못하는 동안 진행되지 않게 닫고 일시정지로 둔다(#36 리뷰)
+  if (lost && game.state === 'grid') closeGrid();
   if (lost) {
     pauseGame(true);
     // 브라우저가 끝내 복구해 주지 않는 경우를 위해 새로고침 안내를 띄운다.

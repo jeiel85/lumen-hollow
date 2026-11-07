@@ -29,6 +29,15 @@ await B.sleep(300);
 await B.shot('night-grid');
 r = await B.ev(`const P = lumen.player; P.hp = 100; T.shade(P.pos.x + 0.5, P.pos.z); lumen.step(0.6, 1 / 30); return { state: lumen.game.state, hp: Math.round(P.hp) };`);
 check('밤에 배전반을 연 채 맞으면 배전반이 닫힌다', r.state === 'play' && r.hp < 100, r);
+r = await B.ev(`const C = lumen.car; C.pos.set(lumen.player.pos.x + 2, 0, lumen.player.pos.z); C.fuel = 50; C.lamp = true; lumen.step(0.2, 1 / 30);
+  lumen.openGrid(); const f0 = C.fuel; lumen.step(3, 1 / 30); const r = { state: lumen.game.state, used: +(f0 - C.fuel).toFixed(2) }; lumen.closeGrid(); C.lamp = false; return r;`);
+check('밤에 배전반을 연 동안에도 작업등이 연료를 쓴다', r.state === 'grid' && r.used > 0.5, r);
+r = await B.ev(`lumen.openGrid(); const ext = lumen.renderer.getContext().getExtension('WEBGL_lose_context'); ext.loseContext();
+  await new Promise((res) => setTimeout(res, 200)); const t0 = lumen.game.time; await new Promise((res) => setTimeout(res, 600));
+  const r = { state: lumen.game.state, lost: lumen.game.contextLost, moved: +(lumen.game.time - t0).toFixed(3) };
+  ext.restoreContext(); await new Promise((res) => setTimeout(res, 1500)); return r;`);
+check('밤에 배전반을 연 채 그래픽 컨텍스트를 잃으면 일시정지되고 진행하지 않는다', r.lost && r.state === 'pause' && r.moved === 0, r);
+await B.ev(`if (lumen.game.state === 'pause') lumen.pauseGame(false); lumen.step(0.3); return 1`);
 
 // 기본 줌의 데스크톱 화면에는 둘레 16m가 다 들어온다. 가장 가깝게 당겨(휠) 화면 밖을 만든다.
 r = await B.ev(`for (const s of lumen.shades.list) { s.active = false; s.g.visible = false; }
