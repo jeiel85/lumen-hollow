@@ -15,7 +15,7 @@ export const KIND_NAMES = { bandage: '붕대', fuel: '연료통', battery: '배�
 export const RUN_TAKE_LIMIT = 3; // 한 판에 남의 보급품을 꺼낼 수 있는 횟수
 export const BATTERY_PACK = 30; // 배터리 팩 하나에 담는 손전등 배터리(%)
 export const BATTERY_PACK_MIN = 50; // 이만큼은 있어야 배터리 팩을 만들 수 있다
-export const MAX_MINE = 3; // 서버 rules.js의 maxActivePerPlayer와 같은 값(안내 문구용)
+export const MAX_MINE = 3; // 서버 rules.js의 maxActivePerPlayer 기본값. 목록 응답의 rules가 오면 그 값을 쓴다(online.rules, #17)
 export const PLACE_RADIUS = 3; // 이 거리 안의 빈 인도 슬롯에 남긴다
 export const CACHE_REACH = 1.6; // 보급품을 꺼낼 수 있는 거리
 
@@ -50,6 +50,41 @@ export class Online {
     this.log = this._loadLog();
     // 설정은 메모리에 들고 있고 저장은 최선만 다한다. 저장소를 못 쓰는 환경에서도 이 페이지 동안은 끄기가 지켜진다.
     this.pref = load(K.pref) !== 'off';
+    // 서버 규칙(안내 문구용). 목록을 받으면 서버 값으로 바꾼다. 못 받은 판에는 이 기본값(서버 rules.js와 같게 둔다).
+    this.rules = { charges: 8, maxActivePerPlayer: MAX_MINE };
+    this.storyQueue = [];
+  }
+
+  // 목록 응답의 rules를 받는다. 이상한 값은 버리고 기본값을 둔다.
+  _takeRules(r) {
+    const ok = (v) => Number.isInteger(v) && v > 0 && v < 1000;
+    if (r && typeof r === 'object') {
+      if (ok(r.charges)) this.rules.charges = r.charges;
+      if (ok(r.maxActivePerPlayer)) this.rules.maxActivePerPlayer = r.maxActivePerPlayer;
+    }
+  }
+
+  // ---------------------------------------------------------------- 이야기 진행 집계(#20·#32)
+  // 플레이어 ID·IP 없이 날짜별 횟수만 센다(docs/online-caches.md 18절). 온라인을 켠 동안에만 모으고 보낸다.
+  // kind: 'scene'(장면을 끝까지 봤거나 skipped), 'chapter'(장에 들어감), 'clear'(장을 마침). id는 장면 id·장 번호.
+  noteStory(kind, id, skipped = false) {
+    if (!this.enabled || !/^[a-z0-9]{1,24}$/.test(String(id))) return;
+    this.storyQueue.push({ kind, id: String(id), skipped: kind === 'scene' && !!skipped });
+    if (this.storyQueue.length > 60) this.storyQueue.splice(0, this.storyQueue.length - 60); // 오래 못 보낸 것은 버린다
+    if (this.storyQueue.length >= 10) this.flushStory();
+  }
+
+  // 모아 둔 것을 보낸다(최대 20개씩). beacon: 탭이 가려질 때 — 응답을 기다리지 않는 sendBeacon(text/plain).
+  flushStory({ beacon = false } = {}) {
+    if (!this.enabled || !this.storyQueue.length) return;
+    while (this.storyQueue.length) {
+      const events = this.storyQueue.splice(0, 20);
+      if (beacon && navigator.sendBeacon) {
+        if (!navigator.sendBeacon(`${this.base}/v1/story`, new Blob([JSON.stringify({ events })], { type: 'text/plain' }))) break;
+      } else {
+        this._call('POST', '/v1/story', { body: { events }, player: false }).catch(() => {});
+      }
+    }
   }
 
   // 서버 주소가 있는가 (없으면 기능 전체를 숨긴다)
@@ -162,6 +197,7 @@ export class Online {
     const r = await this._call('GET', `/v1/caches?layout=${SLOT_LAYOUT}`, { timeout: LIST_TIMEOUT, player: false });
     if (!r.ok) return r;
     const enabled = r.data?.enabled !== false;
+    this._takeRules(r.data?.rules);
     const raw = Array.isArray(r.data?.caches) ? r.data.caches : [];
     // 모르는 종류나 이상한 값은 버린다(새 서버와 옛 클라이언트가 섞여도 깨지지 않게).
     const caches = raw.filter((c) => c && ID_RE.test(c.id) && Number.isInteger(c.slot) && c.slot >= 0 && c.slot < SLOT_COUNT

@@ -15,7 +15,7 @@ import { Wardrobe, OutfitDrops, Closet, itemLabel, objParticle } from './wardrob
 import { Switchboard } from './grid.js';
 import { Wisps } from './wisps.js';
 import { Caches } from './caches.js';
-import { Online, NOTES, KIND_NAMES, RUN_TAKE_LIMIT, BATTERY_PACK, BATTERY_PACK_MIN, MAX_MINE, PLACE_RADIUS, CACHE_REACH } from './online.js';
+import { Online, NOTES, KIND_NAMES, RUN_TAKE_LIMIT, BATTERY_PACK, BATTERY_PACK_MIN, PLACE_RADIUS, CACHE_REACH } from './online.js';
 import { Story, DOCS, sceneById, chapterOf } from './story.js';
 import { Dialogue } from './dialogue.js';
 import { SCENES, FINALE } from './script.js';
@@ -529,6 +529,8 @@ function endButtons({ walk = false, retry = true, next = false, journal = false 
 function endGame(won) {
   game.won = won;
   game.state = 'end';
+  if (won) online.noteStory('clear', '1');
+  online.flushStory();
   const prevBest = loadBest(world.totalZones);
   saveBest();
   // 끝난 판은 이어 갈 수 없다. 다른 탭이 이 판을 이어 가는 중이면 그 탭의 저장은 지우지 않는다(#38 리뷰).
@@ -589,6 +591,7 @@ function backToTitle() {
   wisps.clear();
   storyQueue.length = 0;
   dialogue.reset();
+  online.flushStory();
   game.state = 'title';
   game.run++; // 아직 오지 않은 보급품 응답은 버린다
   game.onlineLive = false;
@@ -673,6 +676,7 @@ function playScene(id, after) {
   dialogue.play(sc, {
     onCam: storyCamera,
     onEnd: () => {
+      online.noteStory('scene', id, dialogue.skipped);
       const opened = story.markSeen(id);
       leaveStory();
       for (const c of opened) hud.toast(`새 기록 — ${c.where}`, 'story');
@@ -1092,6 +1096,8 @@ function startChapter() {
   beginRun({ chapter: true });
   const plan = chapters.begin();
   game.chapter = plan.ch;
+  online.noteStory('chapter', String(plan.ch));
+  online.flushStory();
   ground = chapters.stage;
   // 첫 불은 1장 끝에 다시 켜졌다.
   story.setLighthouse(true);
@@ -1235,6 +1241,8 @@ function chapterFail() {
 // 4장 마지막 방송이 끝났을 때: 이야기의 끝 화면
 function finishStory() {
   game.state = 'end';
+  online.noteStory('clear', '4');
+  online.flushStory();
   hud.prompt(null);
   hud.tags([]);
   sound.play('win');
@@ -1287,7 +1295,10 @@ chapters.attach({
     sound: (name) => sound.play(name),
     card: (text) => showCard(text),
     setHour: (h) => env.setHour(h),
-    next: () => startChapter(),
+    next: () => {
+      online.noteStory('clear', String(game.chapter));
+      startChapter();
+    },
     finish: () => finishStory(),
     openDoc: (clue) => openDoc(clue),
     compare: (a, b, onFlip) => openCompare(a, b, onFlip),
@@ -1303,7 +1314,6 @@ chapters.attach({
 // 설계: docs/online-caches.md. 서버를 못 쓰면 판은 보급품 없이 그대로 진행된다.
 
 const OBJ = { bandage: '붕대를', fuel: '연료통을', battery: '배터리 팩을' };
-const CHARGES = 8; // 서버 rules.js의 charges(안내 문구용)
 
 // 온라인 처리는 부가 기능이라, 여기서 난 예외가 전역 오류 화면(unhandledrejection)으로 번져 판을 끝내면 안 된다.
 // 기록을 남기고 플레이어에게 알린 뒤 게임은 계속한다.
@@ -1352,7 +1362,7 @@ function onlineError(r, c) {
     case 'already_thanked': return '이미 고마워요를 보냈다.';
     case 'not_used': return '꺼내 쓴 보급품에만 고마워요를 보낼 수 있다.';
     case 'slot_taken': return '누군가 방금 그 자리에 보급품을 두었다.';
-    case 'player_limit': return `한 사람이 남겨 둘 수 있는 보급품은 ${MAX_MINE}개까지다.`;
+    case 'player_limit': return `한 사람이 남겨 둘 수 있는 보급품은 ${online.rules.maxActivePerPlayer}개까지다.`;
     case 'ip_daily': return '오늘은 더 할 수 없다. 내일 다시 해 보자.';
     case 'town_full': return '마을에 보급품이 가득 찼다.';
     case 'rate': return '너무 빠르다. 잠시 뒤에 다시 해 보자.';
@@ -1574,7 +1584,7 @@ function refreshPlace() {
   if (p.busy) for (const k of Object.keys(can)) can[k] = false;
   hud.showPlace({
     counts: { bandage: `${player.bandages}개`, fuel: `${player.cans}개`, battery: `손전등 ${BATTERY_PACK}%` },
-    can, note: NOTES[p.note] || '없음', sub: `— ${CHARGES}명이 하나씩 꺼내 쓴다`, busy: p.busy,
+    can, note: NOTES[p.note] || '없음', sub: `— ${online.rules.charges}명이 하나씩 꺼내 쓴다`, busy: p.busy,
   });
 }
 
@@ -2315,8 +2325,12 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) return;
   pauseGame(true);
   saveRun();
+  online.flushStory({ beacon: true }); // 이야기 진행 집계는 기다리지 않는 beacon으로
 });
-addEventListener('pagehide', saveRun);
+addEventListener('pagehide', () => {
+  saveRun();
+  online.flushStory({ beacon: true });
+});
 
 // ?debug: 콘솔에서 상태를 들여다보고 시뮬레이션을 고정 간격으로 돌려 보는 개발용 핸들
 if (params.has('debug')) {

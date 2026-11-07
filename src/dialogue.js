@@ -102,6 +102,7 @@ export class Dialogue {
 
   play(scene, { onCam, onEnd }) {
     this.scene = scene;
+    this.skipped = false;
     this.cbs = { onCam, onEnd };
     this.i = -1;
     this.phase = 'idle';
@@ -175,6 +176,7 @@ export class Dialogue {
   // 남은 줄을 건너뛴다. 대사는 수첩의 무전 기록에서 다시 볼 수 있다.
   skip() {
     if (!this.scene || this.phase === 'end') return;
+    this.skipped = true; // 이야기 진행 집계용(끝까지 봤는지·건너뛰었는지)
     // 암전 중에 건너뛰면 그 줄의 카메라 지시(등대 점등 등)를 먼저 마저 한다.
     if (this.phase === 'out') this.cbs.onCam(this.scene.lines[this.i].cam);
     this._finish();
