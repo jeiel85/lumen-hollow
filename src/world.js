@@ -115,7 +115,7 @@ function hash(n) {
   return s - Math.floor(s);
 }
 
-function makePoolTexture() {
+export function makePoolTexture() {
   const size = 128;
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
@@ -130,6 +130,42 @@ function makePoolTexture() {
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
+}
+
+// 원(반지름 r) vs 정적 충돌체 목록(t: 0 축 정렬 상자, t: 1 원). p를 직접 밀어낸다. 마을과 2~4장 무대가 함께 쓴다.
+export function pushOut(colliders, p, r) {
+  for (const c of colliders) {
+    if (c.t === 0) {
+      if (p.x < c.x0 - r || p.x > c.x1 + r || p.z < c.z0 - r || p.z > c.z1 + r) continue;
+      const nx = Math.min(Math.max(p.x, c.x0), c.x1);
+      const nz = Math.min(Math.max(p.z, c.z0), c.z1);
+      const dx = p.x - nx;
+      const dz = p.z - nz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= r * r) continue;
+      if (d2 > 1e-8) {
+        const d = Math.sqrt(d2);
+        p.x = nx + (dx / d) * r;
+        p.z = nz + (dz / d) * r;
+      } else {
+        const l = p.x - c.x0, rr = c.x1 - p.x, u = p.z - c.z0, dd = c.z1 - p.z;
+        const m = Math.min(l, rr, u, dd);
+        if (m === l) p.x = c.x0 - r;
+        else if (m === rr) p.x = c.x1 + r;
+        else if (m === u) p.z = c.z0 - r;
+        else p.z = c.z1 + r;
+      }
+    } else {
+      const dx = p.x - c.x;
+      const dz = p.z - c.z;
+      const rr = c.r + r;
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= rr * rr || d2 < 1e-8) continue;
+      const d = Math.sqrt(d2);
+      p.x = c.x + (dx / d) * rr;
+      p.z = c.z + (dz / d) * rr;
+    }
+  }
 }
 
 export class World {
@@ -1440,40 +1476,14 @@ export class World {
 
   // 원(플레이어) vs 정적 충돌체. p를 직접 밀어낸다.
   collide(p, r) {
-    for (const c of this.colliders) {
-      if (c.t === 0) {
-        if (p.x < c.x0 - r || p.x > c.x1 + r || p.z < c.z0 - r || p.z > c.z1 + r) continue;
-        const nx = Math.min(Math.max(p.x, c.x0), c.x1);
-        const nz = Math.min(Math.max(p.z, c.z0), c.z1);
-        const dx = p.x - nx;
-        const dz = p.z - nz;
-        const d2 = dx * dx + dz * dz;
-        if (d2 >= r * r) continue;
-        if (d2 > 1e-8) {
-          const d = Math.sqrt(d2);
-          p.x = nx + (dx / d) * r;
-          p.z = nz + (dz / d) * r;
-        } else {
-          const l = p.x - c.x0, rr = c.x1 - p.x, u = p.z - c.z0, dd = c.z1 - p.z;
-          const m = Math.min(l, rr, u, dd);
-          if (m === l) p.x = c.x0 - r;
-          else if (m === rr) p.x = c.x1 + r;
-          else if (m === u) p.z = c.z0 - r;
-          else p.z = c.z1 + r;
-        }
-      } else {
-        const dx = p.x - c.x;
-        const dz = p.z - c.z;
-        const rr = c.r + r;
-        const d2 = dx * dx + dz * dz;
-        if (d2 >= rr * rr || d2 < 1e-8) continue;
-        const d = Math.sqrt(d2);
-        p.x = c.x + (dx / d) * rr;
-        p.z = c.z + (dz / d) * rr;
-      }
-    }
+    pushOut(this.colliders, p, r);
     p.x = Math.min(Math.max(p.x, -BOUND), BOUND);
     p.z = Math.min(Math.max(p.z, -BOUND), BOUND);
+  }
+
+  // 그늘이가 깨어날 수 있는 곳(마을 이동 한계 안)
+  inBounds(x, z) {
+    return Math.abs(x) <= BOUND && Math.abs(z) <= BOUND;
   }
 
   // 켜진 가로등(또는 트럭 작업등) 불빛 안인지. 안이면 빛의 중심·거리·안전 반경을 돌려준다.

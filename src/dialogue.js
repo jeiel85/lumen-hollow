@@ -1,6 +1,6 @@
-import { SPEAKERS } from './script.js';
+import { SPEAKERS, CHAPTERS } from './script.js';
 
-// 이야기 화면: 무전 장면(대화 컷신), 마을 기록 읽기, 수첩.
+// 이야기 화면: 무전·대면 장면(대화 컷신), 기록 읽기(3장의 두 기록 맞춰 보기 포함), 수첩.
 // 장면이 도는 동안 게임은 멈추고(main의 'story' 상태), 카메라 이동은 onCam으로 main에 맡긴다.
 // 배포 직후 캐시된 옛 index.html과 섞여 요소가 없으면 ok가 false가 되고, main은 이야기를 건너뛴다.
 
@@ -16,7 +16,7 @@ export class Dialogue {
       root: $('story'), box: $('story-box'), who: $('story-who'), name: $('story-name'), text: $('story-text'),
       live: $('story-live'), next: $('story-next'), skip: $('story-skip'), fade: $('story-fade'),
       doc: $('doc'), paper: $('doc-paper'), where: $('doc-where'), title: $('doc-title'), body: $('doc-body'),
-      hand: $('doc-hand'), note: $('doc-note'), close: $('doc-close'),
+      hand: $('doc-hand'), note: $('doc-note'), close: $('doc-close'), flip: $('doc-flip'),
       jProgress: $('journal-progress'), jClues: $('journal-clues'), jScenes: $('journal-scenes'), jReset: $('journal-reset'),
       jResetHint: $('journal-reset-hint'),
     };
@@ -24,6 +24,7 @@ export class Dialogue {
     this.reduce = matchMedia('(prefers-reduced-motion: reduce)');
     this.scene = null; // 재생 중인 장면
     this.docOpen = null; // 열린 읽기 화면의 닫기 콜백
+    this.docFlip = null; // 맞춰 보기 화면에서 아직 뒤집지 않은 면을 뒤집는 함수
     if (!this.ok) return;
 
     // 게임 입력(src/input.js)은 window의 버블 단계에서 키를 받는다. 장면·읽기 화면이 쓰는 키는
@@ -36,6 +37,7 @@ export class Dialogue {
     });
     this.el.skip.addEventListener('click', () => this.skip());
     this.el.close.addEventListener('click', () => this.closeDoc());
+    this.el.flip.addEventListener('click', () => this.docFlip?.());
   }
 
   get busy() {
@@ -47,7 +49,10 @@ export class Dialogue {
       if (ADVANCE_KEYS.has(e.code) || e.code === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        if (!e.repeat) this.closeDoc();
+        // 맞춰 보기 화면에서는 넘기는 키가 먼저 사진을 뒤집는다. Esc는 언제나 닫는다.
+        if (e.repeat) return;
+        if (this.docFlip && e.code !== 'Escape') this.docFlip();
+        else this.closeDoc();
       }
       return;
     }
@@ -105,13 +110,16 @@ export class Dialogue {
     const { who, text } = line;
     const el = this.el;
     el.box.classList.remove('hidden');
+    // 무전으로 들리는 줄인지: 줄이 정하지 않으면 1장(무전 장면)은 할머니·낯선 목소리가 무전, 대면 장면은 모두 육성.
+    const radio = line.radio ?? (!this.scene.inPerson && (who === 'gran' || who === 'other'));
     el.box.dataset.who = who;
+    el.box.dataset.radio = radio ? '1' : '';
     el.name.textContent = SPEAKERS[who] ?? '';
     el.who.classList.toggle('hidden', who === 'nar');
-    el.live.textContent = `${SPEAKERS[who] ? `${SPEAKERS[who]}: ` : ''}${text}`;
-    // 무전 속 목소리가 새로 들릴 때마다 스퀠치 소리
-    if ((who === 'gran' || who === 'other') && this.prevWho !== who) this.sound.play('radio');
-    this.prevWho = who;
+    el.live.textContent = `${SPEAKERS[who] ? `${SPEAKERS[who]}${radio ? '(무전)' : ''}: ` : ''}${text}`;
+    // 무전 속 목소리가 새로 들릴 때마다 스퀠치 소리(내가 송신하는 줄은 빼고)
+    if (radio && who !== 'me' && this.prevWho !== who) this.sound.play('radio');
+    this.prevWho = radio ? who : null;
     this.shown = this.reduce.matches ? text.length : 0;
     el.text.textContent = text.slice(0, this.shown);
     this.phase = this.shown >= text.length ? 'wait' : 'typing';
@@ -208,12 +216,13 @@ export class Dialogue {
 
   // ---------------------------------------------------------------- 기록 읽기
 
-  // 마을의 기록(clue) 또는 무전 기록(scene)을 종이 모양으로 보여 준다. first면 닫기 버튼이 "수첩에 적기".
-  showDoc(item, { first = false, onClose }) {
+  // 남은 기록(clue) 또는 장면 기록(scene)을 종이 모양으로 보여 준다. first면 닫기 버튼이 "수첩에 적기".
+  // flipped면 뒤집어야 보이는 면(3장 짐표)까지 보여 준다.
+  showDoc(item, { first = false, flipped = false, onClose }) {
     const el = this.el;
     const isScene = Array.isArray(item.lines);
     el.paper.className = `paper kind-${isScene ? 'radio' : item.kind}`;
-    el.where.textContent = isScene ? '무전 기록' : item.where;
+    el.where.textContent = isScene ? (item.inPerson ? '그날의 기록' : '무전 기록') : item.where;
     el.title.textContent = item.title;
     el.body.replaceChildren();
     if (isScene) {
@@ -229,41 +238,102 @@ export class Dialogue {
         el.body.append(p);
       }
     } else {
-      for (const text of item.body) {
-        const p = document.createElement('p');
-        p.textContent = text;
-        el.body.append(p);
-      }
+      for (const text of item.body) this._para(text);
+      if (flipped && item.flip) for (const text of item.flip.body) this._para(text, 'flipped');
     }
-    el.hand.textContent = item.hand ?? '';
+    el.hand.textContent = (flipped && item.flip?.hand) || item.hand || '';
     el.note.textContent = item.note ?? '';
     el.close.textContent = first ? '수첩에 적어 두기' : '닫기';
+    this._openDoc(onClose);
+  }
+
+  _para(text, cls = '') {
+    const p = document.createElement('p');
+    // '— 할머니가'처럼 서명으로 끝맺는 줄은 오른쪽에 붙인다.
+    if (cls || text.startsWith('— ')) p.className = cls || 'sign';
+    p.textContent = text;
+    this.el.body.append(p);
+    return p;
+  }
+
+  _openDoc(onClose) {
+    const el = this.el;
+    el.flip.classList.toggle('hidden', !this.docFlip);
+    // 뒤집을 면이 남아 있으면 '사진 뒤집기'가 주 단추, 닫기는 보조 단추다.
+    el.close.classList.toggle('ghost', !!this.docFlip);
     el.doc.classList.remove('hidden');
     el.doc.scrollTop = 0;
     this.docOpen = onClose;
     this.sound.play('page');
-    el.close.focus({ preventScroll: true });
+    (this.docFlip ? el.flip : el.close).focus({ preventScroll: true });
+  }
+
+  // 3장: 이송 명부와 소지품 봉투의 17번을 나란히 놓고, 봉투 속 사진을 뒤집어 본다.
+  // 뒤집으면 onFlip(), 닫으면 onClose(flipped). 숫자를 맞히는 식의 실패는 없다.
+  showCompare(a, b, { onFlip, onClose }) {
+    const el = this.el;
+    el.paper.className = 'paper kind-clipboard compare';
+    el.where.textContent = '둑길 창고 — 명부와 봉투를 나란히';
+    el.title.textContent = '17번';
+    el.body.replaceChildren();
+    this._para(a.title, 'sec');
+    this._para(a.body[a.match], 'match');
+    this._para(b.title, 'sec');
+    b.body.forEach((t, i) => this._para(t, i === b.match ? 'match' : ''));
+    el.hand.textContent = '';
+    el.note.textContent = '';
+    el.close.textContent = '닫기';
+    el.flip.textContent = b.flip.label;
+    let flipped = false;
+    this.docFlip = () => {
+      this.docFlip = null;
+      flipped = true;
+      for (const t of b.flip.body) this._para(t, 'flipped');
+      el.hand.textContent = b.flip.hand ?? '';
+      el.flip.classList.add('hidden');
+      el.close.classList.remove('ghost');
+      el.close.textContent = '수첩에 적어 두기';
+      el.close.focus({ preventScroll: true });
+      this.sound.play('page');
+      onFlip?.();
+    };
+    this._openDoc(() => onClose?.(flipped));
   }
 
   closeDoc() {
     if (!this.docOpen) return;
     const cb = this.docOpen;
     this.docOpen = null;
+    this.docFlip = null;
     this.el.doc.classList.add('hidden');
     cb();
   }
 
   // ---------------------------------------------------------------- 수첩
 
-  // story: 진행 상태(src/story.js), scenes·clues: 대본, canReset: 처음 화면에서 열었는지.
-  // onRead(item)은 항목을 눌렀을 때, onReset()은 "이야기 처음부터"를 두 번 눌렀을 때.
-  renderJournal({ story, scenes, docs, canReset, onRead, onReset }) {
+  // story: 진행 상태(src/story.js), scenes·docs: 대본, upTo: 다다른 장(그 뒤 장의 항목은 아예 보이지 않는다),
+  // canReset: 처음 화면에서 열었는지. onRead(item)은 항목을 눌렀을 때, onReset()은 "이야기 처음부터"를 두 번 눌렀을 때.
+  renderJournal({ story, scenes: allScenes, docs: allDocs, upTo = 1, canReset, onRead, onReset }) {
     const el = this.el;
+    const chOf = (item) => item.ch ?? 1;
+    const scenes = allScenes.filter((s) => chOf(s) <= upTo);
+    const docs = allDocs.filter((c) => chOf(c) <= upTo);
     const seen = scenes.filter((s) => story.isSeen(s.id));
-    el.jProgress.textContent = `주운 기록 ${story.foundDocs} / ${docs.length} · 들은 무전 ${seen.length} / ${scenes.length}`;
+    el.jProgress.textContent = `주운 기록 ${story.foundDocs(upTo)} / ${docs.length} · 들은 이야기 ${seen.length} / ${scenes.length}`;
+    // 2장에 다다르면 장마다 머리글을 단다.
+    const header = (list, ch, prev) => {
+      if (upTo < 2 || ch === prev) return;
+      const li = document.createElement('li');
+      li.className = 'jhead';
+      li.textContent = `${ch}장 · ${CHAPTERS[ch - 1]?.title ?? ''}`;
+      list.append(li);
+    };
 
     el.jClues.replaceChildren();
+    let prevCh = 0;
     for (const c of docs) {
+      header(el.jClues, chOf(c), prevCh);
+      prevCh = chOf(c);
       const li = document.createElement('li');
       if (story.isFound(c.id)) {
         const btn = document.createElement('button');
@@ -277,14 +347,17 @@ export class Dialogue {
       } else {
         li.className = story.isUnlocked(c.id) ? 'jrow open' : 'jrow locked';
         li.innerHTML = '<span class="jt">???</span><small></small>';
-        li.querySelector('small').textContent = story.isUnlocked(c.id) ? `${c.where} — 푸른 빛기둥을 따라가자` : '아직 모른다';
+        li.querySelector('small').textContent = story.isUnlocked(c.id) ? `${c.where} — 푸른 표시를 따라가자` : '아직 모른다';
       }
       el.jClues.append(li);
     }
 
     el.jScenes.replaceChildren();
+    prevCh = 0;
     for (const s of scenes) {
       if (!story.isSeen(s.id)) continue;
+      header(el.jScenes, chOf(s), prevCh);
+      prevCh = chOf(s);
       const li = document.createElement('li');
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -298,7 +371,7 @@ export class Dialogue {
     if (!seen.length) {
       const li = document.createElement('li');
       li.className = 'jrow locked';
-      li.textContent = '아직 들은 무전이 없다.';
+      li.textContent = '아직 들은 이야기가 없다.';
       el.jScenes.append(li);
     }
 
