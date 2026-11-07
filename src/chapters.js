@@ -94,9 +94,21 @@ class Stage {
     return this.areas.some((a) => this._in(a, x, z, m));
   }
 
+  // 몸(반지름 r)이 영역들의 합집합 안에 있는가. 영역마다 따로 r만큼 줄여 보면, 두 영역이 2r보다 덜 겹치는
+  // 이음매(빈터와 선착장 판자 등)에 넘을 수 없는 틈이 생긴다. 가운데와 둘레 여덟 점이 모두 어느 영역 안이면
+  // 통과시킨다. 돌아간 영역 모서리에서 몸이 최대 r·(1 − cos 22.5°) ≈ 0.03만큼 삐져나갈 수 있다.
+  _covered(x, z, r) {
+    if (!this.walkable(x, z)) return false;
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4;
+      if (!this.walkable(x + Math.cos(a) * r, z + Math.sin(a) * r)) return false;
+    }
+    return true;
+  }
+
   collide(p, r) {
     pushOut(this.colliders, p, r);
-    if (this.walkable(p.x, p.z, r)) return;
+    if (this.walkable(p.x, p.z, r) || this._covered(p.x, p.z, r)) return;
     let best = null;
     let bd = Infinity;
     for (const a of this.areas) {
