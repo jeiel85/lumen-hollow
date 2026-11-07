@@ -300,11 +300,13 @@ export function createApp({ now = () => Date.now(), rules = RULES, verify = (url
     const c = check.results[0];
     if (!c) throw new HttpError(404, 'not_found');
     if (!c.ok) {
+      // 이 사람이 최근에 쓴 적이 있으면 상자가 그 뒤 소진·만료됐어도 used_today로 답한다. 응답이 끊겨 결과를 모르는
+      // 클라이언트가 다시 물었을 때, 마지막 하나를 가져간 경우에도 '이미 받았다'를 알 수 있게(#38 리뷰).
+      if (c.recent) throw new HttpError(409, 'used_today');
       if (c.today >= rules.maxUsesPerIpPerDay) throw new HttpError(429, 'ip_daily');
       const alive = c.removed_at === null && c.expires_at > t && c.charges > 0;
       if (!alive) throw new HttpError(410, 'gone');
       if (c.owner === user) throw new HttpError(403, 'own_cache');
-      if (c.recent) throw new HttpError(409, 'used_today');
       throw new HttpError(410, 'gone');
     }
     listMemo.at = -Infinity;

@@ -135,6 +135,26 @@ test('쓰기: 본인 불가, 같은 사람 24시간 1회, 8번 쓰면 소진되�
   assert.equal((await s.placeAs(9, FREE[0])).status, 201, '소진된 슬롯에 다시 둘 수 있다');
 });
 
+test('마지막 하나를 가져간 사람이 다시 물으면(응답이 끊겼던 경우) 소진된 상자라도 used_today', async () => {
+  const s = setup();
+  const id = (await s.placeAs(1, FREE[0], 'bandage')).body.cache.id;
+  for (let n = 2; n < RULES.charges + 1; n++) {
+    assert.equal((await s.call('POST', `/v1/caches/${id}/use`, { player: pid(n), ip: `192.0.2.${n}` })).status, 200);
+  }
+  const last = await s.call('POST', `/v1/caches/${id}/use`, { player: pid(90), ip: '192.0.2.90' });
+  assert.equal(last.status, 200);
+  assert.equal(last.body.charges, 0);
+  const retry = await s.call('POST', `/v1/caches/${id}/use`, { player: pid(90), ip: '192.0.2.90' });
+  assert.equal(retry.status, 409);
+  assert.equal(retry.body.error, 'used_today');
+  // 처음 오는 사람에게는 여전히 사라진 상자다
+  assert.equal((await s.call('POST', `/v1/caches/${id}/use`, { player: pid(91), ip: '192.0.2.91' })).status, 410);
+  // 한계: 재사용 대기(reuseCooldownMs)가 지나면 '최근에 썼다'를 알 수 없다(그때는 410). 상자 수명이 대기보다 길어
+  // 만료된 뒤에 다시 물으면 확인할 수 없다 — 클라이언트는 이어하기에서 곧바로 다시 묻는다.
+  s.clock.t += RULES.reuseCooldownMs + 1;
+  assert.equal((await s.call('POST', `/v1/caches/${id}/use`, { player: pid(90), ip: '192.0.2.90' })).status, 410);
+});
+
 test('같은 밀리초에 두 번 눌러도 횟수와 고마워요가 한 번만 반영된다', async () => {
   const s = setup();
   const id = (await s.placeAs(1, FREE[0])).body.cache.id;
