@@ -94,7 +94,24 @@ await B.sleep(400);
 await B.shot('closet-truck-avoid');
 await B.ev(`lumen.closeCloset(); return true`);
 
-let errs = B.logs.filter((l) => /error|exception/i.test(l) && !/caches|online|fetch|CORS|ERR_/i.test(l));
+// 저장 공간이 거의 차서 큰 쓰기(옷장)만 실패하는 경우: 가져오기가 성공이라고 하지 않는다(#41 리뷰)
+r = await B.ev(`const orig = Storage.prototype.setItem;
+  const fresh = [...document.querySelectorAll('[data-item]')].map((e) => e.dataset.item).find((id) => !lumen.wardrobe.owned.has(id))
+    ?? ['coat.teal', 'coat.orange', 'coat.sky', 'coat.lilac'].find((id) => !lumen.wardrobe.owned.has(id));
+  Storage.prototype.setItem = function (k, v) { if (k === 'lumen.wardrobe') throw new DOMException('full', 'QuotaExceededError'); return orig.call(this, k, v); };
+  ${$('settings-btn')}.click();
+  const file = { format: 'lumen-hollow-records', version: 2, exportedAt: new Date().toISOString(), best: { nights: 1, zones: 2, winDay: 0 },
+    wardrobe: { v: 1, owned: [fresh], wear: {} } };
+  const dt = new DataTransfer(); dt.items.add(new File([JSON.stringify(file)], 'records.json', { type: 'application/json' }));
+  const inp = ${$('records-file')}; inp.files = dt.files; inp.dispatchEvent(new Event('change')); await new Promise((res) => setTimeout(res, 300));
+  const msg = ${$('records-msg')};
+  const out = { fresh, text: msg.textContent, cls: msg.className, stored: (JSON.parse(localStorage.getItem('lumen.wardrobe') ?? '{}').owned ?? []).includes(fresh) };
+  Storage.prototype.setItem = orig;
+  ${$('settings-close')}?.click();
+  return out;`);
+check('큰 진행 쓰기가 저장 공간 부족으로 실패하면 가져오기가 성공이라 하지 않고 무엇이 안 남았는지 알린다', !r.stored && r.cls.includes('warn') && r.text.includes('옷가지'), r);
+
+let errs = B.logs.filter((l) => /error|exception/i.test(l) && !/caches|online|fetch|CORS|ERR_|QuotaExceeded|storage/i.test(l));
 check('콘솔 오류 없음', errs.length === 0, errs);
 
 // ---------------------------------------------------------------- 저장소가 막힌 브라우저(사생활 보호 모드 흉내)
@@ -113,7 +130,7 @@ r = await B.ev(`const L = lumen; L.startGame(); L.step(0.3); ${skip};
   const d = L.drops.list[0]; L.player.pos.set(d.x, L.world.heightAt(d.x, d.z), d.z); L.step(0.2);
   return { toasts: [...document.querySelectorAll('#toasts .toast')].map((t) => t.textContent), owned: L.wardrobe.has(d.item.id), ok: L.wardrobe.storeOk }`);
 check('옷을 주우면 이번 세션에만 남는다고 알린다', r.owned && !r.ok && r.toasts.some((t) => t.includes('이번 세션에만')), r);
-errs = B.logs.filter((l) => /error|exception/i.test(l) && !/caches|online|fetch|CORS|ERR_|blocked|SecurityError/i.test(l));
+errs = B.logs.filter((l) => /error|exception/i.test(l) && !/caches|online|fetch|CORS|ERR_|blocked|SecurityError|QuotaExceeded/i.test(l)); // 저장 공간 부족 시험의 경고도 일부러 낸 것
 check('콘솔 오류 없음(저장소 차단 경고 제외)', errs.length === 0, errs);
 
 console.log(`\n${ok.filter(Boolean).length}/${ok.length} 통과`);

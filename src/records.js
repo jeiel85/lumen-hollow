@@ -262,6 +262,9 @@ function hasProgress(s) {
 }
 
 // 각 객체의 저장 함수로 더한다(메모리와 저장소가 함께 바뀐다). 처음 화면에서만 부른다.
+// 더한 진행을 적용하고, 실제로 저장소에 남았는지 다시 읽어 확인한다. 저장 공간이 거의 찬 브라우저에서는
+// 작은 최고 기록은 써지고 큰 옷장·이야기 쓰기만 실패할 수 있는데, 저장 도우미는 예외를 삼키므로(#41 리뷰)
+// 쓴 결과를 읽어서 본다. 남지 않은 부분의 이름(옷가지·이야기 진행·2~4장 진행)을 돌려준다.
 function applyProgress(progress, add) {
   const { wardrobe: w, story: st, chapters: ch } = progress;
   if (add.owned.length || Object.keys(add.wear).length) w.absorb(add.owned, add.wear);
@@ -269,6 +272,24 @@ function applyProgress(progress, add) {
   for (const id of add.found) st.markFound(id);
   // chapters.js에는 밖에서 표시를 더하는 공개 함수가 없어 _setFlag를 쓴다(저장과 더 새 버전 잠금 규칙을 그대로 따른다).
   for (const f of add.flags) ch._setFlag(f);
+
+  const read = (key) => {
+    try {
+      return JSON.parse(load(key)) ?? {};
+    } catch {
+      return {};
+    }
+  };
+  const has = (list, ids) => ids.every((id) => Array.isArray(list) && list.includes(id));
+  const lost = [];
+  if (add.owned.length && !has(read('lumen.wardrobe').owned, add.owned)) lost.push('옷가지');
+  if (add.seen.length || add.found.length) {
+    const sv = read('lumen.story');
+    if (!has(sv.seen, add.seen) || !has(sv.found, add.found)) lost.push('이야기 진행');
+  }
+  // 더 새 버전이 쓴 2~4장 진행은 일부러 건드리지 않으므로(잠금) 확인하지 않는다.
+  if (add.flags.length && !ch.locked && !has(read('lumen.chapters').flags, add.flags)) lost.push('2~4장 진행');
+  return lost;
 }
 
 // 설정 화면의 "기록" 묶음. 기록이 바뀌면 onChange()로 타이틀 표시를 갱신하게 한다.
@@ -355,9 +376,16 @@ export function initRecordsPanel({ totalZones, onChange, mobile, progress = null
       // 가져온 기록과 지금 기록 중 더 좋은 쪽을 남기고, 진행은 더하기만 한다(가져오기로 이 기기의 진행이 줄지 않게).
       const merged = mergeRecords(snapshot(progress, totalZones), parsed);
       if (!save(KEY, JSON.stringify(merged.best))) throw new Error('이 브라우저가 저장소를 막아 두어 가져온 기록을 저장하지 못했어요.');
-      if (progress) applyProgress(progress, merged.add);
+      const lost = progress ? applyProgress(progress, merged.add) : [];
       requestPersist();
-      say(describeImport(parsed, merged, totalZones), 'good');
+      if (lost.length) {
+        const what = lost.join('·');
+        const code = what.charCodeAt(what.length - 1) - 0xac00; // 마지막 글자에 받침이 있으면 '은', 없으면 '는'
+        const topic = code >= 0 && code < 11172 && code % 28 ? '은' : '는';
+        say(`최고 기록은 가져왔지만 ${what}${topic} 이 기기에 저장하지 못했어요(저장 공간이 모자라요). 새로고침하면 사라져요.`, 'warn');
+      } else {
+        say(describeImport(parsed, merged, totalZones), 'good');
+      }
       onChange();
     } catch (err) {
       say(err.message, 'warn');
