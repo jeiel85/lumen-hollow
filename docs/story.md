@@ -1,6 +1,6 @@
 # 이야기 설정 《돌아갈 자리》 (스포일러 있음)
 
-게임 속 대사·기록의 원문은 [src/script.js](../src/script.js)에 있고, 여기는 설정과 진행 구조를 한눈에 보기 위한 요약입니다. 대본을 고칠 때 이 문서도 같이 맞춥니다. 글과 설정은 콘텐츠(CC BY 4.0, [LICENSE-CONTENT.md](../LICENSE-CONTENT.md))입니다. 이야기를 다른 작가(사람·AI)에게 넘길 때 쓴 자료는 [story-rewrite-brief.md](story-rewrite-brief.md)입니다.
+게임 속 대사·기록의 원문은 [src/script.js](../src/script.js)에 있고, 여기는 설정과 진행 구조를 한눈에 보기 위한 요약입니다. 대본을 고칠 때 이 문서도 같이 맞춥니다. 글과 설정의 권리는 [LICENSE](../LICENSE)를 따릅니다(모든 권리 보유). 이야기를 다른 작가(사람·AI)에게 넘길 때 쓴 자료는 [story-rewrite-brief.md](story-rewrite-brief.md)입니다.
 
 분위기는 아포칼립스 생존물을 따릅니다. 세상 전체가 무너진 뒤의 고요, 끊긴 재난 방송, 생존자가 문에 써 붙인 규칙, 가족을 향한 먼 길. 특정 작품의 설정·인물·장치는 가져오지 않습니다.
 

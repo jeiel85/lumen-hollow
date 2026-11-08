@@ -176,12 +176,12 @@ python -m http.server 8000
 
 ## 라이선스
 
-**코드는 가져다 써도 되고, 콘텐츠는 원작자를 표시하면 쓸 수 있습니다.**
+**2026-11-08부터 모든 권리 보유입니다.** 저장소는 공개되어 있어 코드를 볼 수 있지만, 코드·그림·글·세계관을 허락 없이 가져다 쓰거나 다시 배포·판매할 수 없습니다. 공식 배포판을 하는 영상·방송·스크린샷·리뷰는 수익 창출을 포함해 자유롭게 올려도 됩니다. 조건은 [LICENSE](LICENSE), 안내는 [LICENSE-CONTENT.md](LICENSE-CONTENT.md)에 있습니다.
 
-| 구분 | 해당하는 것 | 라이선스 |
-|---|---|---|
-| 코드 | `src/`, `index.html`, `style.css`, `sw.js` 등. 마을·모델·조명·소리를 만드는 코드 포함 | [MIT](LICENSE) |
-| 콘텐츠 | 이미지(`docs/`, `icons/`, `favicon.svg`), 게임 속 글, 게임 이름·세계관·그늘이 같은 등장 요소 | [CC BY 4.0](LICENSE-CONTENT.md) |
-| three.js | `vendor/three/` | MIT ([vendor/three/LICENSE](vendor/three/LICENSE)) |
+| 구분 | 라이선스 |
+|---|---|
+| 지금 버전의 코드·콘텐츠 | 모든 권리 보유 ([LICENSE](LICENSE)) |
+| 이전 버전(`LICENSE`가 MIT였던 v0.1.0 ~ v0.14.x) | 그 커밋의 조건: 코드 MIT, 콘텐츠 CC BY 4.0. 이미 준 허락은 그대로이고, 그 뒤 더하거나 고친 부분은 지금 조건을 따른다 |
+| three.js (`vendor/three/`) | MIT ([vendor/three/LICENSE](vendor/three/LICENSE)) |
 
-콘텐츠를 쓸 때는 `"Lumen Hollow" © 2026 박용은 (jeiel85), CC BY 4.0`과 원본 주소를 적고, 고쳤다면 고친 사실도 밝혀 주세요. 경계와 표시 방법은 [LICENSE-CONTENT.md](LICENSE-CONTENT.md)에 있습니다.
+바꾼 이유는 [DECISIONS.md](DECISIONS.md)의 "라이선스 전환"에 있습니다.
