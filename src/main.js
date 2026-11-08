@@ -1653,12 +1653,9 @@ async function forgetOnline() {
 
 // 트럭 타기·내리기
 function enterCar() {
-  let poured = 0;
-  while (player.cans > 0 && car.fuel < 90) {
-    car.fuel = Math.min(100, car.fuel + 40);
-    player.cans--;
-    poured++;
-  }
+  // 넘쳐 버리지 않을 만큼만 붓는다(연료 60% 이하일 때 한 통씩, src/vehicle.js CAN_FUEL).
+  const poured = car.pour(player.cans);
+  player.cans -= poured;
   if (poured) {
     sound.play('pour');
     hud.toast(`연료통 ${poured}개를 부었다. 연료 ${Math.round(car.fuel)}%`, 'good');
@@ -1684,8 +1681,14 @@ function seatInCar() {
   hud.setDriving(true);
 }
 
-function leaveCar() {
-  const spot = car.exitSpot(world);
+// force가 거짓이면(플레이어가 내리기를 눌렀을 때) 문 앞이 모두 막혀 있으면 내리지 않고 알린다(옮겨 세우면 된다).
+// 처음 화면으로 나가거나 장을 시작할 때는 force로 반드시 내린다.
+function leaveCar(force = true) {
+  const spot = car.exitSpot(world, { force });
+  if (!spot) {
+    hud.toast('문 앞이 막혀 내릴 수 없다. 트럭을 조금 옮겨 세우자.', 'warn');
+    return;
+  }
   game.driving = false;
   car.occupied = false;
   car.reverse = false;
@@ -1722,7 +1725,7 @@ function interact(dt) {
     if (done) {
       game.hold = 0;
       game.holdLock = true;
-      leaveCar();
+      leaveCar(false);
     }
     return;
   }
@@ -1757,7 +1760,8 @@ function interact(dt) {
       hud.prompt('트럭 — 연료가 바닥났다. 연료통이 필요하다', 0);
       return;
     }
-    const pour = player.cans > 0 && car.fuel < 90 ? ` · 연료통 ${player.cans}개 붓기` : '';
+    const cans = car.cansToPour(player.cans);
+    const pour = cans ? ` · 연료통 ${cans}개 붓기` : player.cans > 0 ? ' · 연료가 넉넉해 연료통은 아껴 둔다' : '';
     const done = holdProgress(dt, 0.5);
     hud.prompt(`${how} 트럭 타기${pour}`, Math.min(1, game.hold / 0.5));
     if (done) {
@@ -1885,6 +1889,7 @@ function walk(dt) {
     aim = touchAim();
   }
   player.update(dt, game.time, { x: move.x, z: move.z }, aim, ground, env.night, env.rainLevel);
+  if (player.footfall) sound.footstep(player.footfall, env.rainLevel); // 걸음마다 발소리(비 오면 젖은 소리)
   if (game.chapter) return; // 장 무대에는 트럭이 없다
   onCarEvent(car.update(dt, null, world, env.night));
   // 세워 둔 트럭과 정적 충돌체를 번갈아 풀어, 트럭이 밀어낸 자리가 벽 속이 되지 않게 한다.
@@ -2277,7 +2282,7 @@ addEventListener('pagehide', saveRun);
 // ?debug: 콘솔에서 상태를 들여다보고 시뮬레이션을 고정 간격으로 돌려 보는 개발용 핸들
 if (params.has('debug')) {
   window.lumen = {
-    THREE, scene, camera, renderer, world, env, post, player, shades, car, wisps, game, input, hud, startGame,
+    THREE, scene, camera, renderer, world, env, post, player, shades, car, wisps, game, input, hud, sound, startGame,
     saveRun, resumeGame, readRun: () => readRun(world), backToTitle, pauseGame,
     wardrobe, drops, closet, openCloset, closeCloset, board, openGrid, closeGrid, online, caches,
     story, dialogue, storyQueue, playScene, openDoc, queueStory, chapters, startChapter, minimap, autoQ, takeCache, get ground() { return ground; },

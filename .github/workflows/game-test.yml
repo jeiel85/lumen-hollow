@@ -64,3 +64,5 @@ jobs:
         run: node tests/e2e/minimap.mjs 'http://127.0.0.1:8000/?debug' 960 540
       - name: Robustness
         run: node tests/e2e/robust.mjs 'http://127.0.0.1:8000/?debug' 960 540
+      - name: Truck
+        run: node tests/e2e/truck.mjs
