@@ -32,7 +32,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // 플레이 스토어에 올릴 때마다 versionCode를 1씩 올린다. versionName은 게임 태그(vX.Y.Z)와 맞춘다.
         versionCode 1
-        versionName "0.15.0"
+        versionName "0.17.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
