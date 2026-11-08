@@ -88,6 +88,8 @@ const input = new Input(renderer.domElement);
 const hud = new Hud();
 const sound = new Sound();
 sound.setVolume(settings.volume, settings.ambience);
+sound.setMusicVolume(settings.music);
+sound.music.setLite(settings.quality === 'low');
 const story = new Story(scene, world);
 const dialogue = new Dialogue({ sound });
 // 2~4장 무대와 진행. 장 안에서는 ground가 그 무대(섬·강 건너 학교)이고, 1장 판에서는 마을(world)이다.
@@ -204,6 +206,33 @@ function viewHalfFor(w, h, zoom) {
   const t = Math.min(1, Math.max(0, (h - 430) / (600 - 430)));
   return minShort + (zoom - minShort) * t;
 }
+
+// 배경 음악의 분위기(#55). 처음 화면·옷장은 주제, 장면은 무전, 끝 화면은 이겼으면 새벽·졌으면 해질녘, 판 도중은 시간대.
+function musicMood() {
+  switch (game.state) {
+    case 'title':
+    case 'closet':
+      return 'title';
+    case 'story':
+      return 'radio';
+    case 'end':
+      return game.won ? 'dawn' : 'dusk';
+    default: {
+      const h = env.hour;
+      if (env.night > 0.6) return 'night';
+      if (h >= 16.5 && h < 19.5) return 'dusk';
+      if (h >= 4.5 && h < 8) return 'dawn';
+      return 'day';
+    }
+  }
+}
+
+// 처음 화면에서도 음악이 나오게 첫 입력 때 소리를 켠다. 브라우저 자동재생 정책상 사용자 입력 안에서만 켤 수 있다.
+function wakeSound() {
+  sound.init();
+  for (const type of ['pointerdown', 'keydown']) removeEventListener(type, wakeSound, true);
+}
+for (const type of ['pointerdown', 'keydown']) addEventListener(type, wakeSound, { capture: true, passive: true });
 
 function updateCamera(dt) {
   game.zoom += (Math.min(24, game.zoomTarget + game.zoomBoost) - game.zoom) * (1 - Math.exp(-dt * 10));
@@ -883,6 +912,7 @@ function toggleMute() {
 
 function applyQuality() {
   const q = QUALITY[settings.quality];
+  sound.music.setLite(settings.quality === 'low');
   post.setSamples(q.samples);
   resize();
   if (renderer.shadowMap.enabled === q.shadows) return;
@@ -933,6 +963,9 @@ function applySetting(key) {
     case 'volume':
     case 'ambience':
       sound.setVolume(settings.volume, settings.ambience);
+      break;
+    case 'music':
+      sound.setMusicVolume(settings.music);
       break;
     case 'quality':
       autoQ.off = true; // 손으로 고른 화질은 이번 실행 동안 자동으로 바꾸지 않는다
@@ -2233,6 +2266,7 @@ function frame(now) {
     const buzz = game.state === 'play' && loadShown && !loadShown.tripped ? Math.max(0, (loadShown.load - 0.35) / 0.65) : 0;
     sound.setMix({ rain: env.rainLevel, night: env.night, dread: game.state === 'play' ? game.dread ?? 0 : 0, buzz });
   }
+  sound.setMusic(musicMood(), game.state === 'play' ? game.dread ?? 0 : 0);
   // 일시정지 중에는 공회전, 그 밖(타이틀·종료 화면)에는 엔진을 끈다.
   const engineOn = game.driving && car.running && (game.state === 'play' || game.state === 'pause' || game.state === 'grid');
   sound.setEngine(game.state === 'play' && engineOn ? {

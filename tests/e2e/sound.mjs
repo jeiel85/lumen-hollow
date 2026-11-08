@@ -1,5 +1,5 @@
-// 소리(#1·#6·#14): 엔진·타이어 소리 노드는 운전할 때만 돌고 내린 뒤 정리되는지, 멈춘 AudioContext(전화·백그라운드)가
-// 화면 복귀·다음 입력에 다시 켜지는지, 환경음을 0으로 줄여도 그늘이 접근 속삭임이 들리는지, 발소리 박자, 음악 신호.
+// 소리(#1·#6·#14·#55): 엔진·타이어 소리 노드는 운전할 때만 돌고 내린 뒤 정리되는지, 멈춘 AudioContext(전화·백그라운드)가
+// 화면 복귀·다음 입력에 다시 켜지는지, 환경음을 0으로 줄여도 그늘이 접근 속삭임이 들리는지, 발소리 박자, 음악 신호, 배경 음악.
 //   node tests/e2e/sound.mjs [url]
 // 소리를 실제로 듣지는 않는다. 재생 중인 소스 노드 수와 master 출력의 세기(AnalyserNode)로 본다.
 import { launch } from './cdp.mjs';
@@ -40,8 +40,10 @@ const RUN = `
   const noon = () => { L.env.setHour(12); L.player.hp = 100; L.shades.clear(); };
 `;
 
+// 엔진·바탕 소리 시험은 도는 소스 수를 세므로 배경 음악을 끄고 한다. 배경 음악은 마지막 묶음에서 따로 본다.
 let r = await B.ev(`
   for (const id of ${JSON.stringify(CH1)}) lumen.story.markSeen(id);
+  lumen.sound.setMusicVolume(0);
   lumen.startGame(); lumen.step(0.3);
   ${RUN}
   noon();
@@ -214,6 +216,78 @@ r = await B.ev(`${RUN}
   return out;`);
 check('해질녘·새벽·구역 복구 음악 신호(화음 + 선율)', r.dusk >= 13 && r.dawn >= 13 && r.power >= 13, r);
 check('음소거면 음악 신호·발소리를 만들지 않는다', r.muted === 0, r.muted);
+
+// 배경 음악(#55): 시간대마다 다른 음계·화음, 소스 수 상한(화질 '낮음'은 더 적게), 위험·음악 신호 때 줄이기,
+// 음량 0·음소거면 새로 만들지 않고 예약해 둔 음이 끝나면 하나도 남지 않음, 설정의 음악 막대, 처음 화면의 주제.
+r = await B.ev(`${RUN}
+  const M = S.music;
+  const MOODS = (await import('./src/music.js')).MOODS;
+  const clear = () => { L.env.rainLevel = 0; L.env.rainyNight = false; };
+  const notes = {};
+  const tone = M._tone.bind(M), bar = M._bar.bind(M), pad = M._pad.bind(M);
+  let cur = null;
+  M._bar = (m, t0) => { cur = M.mood; bar(m, t0); };
+  M._tone = (midi, ...a) => { (notes[cur] ??= { mel: [], pads: 0 }).mel.push(midi); tone(midi, ...a); };
+  M._pad = (n, ...a) => { (notes[cur] ??= { mel: [], pads: 0 }).pads++; pad(n, ...a); };
+  const watch = async (sec) => { let peak = 0; const end = performance.now() + sec * 1000; while (performance.now() < end) { L.step(1 / 60, 1 / 60); peak = Math.max(peak, M.live); await wait(16); } return peak; };
+  const inMood = (name) => { const m = MOODS[name]; const ok = new Set([...m.scale, ...m.chords.map((c) => c.bass)]); return (notes[name]?.mel ?? []).every((n) => ok.has(n)); };
+  const out = {};
+  S.setMusicVolume(1);
+  L.game.peaceful = true; noon(); clear();
+  const dayPeak = await watch(9);
+  out.day = { mood: M.mood, notes: notes.day?.mel.length ?? 0, pads: notes.day?.pads ?? 0, inScale: inMood('day'), peak: dayPeak };
+  L.env.setHour(23); clear();
+  const nightPeak = await watch(12);
+  out.night = { mood: M.mood, notes: notes.night?.mel.length ?? 0, pads: notes.night?.pads ?? 0, inScale: inMood('night'), peak: nightPeak };
+  // 위험 신호: 접근 속삭임이 셀수록 음악을 줄인다
+  const level = () => +M.bus.gain.value.toFixed(3);
+  const real = S.setMusic.bind(S);
+  let danger = 0;
+  S.setMusic = (mood) => real(mood, danger);
+  await watch(2.5); const calm = level();
+  danger = 1; await watch(2.5); const scared = level();
+  danger = 0; S.setMusic = real; await watch(2.5);
+  // 음악 신호(해질녘)가 울리는 동안 줄였다가 돌아온다
+  S.play('dusk'); await watch(0.6); const cue = level();
+  await watch(6); const after = level();
+  out.duck = { calm, scared, cue, after };
+  // 화질 '낮음': 화음 바탕 소스 절반, 메아리 없음
+  M.setLite(true); L.env.setHour(12); clear();
+  const litePeak = await watch(10);
+  out.lite = { peak: litePeak, echo: !!M.wet };
+  M.setLite(false);
+  // 음량 0: 새로 예약하지 않고, 예약해 둔 마디가 끝나면 음악 소스가 하나도 없다
+  S.setMusicVolume(0);
+  let t0 = performance.now(), made0 = M.made;
+  while (M.live > 0 && performance.now() - t0 < 14000) await watch(0.5);
+  out.off = { live: M.live, sec: +((performance.now() - t0) / 1000).toFixed(1), madeAfterOff: M.made - made0 };
+  // 음소거도 같다
+  S.setMusicVolume(1); await watch(2); S.toggleMute();
+  t0 = performance.now(); made0 = M.made;
+  while (M.live > 0 && performance.now() - t0 < 14000) await watch(0.5);
+  await watch(1);
+  out.mute = { live: M.live, madeWhileMuted: M.made - made0 };
+  S.toggleMute();
+  // 설정 화면의 음악 막대가 음량을 바꾼다
+  const slider = document.querySelector('[data-setting="music"]');
+  slider.value = '30'; slider.dispatchEvent(new Event('input'));
+  out.slider = { level: M.level, saved: JSON.parse(localStorage.getItem('lumen.settings')).music, label: document.querySelector('[data-out="music"]').textContent };
+  // 처음 화면은 주제 음악
+  L.game.peaceful = false; L.backToTitle(); await wait(1200);
+  for (let i = 0; i < 30; i++) { await wait(100); if (M.mood) break; }
+  out.title = M.mood;
+  M._tone = tone; M._bar = bar; M._pad = pad;
+  return out;`);
+check('낮: 다 장조 음계의 낮 음악(화음 바탕 + 선율)', r.day.mood === 'day' && r.day.pads >= 1 && r.day.notes >= 3 && r.day.inScale, r.day);
+check('밤: 가 단조 음계의 밤 음악', r.night.mood === 'night' && r.night.pads >= 1 && r.night.notes >= 1 && r.night.inScale, r.night);
+check('도는 음악 소스는 많아야 24개', r.day.peak <= 24 && r.night.peak <= 24, { day: r.day.peak, night: r.night.peak });
+check("화질 '낮음'은 음악 소스 14개 이하, 메아리 없음", r.lite.peak <= 14 && !r.lite.echo, r.lite);
+check('접근 속삭임이 셀수록 음악을 줄인다', r.duck.scared < r.duck.calm * 0.45, r.duck);
+check('음악 신호가 울리는 동안 줄였다가 돌아온다', r.duck.cue < r.duck.calm * 0.5 && r.duck.after > r.duck.calm * 0.8, r.duck);
+check('음악 음량 0: 새로 만들지 않고, 예약한 마디가 끝나면 음악 소스가 없다', r.off.live === 0 && r.off.madeAfterOff === 0, r.off);
+check('음소거: 새로 만들지 않고 음악 소스가 없다', r.mute.live === 0 && r.mute.madeWhileMuted === 0, r.mute);
+check('설정의 음악 막대가 음량을 바꾸고 저장한다', r.slider.level === 0.3 && r.slider.saved === 0.3 && r.slider.label === '30%', r.slider);
+check('처음 화면에서는 주제 음악', r.title === 'title', r.title);
 
 // 흉내 낸 'interrupted' 거절은 경고로 한 번 남는 것이 정상이다.
 const errs = B.logs.filter((l) => /error|exception/i.test(l) && !/caches|online|fetch|CORS|ERR_/i.test(l) && !l.startsWith('warning: [sound]'));

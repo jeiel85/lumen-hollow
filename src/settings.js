@@ -16,6 +16,7 @@ export const ZOOM = { min: 8, max: 22, base: 12.5 };
 function defaults({ mobile }) {
   return {
     volume: 1,
+    music: 0.6,
     ambience: 1,
     quality: mobile ? 'mid' : 'high',
     tilt: true,
@@ -44,6 +45,7 @@ export function loadSettings(opts) {
     if (typeof raw[k] === 'boolean') s[k] = raw[k];
   };
   num('volume', 0, 1);
+  num('music', 0, 1);
   num('ambience', 0, 1);
   num('zoom', ZOOM.min, ZOOM.max);
   if (typeof raw.quality === 'string' && Object.prototype.hasOwnProperty.call(QUALITY, raw.quality)) s.quality = raw.quality;
@@ -62,6 +64,7 @@ const BLOCKED = '이 브라우저는 저장소를 막아 두어 설정이 이번
 const pct = (v) => `${Math.round(v * 100)}%`;
 const FORMAT = {
   volume: pct,
+  music: pct,
   ambience: pct,
   zoom: (v) => `${(v / ZOOM.base).toFixed(1)}×`,
 };
