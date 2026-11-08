@@ -97,8 +97,30 @@ check('설정에서 한국어를 고르면 다시 열려 한국어', r.lang === 
 
 // 마지막 한국어 확인 뒤의 한국어 화면은 감시 보고에서 뺀다(위에서 이미 영어 화면의 한글을 봤다).
 await B.ev('window.__hangul?.clear(); return true');
-const errs = B.logs.filter((l) => /error|exception|\[i18n\]/i.test(l) && !/caches|online|fetch|CORS|ERR_/i.test(l));
-check('콘솔 오류·빠진 번역 경고 없음', errs.length === 0, errs.slice(0, 6));
+// 저장소가 막힌 브라우저(#71 리뷰): 판 도중에는 다시 열지 않고 되돌리며 알리고, 처음 화면에서는 주소의 ?lang=으로 다시 연다.
+r = await B.ev(`${SETUP}
+  L.startGame(); L.step(0.3); skip(); L.pauseGame(true);
+  window.__same = 1;
+  const real = Storage.prototype.setItem;
+  Storage.prototype.setItem = function () { throw new Error('blocked'); };
+  $('pause-settings-btn').click();
+  const en = document.querySelector('input[name="lang"][value="en"]');
+  en.checked = true; en.dispatchEvent(new Event('change'));
+  await wait(800);
+  const out = { same: window.__same === 1, lang: L.settings.lang, checked: document.querySelector('input[name="lang"]:checked')?.value, note: $('settings-store').textContent };
+  $('settings-close').click(); L.pauseGame(false); L.backToTitle();
+  $('settings-btn').click();
+  en.checked = true; en.dispatchEvent(new Event('change'));
+  return out;`);
+check('저장소가 막혔으면 판 도중엔 다시 열지 않고 되돌리며 알린다', r.same && r.lang === 'ko' && r.checked === 'ko' && /저장소를 막아/.test(r.note), r);
+await ready();
+r = await B.ev(`return { lang: document.documentElement.lang, url: location.search };`);
+check('처음 화면에서는 주소의 ?lang=en으로 다시 열어 영어', r.lang === 'en' && /lang=en/.test(r.url), r);
+await B.ev('window.__hangul?.clear(); return true');
+
+// 저장소를 막은 흉내에서 나오는 [storage] 경고는 정상이다.
+const errs = B.logs.filter((l) => /error|exception|\[i18n\]/i.test(l) && !/caches|online|fetch|CORS|ERR_|\[storage\]/i.test(l));
+check('콘솔 오류·빠진 번역 경고 없음(저장소 차단 경고 제외)', errs.length === 0, errs.slice(0, 6));
 console.log(`\n${ok.filter(Boolean).length}/${ok.length} 통과`);
 await B.close();
 process.exit(ok.every(Boolean) ? 0 : 1);

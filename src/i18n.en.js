@@ -648,4 +648,6 @@ export const UI_EN = {
   '꽃집': 'Florist',
   '수선집': 'Tailor',
   '반찬가게': 'Side Dishes',
+  // src/main.js — 언어 바꾸기(#71 리뷰)
+  '이 브라우저는 저장소를 막아 두어 판 도중에는 언어를 바꿀 수 없어요. 처음 화면의 설정에서 바꿔 주세요.': 'This browser blocks storage, so the language cannot be changed during a run. Change it from Settings on the title screen.',
 };

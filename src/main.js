@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World, CAR_SPAWN, DEFAULT_VILLAGE, MAX_VILLAGE, isVillage } from './world.js';
-import { load as loadKey, save as saveKey, remove as removeKey } from './storage.js';
+import { load as loadKey, save as saveKey, remove as removeKey, storageAvailable } from './storage.js';
 import { Environment } from './env.js';
 import { Post } from './post.js';
 import { Player, PLAYER_R } from './player.js';
@@ -622,6 +622,37 @@ function pauseGame(on) {
   }
 }
 
+// 언어 바꾸기(#60): 모든 모듈이 열 때 글을 정하므로 다시 연다. 다시 열면 저장된 설정으로 언어를 고르니 저장이 됐는지 먼저 본다(#71 리뷰).
+// 저장소가 막힌 브라우저: 처음 화면이면 잃을 것이 없어 주소의 ?lang=으로 다시 열고, 판 도중이면 진행을 잃으니 다시 열지 않고 되돌린다.
+let langPref = settings.lang;
+function switchLang() {
+  let saved = null;
+  try {
+    saved = JSON.parse(loadKey('lumen.settings'))?.lang ?? null;
+  } catch {
+    saved = null;
+  }
+  if (storageAvailable() && saved === settings.lang) {
+    langPref = settings.lang;
+    saveRun(); // 판 도중이면 처음 화면에서 이어 갈 수 있게
+    const u = new URL(location.href);
+    u.searchParams.delete('lang'); // 주소의 ?lang=이 설정을 덮지 않게
+    location.replace(u.href);
+    return;
+  }
+  if (game.state === 'title') {
+    const u = new URL(location.href);
+    if (settings.lang === 'auto') u.searchParams.delete('lang');
+    else u.searchParams.set('lang', settings.lang);
+    location.replace(u.href);
+    return;
+  }
+  settings.lang = langPref;
+  settingsUi?.sync();
+  const note = $('settings-store');
+  if (note) note.textContent = tr('이 브라우저는 저장소를 막아 두어 판 도중에는 언어를 바꿀 수 없어요. 처음 화면의 설정에서 바꿔 주세요.');
+}
+
 // 일시정지 화면의 난이도 한 줄. 2~4장은 설정에서 바로 바꿀 수 있다.
 function renderPauseDiff() {
   const el = $('pause-diff');
@@ -1121,9 +1152,7 @@ function applySetting(key) {
       sound.setMusicVolume(settings.music);
       break;
     case 'lang':
-      // 모든 모듈이 열 때 글을 정하므로 다시 연다. 판 도중이면 저장된 판으로 처음 화면에서 이어 갈 수 있다.
-      saveRun();
-      location.reload();
+      switchLang();
       break;
     case 'difficulty':
       // 1장 판은 시작할 때 정한 단계 그대로, 2~4장은 다음 프레임부터 바뀐다(diffNow).
