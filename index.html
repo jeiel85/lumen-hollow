@@ -146,14 +146,10 @@
           <button id="settings-btn" class="chip" type="button">설정</button>
           <button id="install-btn" class="chip hidden" type="button">앱으로 설치</button>
         </div>
+        <p id="update-note" class="update-note hidden" role="status">새 버전이 준비됐어요. <button id="update-reload" class="chip" type="button">다시 열기</button></p>
         <p id="best" class="best"></p>
         <div id="online" class="online hidden">
           <p id="online-summary" class="online-summary"></p>
-          <div class="online-row">
-            <button id="online-toggle" class="chip" type="button" aria-pressed="true">온라인 보급품 켜짐</button>
-            <button id="online-forget" class="chip" type="button">내 온라인 기록 지우기</button>
-          </div>
-          <p class="online-note">다른 생존자가 남긴 보급품을 주고받아요. 무작위 ID와 보급품 위치만 서버에 저장하고, 이름·글·IP 원문은 저장하지 않아요.</p>
         </div>
       </div>
       <ul class="howto">
@@ -168,12 +164,13 @@
     </div>
   </section>
 
-  <section id="closet" class="screen closet hidden" aria-label="옷장">
+  <section id="closet" class="screen closet hidden" aria-labelledby="closet-title">
     <div class="card closet-panel">
-      <div class="closet-head"><h2>옷장</h2><span id="closet-count" class="closet-count"></span></div>
+      <div class="closet-head"><h2 id="closet-title" tabindex="-1">옷장</h2><span id="closet-count" class="closet-count"></span></div>
+      <p id="closet-store" class="hint warn closet-store" role="status"></p>
       <div id="closet-tabs" class="closet-tabs" role="group" aria-label="부위"></div>
       <div id="closet-grid" class="closet-grid"></div>
-      <p class="closet-note">잠긴 옷가지는 마을 어딘가에 빛나는 꾸러미로 떨어져 있다. 한 번 주우면 영원히 내 것이 된다.</p>
+      <p id="closet-note" class="closet-note">잠긴 옷가지는 마을 어딘가에 빛나는 꾸러미로 떨어져 있다. 한 번 주우면 영원히 내 것이 된다.</p>
       <button id="closet-close" class="btn" type="button">이대로 입기</button>
     </div>
   </section>
@@ -222,6 +219,7 @@
         <h2 id="settings-title" tabindex="-1">설정</h2>
         <button id="settings-close" class="chip" type="button">닫기</button>
       </div>
+      <p id="settings-store" class="hint warn settings-store" role="status"></p>
       <div class="settings-grid">
         <div class="group" role="group" aria-labelledby="g-sound">
           <h3 id="g-sound">소리</h3>
@@ -251,16 +249,27 @@
         <div class="group" role="group" aria-labelledby="g-app">
           <h3 id="g-app">앱 설치</h3>
           <p id="app-status" class="hint"></p>
+          <p id="offline-status" class="hint" role="status" aria-live="polite"></p>
           <div class="row-btns"><button id="app-install" class="chip hidden" type="button">설치하기</button></div>
+        </div>
+        <div id="online-panel" class="group hidden" role="group" aria-labelledby="g-online">
+          <h3 id="g-online">온라인 보급품</h3>
+          <div class="row-btns">
+            <button id="online-toggle" class="chip" type="button" aria-pressed="true">온라인 보급품 켜짐</button>
+            <button id="online-forget" class="chip danger" type="button">내 온라인 기록 지우기</button>
+          </div>
+          <p class="hint online-note">다른 생존자가 남긴 보급품을 주고받아요. 무작위 ID와 보급품 위치만 서버에 저장하고, 이름·글·IP 원문은 저장하지 않아요.</p>
+          <p id="online-msg" class="hint" role="status" aria-live="polite"></p>
         </div>
         <div id="records-panel" class="group" role="group" aria-labelledby="g-records">
           <h3 id="g-records">기록</h3>
           <p id="records-best" class="hint strong"></p>
+          <p id="records-progress" class="hint"></p>
           <p id="records-store" class="hint"></p>
           <div class="row-btns">
             <button id="records-export" class="chip" type="button">내보내기</button>
             <button id="records-import" class="chip" type="button">가져오기</button>
-            <button id="records-clear" class="chip danger" type="button">지우기</button>
+            <button id="records-clear" class="chip danger" type="button">최고 기록 지우기</button>
           </div>
           <input id="records-file" type="file" accept=".json,application/json" hidden>
           <p id="records-msg" class="hint" role="status" aria-live="polite"></p>

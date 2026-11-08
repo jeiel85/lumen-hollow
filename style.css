@@ -124,8 +124,7 @@ h2 { margin: 0 0 4px; font-weight: 400; font-size: 26px; }
 /* ---------- 공유 보급품 ---------- */
 .online { margin-top: 14px; display: grid; gap: 8px; justify-items: center; }
 .online-summary { margin: 0; font-size: 13px; color: var(--cache); min-height: 1em; }
-.online-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-.online-row .chip[aria-pressed="false"] { opacity: 0.7; }
+#online-toggle[aria-pressed="false"] { opacity: 0.7; }
 .online-note { margin: 0; font-size: 11px; color: var(--dim); line-height: 1.5; max-width: 420px; }
 .chip.drop { color: var(--cache); border-color: rgba(120, 230, 214, 0.35); }
 .place { position: absolute; left: 50%; bottom: calc(var(--edge-b) + 4px); transform: translateX(-50%); pointer-events: auto; padding: 12px 14px; border-radius: 14px; background: rgba(10, 16, 18, 0.82); border: 1px solid rgba(120, 230, 214, 0.35); width: min(440px, 92vw); display: grid; gap: 10px; }
@@ -489,3 +488,57 @@ body.chapter-mode .hud .zones, body.chapter-mode #power-btn, body.chapter-mode .
 .pause-log ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
 .pause-log li.warn { color: var(--warn); }
 .pause-log li.good { color: var(--good); }
+/* ---------- 설정·옷장 보강(#10·#15·#17) ---------- */
+/* 저장소가 막혔을 때의 안내(설정·옷장), 처음 화면의 새 버전 안내 */
+.settings-store { margin: 2px 0 8px; }
+.closet-store { margin: 0; }
+.update-note { margin: 12px 0 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; font-size: 12.5px; color: var(--good); }
+.update-note .chip { color: var(--ink); }
+/* 잠긴 옷가지는 disabled가 아니라 aria-disabled라서 hover 강조를 따로 끈다. */
+.closet-item.locked:hover { background: rgba(255, 255, 255, 0.04); }
+.closet-item:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+@media (orientation: landscape) and (max-height: 540px) {
+  .title-card .update-note { justify-content: flex-start; }
+}
+
+/* ---------- 낮은 가로 화면의 아래 줄(높이 540px 이하) ---------- */
+/* 가로로 눕힌 휴대폰은 위 줄(상태 창·오른쪽 위 미니맵 #minimap)과 아래 줄(터치 버튼·보급품 단추·장 목표)로 나눈다.
+   '보급품 남기기'는 터치 버튼 위, 장 목표는 오른쪽 위에 있어 미니맵과 겹쳤고, 남기기 창은 터치 버튼을 덮었다.
+   터치 버튼 묶음은 64px 버튼 두 개 + 8px 간격 = 136px 폭이라, 그 옆 150px 안쪽을 아래 줄로 쓴다. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .chip.drop { bottom: calc(var(--edge-b) + 4px); right: calc(max(14px, env(safe-area-inset-right)) + 146px); }
+  body:has(#touch.lefty) .chip.drop { right: auto; left: calc(max(14px, env(safe-area-inset-left)) + 146px); }
+  /* 남기기 창이 열리면 그 창이 같은 아래 줄을 쓴다(창 안에 닫기가 있다). */
+  body:has(#place:not(.hidden)) .chip.drop { visibility: hidden; }
+  .place { width: min(440px, calc(100vw - 2 * (max(var(--edge-l), var(--edge-r)) + 150px))); }
+  .objective { top: auto; bottom: calc(var(--edge-b) + 4px); left: 50%; right: auto; transform: translateX(-50%); width: max-content; max-width: min(300px, calc(100vw - 2 * (max(var(--edge-l), var(--edge-r)) + 150px))); text-align: center; }
+}
+
+/* ---------- 아주 낮은 가로 화면(주소창이 보이는 작은 휴대폰, 높이 320px 이하) ---------- */
+/* 높이 304px 기기에서 상태 창과 터치 버튼 사이가 32px였고, 300px 아래로는 미니맵·터치 버튼이 겹쳤다. 위 줄과 아래 줄을 더 줄인다.
+   터치 버튼 묶음: 52px 버튼 두 개 + 6px 간격 = 110px 폭, 52 + 6 + 44 = 102px 높이. */
+@media (orientation: landscape) and (max-height: 320px) {
+  :root { --edge-t: max(8px, env(safe-area-inset-top)); --edge-b: max(8px, env(safe-area-inset-bottom)); }
+  .pill { padding: 5px 10px; }
+  .hud-bottom { top: calc(var(--edge-t) + 36px); }
+  .stats { width: 172px; padding: 6px 9px; gap: 3px; }
+  .bar { grid-template-columns: 60px 1fr; font-size: 10.5px; gap: 6px; }
+  .track { height: 6px; }
+  .inv { gap: 8px; font-size: 10.5px; padding-top: 0; }
+  .inv b { font-size: 12px; }
+  .touch-btns { gap: 6px; bottom: calc(var(--edge-b) + 2px); }
+  .touch-btns button { width: 52px; height: 52px; font-size: 11px; }
+  .touch-btns button.big { height: 44px; border-radius: 22px; }
+  /* 미니맵은 위 줄 오른쪽에 작게(미니맵 규칙보다 앞에 합쳐져도 이기도록 .hud를 붙인다). */
+  .hud .minimap { width: 66px; height: 66px; top: calc(var(--edge-t) + 36px); }
+  .fps { top: calc(var(--edge-t) + 36px); right: calc(var(--edge-r) + 74px); }
+  .chip.drop { bottom: calc(var(--edge-b) + 2px); right: calc(max(14px, env(safe-area-inset-right)) + 120px); padding: 8px 12px; font-size: 12px; }
+  body:has(#touch.lefty) .chip.drop { left: calc(max(14px, env(safe-area-inset-left)) + 120px); }
+  .objective { bottom: calc(var(--edge-b) + 2px); max-width: min(300px, calc(100vw - 2 * (max(var(--edge-l), var(--edge-r)) + 124px))); font-size: 11.5px; padding: 6px 10px; }
+  .prompt { bottom: 30%; }
+  .toasts { top: calc(var(--edge-t) + 36px); }
+  .toast { font-size: 12px; padding: 5px 12px; }
+  .toast:nth-last-child(n + 3) { display: none; }
+  .place { width: min(440px, calc(100vw - 2 * (max(var(--edge-l), var(--edge-r)) + 124px))); padding: 8px 10px; gap: 6px; bottom: calc(var(--edge-b) + 2px); }
+  .place-items button { padding: 6px 4px; font-size: 12px; }
+}
