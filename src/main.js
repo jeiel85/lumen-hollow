@@ -497,7 +497,7 @@ function resumeGame() {
   beginRun();
   game.difficulty = run.diff;
   game.nightEvent = run.event;
-  game.prevEvent = run.event;
+  game.prevEvent = run.prev ?? run.event; // 어젯밤 사건이 없던 옛 저장은 오늘 밤 사건으로
   game.surgeIn = 6;
   game.nights = run.nights;
   game.returned = run.returned;

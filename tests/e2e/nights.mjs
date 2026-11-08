@@ -7,7 +7,9 @@ const [,, url = 'http://127.0.0.1:8000/?debug', w = '960', h = '540'] = process.
 const B = await launch(url, +w, +h);
 const ok = [];
 const check = (n, c, i) => { ok.push(!!c); console.log(`${c ? 'OK ' : 'NG '} ${n}${i !== undefined ? ` — ${JSON.stringify(i)}` : ''}`); };
-for (let i = 0; i < 60; i++) { if (await B.ev('return !!(window.lumen && lumen.game.ready)')) break; await B.sleep(500); }
+// 처음 여는 Chrome은 셰이더 준비가 30초를 넘길 때가 있어 넉넉히 기다린다.
+await B.sleep(800);
+for (let i = 0; i < 90; i++) { if (await B.ev('return !!(window.lumen && lumen.game.ready)')) break; await B.sleep(500); }
 
 const START = `
   const L = lumen, P = L.player, $ = (id) => document.getElementById(id);
@@ -104,8 +106,12 @@ r = await B.ev(`${START}
   L.shades.clear(); L.game.peaceful = false; L.game.nightEvent = 'surge'; L.saveRun();
   const saved = JSON.parse(localStorage.getItem('lumen.run')).run.event;
   L.backToTitle(); L.resumeGame(); L.step(0.2);
-  return { saved, resumed: L.game.nightEvent };`);
-check('판 저장·이어하기에 오늘 밤 사건이 남는다', r.saved === 'surge' && r.resumed === 'surge', r);
+  const resumed = L.game.nightEvent;
+  // 안개 낀 밤이 지나고 낮에 저장·이어해도 어젯밤 사건을 기억한다(다음 해질녘에 안개가 다시 오지 않게, #68 리뷰)
+  L.game.nightEvent = null; L.game.prevEvent = 'fog'; L.env.setHour(12); L.saveRun();
+  L.backToTitle(); L.resumeGame(); L.step(0.2);
+  return { saved, resumed, day: [L.game.nightEvent, L.game.prevEvent] };`);
+check('판 저장·이어하기에 오늘 밤 사건과 어젯밤 사건이 남는다', r.saved === 'surge' && r.resumed === 'surge' && r.day[0] === null && r.day[1] === 'fog', r);
 
 // 수첩 '밤의 기록': 만난 것은 설명, 못 만난 것은 ???
 r = await B.ev(`${START}

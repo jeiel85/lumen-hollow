@@ -72,8 +72,9 @@ export function captureRun({ world, player, car, env, game, shades }) {
       ...(game.pendingTake ? { pendingTake: { id: game.pendingTake.id, kind: game.pendingTake.kind } } : {}),
       // 난이도 단계(#56). 보통이면 빠진다(단계가 생기기 전의 저장도 보통으로 읽는다).
       ...(game.difficulty && game.difficulty !== DEFAULT_LEVEL ? { diff: game.difficulty } : {}),
-      // 오늘 밤 사건(#57). 없으면 빠진다.
+      // 오늘 밤 사건과 어젯밤 사건(#57, 같은 사건이 이틀 연달아 오지 않게). 없으면 빠진다.
       ...(game.nightEvent ? { event: game.nightEvent } : {}),
+      ...(game.prevEvent ? { prev: game.prevEvent } : {}),
     },
   };
 }
@@ -157,6 +158,7 @@ function validate(raw, world) {
       diff: isLevel(run.diff) ? run.diff : DEFAULT_LEVEL,
       // 선택 항목: 모르는 사건이면 사건 없는 밤으로 읽는다.
       event: isEvent(run.event) ? run.event : null,
+      prev: isEvent(run.prev) ? run.prev : null,
     },
   };
 }
