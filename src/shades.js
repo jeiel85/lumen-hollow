@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { LOAD_PER_SHADE } from './world.js';
 import { RAM_SPEED } from './vehicle.js';
+import { DIFFICULTY } from './difficulty.js';
 
 // 그늘이(Shade): 밤에만 나타나는 그림자 형체. 빛에 닿으면 물러나고 오래 비추면 흩어진다.
 const MAX = 18;
@@ -127,31 +128,34 @@ export class Shades {
     return false;
   }
 
-  // ctx: { player, world, night, nights, spawning, car, driving, cap }. cap은 저절로 깨어나는 그늘이 수의 상한(빠지면 밤마다 늘어난다).
+  // ctx: { player, world, night, nights, spawning, car, driving, cap, diff }. cap은 저절로 깨어나는 그늘이 수의 상한(빠지면 밤마다
+  // 늘어난다), diff는 난이도 단계 값(src/difficulty.js, 빠지면 보통).
   update(dt, t, ctx) {
-    const { player, world, night, nights, spawning, car, driving, cap } = ctx;
+    const { player, world, night, nights, spawning, car, driving, cap, diff = DIFFICULTY.normal } = ctx;
     const px = player.pos.x;
     const pz = player.pos.z;
     // returned: 이번 프레임에 흩어져 주인에게 돌아가는 그림자 자리(빛줄기 연출·깨어남 단서용)
     const events = { hits: 0, banished: 0, rammed: 0, nearest: Infinity, burning: 0, pressing: 0, returned: [] };
     const ramming = driving && Math.abs(car.speed) >= RAM_SPEED;
 
-    const target = spawning ? cap ?? Math.min(5 + nights * 2, 14) : 0;
+    // 장이 정한 상한도 단계 배율을 따른다(쉬움 3 → 2). 하나 아래로는 줄이지 않는다.
+    const target = !spawning ? 0 : cap !== undefined ? Math.max(1, Math.round(cap * diff.count)) : Math.min(Math.round((5 + nights * 2) * diff.count), diff.cap, MAX);
     this.spawnTimer -= dt;
     if (spawning && this.spawnTimer <= 0 && this.activeCount < target) {
       // 깊은 밤(세 번째 밤부터)에는 손전등이 비추는 반대쪽에서 깨어나거나 두 방향에서 한꺼번에 몰려온다.
       // 한 방향만 잘 겨누면 밤이 깊어져도 압박이 없던 문제(#14·#21). 1장 판에만(장의 목표 그림자는 cap으로 따로 정한다).
-      const deep = cap === undefined ? Math.min(3, Math.max(0, nights - 1)) : 0; // 다섯 번째 밤에서 더 오르지 않는다(완벽 조준 봇이 어둠에서 분당 0~3대)
+      // 보통은 셋째 밤부터 오르기 시작해 다섯 번째 밤에서 멈춘다(완벽 조준 봇이 어둠에서 분당 0~3대). 단계가 시작하는 밤을 정한다.
+      const deep = cap === undefined && diff.deep !== null ? Math.min(3, Math.max(0, nights - diff.deep + 1)) : 0;
       const behind = Math.atan2(-Math.cos(player.facing), -Math.sin(player.facing));
       const flank = deep > 0 && Math.random() < Math.min(0.4, 0.08 * deep);
-      const tough = 1 + Math.min(0.3, 0.06 * deep); // 깊은 밤의 그늘이는 조금 더 오래 비춰야 흩어진다
-      if (this._spawn(px, pz, world, flank ? behind : null)) this._last.tough = tough;
+      const tough = (1 + Math.min(0.3, 0.06 * deep)) * diff.tough; // 깊은 밤의 그늘이는 조금 더 오래 비춰야 흩어진다
+      if (this._spawn(px, pz, world, flank ? behind : null)) this._last.tough = cap === undefined ? tough : diff.tough;
       if (deep > 0 && this.activeCount < target && Math.random() < Math.min(0.4, 0.08 * deep)) {
         if (this._spawn(px, pz, world, behind + (Math.random() < 0.5 ? -1 : 1) * Math.PI * 0.5)) this._last.tough = tough;
       }
-      this.spawnTimer = (1.2 + Math.random() * 1.8) / (1 + 0.12 * deep);
+      this.spawnTimer = ((1.2 + Math.random() * 1.8) / (1 + 0.12 * deep)) * diff.gap;
     }
-    const base = Math.min(2.4 + nights * 0.2, 3.4);
+    const base = Math.min(2.4 + nights * 0.2, 3.4) * diff.speed;
 
     for (const s of this.list) {
       if (!s.active) continue;
@@ -168,7 +172,7 @@ export class Shades {
       } else if (s.state === 'stalk' && d > FAR && !s.tag) {
         s.state = 'die';
       } else if (s.state === 'stalk') {
-        const lunge = d < 5 ? 4.6 : base;
+        const lunge = d < 5 ? 4.6 * diff.speed : base;
         const wob = Math.sin(t * 0.8 + s.seed) * 0.45;
         let ux = dx / d;
         let uz = dz / d;
@@ -222,7 +226,7 @@ export class Shades {
         let lit = world.lightAt(s.x, s.z);
         if (lit) {
           s.burn += dt * 0.25;
-          world.addLoad(lit, dt * LOAD_PER_SHADE);
+          world.addLoad(lit, dt * LOAD_PER_SHADE * diff.load);
           events.pressing++;
           for (let k = 0; lit && k < 4; k++) {
             const n = lit.d || 0.001;
@@ -248,7 +252,7 @@ export class Shades {
           this.banished++;
           events.returned.push({ x: s.x, z: s.z, tag: s.tag });
         } else if (touching && s.cool <= 0 && player.alive) {
-          if (player.hurt(15, s.x, s.z)) events.hits++;
+          if (player.hurt(diff.damage, s.x, s.z)) events.hits++;
           s.cool = 1.3;
           s.vx = -(dx / d) * 5;
           s.vz = -(dz / d) * 5;

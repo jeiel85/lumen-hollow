@@ -10,6 +10,7 @@ import { Hud } from './hud.js';
 import { Sound } from './audio.js';
 import { QUALITY, ZOOM, loadSettings, saveSettings, bindSettings } from './settings.js';
 import { loadBest, recordRun, hasRecords, describeBest, initRecordsPanel } from './records.js';
+import { DIFFICULTY, LEVEL_NOTE, levelOf } from './difficulty.js';
 import { initPwa } from './pwa.js';
 import { initNative, isNativeApp } from './native.js';
 import { Wardrobe, OutfitDrops, Closet, itemLabel, objParticle } from './wardrobe.js';
@@ -147,7 +148,13 @@ const game = {
   hintThanks: false,
   savedAt: 0, // 판을 마지막으로 저장한 게임 시간(game.time)
   chapter: 0, // 2~4장을 하는 중이면 그 장 번호(1장 판이면 0)
+  difficulty: 'normal', // 이 1장 판의 난이도 단계(시작할 때 정해지고 판 저장에 남는다). 2~4장은 설정의 단계를 바로 따른다.
 };
+
+// 지금 적용할 난이도 단계 값(src/difficulty.js)
+function diffNow() {
+  return levelOf(game.chapter ? settings.difficulty : game.difficulty);
+}
 
 // 이야기 장면: 차례를 기다리는 장면 id와, 장면이 카메라를 옮긴 곳
 const storyQueue = [];
@@ -256,12 +263,13 @@ function updateCamera(dt) {
 // ---------------------------------------------------------------- 기록
 
 function saveBest() {
-  recordRun({ nights: game.nights, zones: world.poweredZones, won: game.won, day: env.day }, world.totalZones);
+  recordRun({ nights: game.nights, zones: world.poweredZones, won: game.won, day: env.day }, world.totalZones, game.difficulty);
 }
 
+// 처음 화면에는 다음 판 난이도의 최고 기록만 보인다(모든 단계는 설정 → 기록).
 function renderBest() {
-  const b = loadBest(world.totalZones);
-  $('best').textContent = hasRecords(b) ? `최고 기록 · ${describeBest(b, world.totalZones)}` : '';
+  const b = loadBest(world.totalZones, settings.difficulty);
+  $('best').textContent = hasRecords(b) ? `최고 기록(${DIFFICULTY[settings.difficulty].label}) · ${describeBest(b, world.totalZones)}` : '';
 }
 
 // ---------------------------------------------------------------- 게임 흐름
@@ -354,6 +362,7 @@ function beginRun({ chapter = false } = {}) {
 function startGame() {
   if (game.contextLost || !game.ready) return;
   world.reset((Math.random() * 1e9) | 0);
+  game.difficulty = settings.difficulty;
   player.reset(START.x, START.z);
   car.reset(CAR_SPAWN.x, CAR_SPAWN.z, CAR_SPAWN.a);
   const h = Number(params.get('hour'));
@@ -377,23 +386,32 @@ function startGame() {
   flushStory();
 }
 
-// 처음 화면의 '새로 시작'. 이어할 수 있는 판이 있으면 지워도 되는지 먼저 묻는다.
+// 처음 화면의 '새로 시작': 난이도를 고르는 새 판 준비를 연다(#56). 이어할 수 있는 판이 있으면 지워진다는 것도 함께 알린다.
 // 브라우저 confirm()은 닫힐 때 늦게 오는 blur가 막 시작한 판을 일시정지시켜서, 처음 화면 안에서 묻는다.
-// 두 번째 자리에 '취소'를 두어, '새로 시작'을 두 번 연달아 눌러도 판이 지워지지 않게 한다.
+// 지워질 판이 있으면 '취소'에 초점을 두어, '새로 시작'을 두 번 연달아 눌러도 판이 지워지지 않게 한다.
+let newRunUi = null;
 function newGame() {
   if (game.contextLost || !game.ready) return;
-  const r = readRun(world);
-  // 더 새 버전이 쓴 저장도 새 판이 덮어쓰므로 함께 묻는다.
-  const lose = r.status === 'ok' ? `진행 중인 판(${describeRun(r.run, world.totalZones)})이 지워져요.`
-    : r.status === 'newer' ? '더 새 버전에서 저장한 판이 지워져요.' : null;
-  if (!lose || !$('new-confirm')) {
-    startGame();
+  if (!$('new-confirm')) {
+    startGame(); // 배포 직후 캐시된 옛 index.html과 섞인 경우
     return;
   }
+  const r = readRun(world);
+  // 더 새 버전이 쓴 저장도 새 판이 덮어쓰므로 함께 알린다.
+  const lose = r.status === 'ok' ? `진행 중인 판(${describeRun(r.run, world.totalZones)})이 지워져요.`
+    : r.status === 'newer' ? '더 새 버전에서 저장한 판이 지워져요.' : '';
+  newRunUi?.sync();
+  renderDiffNote();
   $('title-actions').classList.add('hidden');
   $('new-confirm').classList.remove('hidden');
   $('run-info').textContent = lose;
-  $('new-no').focus();
+  $('new-yes').textContent = lose ? '지우고 시작' : '시작';
+  (lose ? $('new-no') : $('new-yes')).focus();
+}
+
+function renderDiffNote() {
+  const el = $('new-diff-note');
+  if (el) el.textContent = LEVEL_NOTE[settings.difficulty];
 }
 
 function cancelNewGame() {
@@ -469,6 +487,7 @@ function resumeGame() {
   env.rainyNight = e.rainyNight;
   env.rainLevel = e.rain;
   beginRun();
+  game.difficulty = run.diff;
   game.nights = run.nights;
   game.returned = run.returned;
   game.cacheTaken = run.cacheTaken;
@@ -546,12 +565,19 @@ function pauseGame(on) {
     if (game.placing && !game.placing.busy) closePlace();
     game.state = 'pause';
     hud.renderLog($('pause-log'));
+    renderPauseDiff();
     setScreen('pause');
     saveRun();
   } else if (!on && game.state === 'pause' && !game.contextLost) {
     game.state = 'play';
     setScreen(null);
   }
+}
+
+// 일시정지 화면의 난이도 한 줄. 2~4장은 설정에서 바로 바꿀 수 있다.
+function renderPauseDiff() {
+  const el = $('pause-diff');
+  if (el) el.textContent = `난이도 ${diffNow().label}${game.chapter ? ' · 설정에서 바꿀 수 있어요' : ''}`;
 }
 
 // 끝 화면의 단추: 1장 승리(산책·다음 장), 1장·2~4장 패배(다시 하기), 이야기 끝(수첩·처음 화면)
@@ -574,7 +600,7 @@ function endGame(won) {
   game.state = 'end';
   if (won) online.noteStory('clear', '1');
   online.flushStory();
-  const prevBest = loadBest(world.totalZones);
+  const prevBest = loadBest(world.totalZones, game.difficulty);
   saveBest();
   // 끝난 판은 이어 갈 수 없다. 다른 탭이 이 판을 이어 가는 중이면 그 탭의 저장은 지우지 않는다(#38 리뷰).
   if (!game.otherTab) clearRun();
@@ -604,8 +630,8 @@ function bestLine(prev) {
   if (game.won && (!prev.winDay || env.day < prev.winDay)) news.push(prev.winDay ? `가장 빠른 복구(전에는 ${prev.winDay}일)` : '처음으로 마을을 되살렸다');
   if (game.nights > prev.nights) news.push(`가장 오래 버틴 밤(전에는 ${prev.nights}번)`);
   if (world.poweredZones > prev.zones) news.push(`가장 많이 밝힌 구역(전에는 ${prev.zones}곳)`);
-  if (news.length) return `신기록 — ${news.join(' · ')}`;
-  return hasRecords(prev) ? `최고 기록 · ${describeBest(prev, world.totalZones)}` : '';
+  if (news.length) return `신기록(${DIFFICULTY[game.difficulty].label}) — ${news.join(' · ')}`;
+  return hasRecords(prev) ? `최고 기록(${DIFFICULTY[game.difficulty].label}) · ${describeBest(prev, world.totalZones)}` : '';
 }
 
 function continueWalk() {
@@ -967,6 +993,15 @@ function applySetting(key) {
     case 'music':
       sound.setMusicVolume(settings.music);
       break;
+    case 'difficulty':
+      // 1장 판은 시작할 때 정한 단계 그대로, 2~4장은 다음 프레임부터 바뀐다(diffNow).
+      // 같은 값을 보이는 두 곳(새 판 화면·설정)을 맞춘다: 새 판 화면을 열어 둔 채 설정에서 바꿔도 시작할 단계가 보이는 대로다.
+      newRunUi?.sync();
+      settingsUi?.sync();
+      renderDiffNote();
+      renderBest();
+      if (game.state === 'pause' || settingsFrom === 'pause') renderPauseDiff();
+      break;
     case 'quality':
       autoQ.off = true; // 손으로 고른 화질은 이번 실행 동안 자동으로 바꾸지 않는다
       applyQuality();
@@ -1215,6 +1250,7 @@ function showCard(text) {
 }
 
 function chapterStep(dt) {
+  player.drain = diffNow().drain;
   const flashKey = input.consume('KeyF') || input.consume('Touch_flash');
   const flashClick = input.consume('MouseLeft');
   if (flashKey || flashClick) toggleFlash();
@@ -1251,6 +1287,7 @@ function chapterStep(dt) {
   chapters.update(dt, player);
   const ev = shades.update(dt, game.time, {
     player, world: ground, night: env.night, nights: game.nights, spawning: chapters.spawning(env.night), cap: chapters.shadeCap, car: null, driving: false,
+    diff: diffNow(),
   });
   if (ev.hits) {
     sound.play('hurt');
@@ -2080,6 +2117,7 @@ function step(dt, frozen = false) {
 
 function stepWorld(dt, frozen) {
   for (const ev of env.advance(dt)) onTimeEvent(ev);
+  player.drain = diffNow().drain;
 
   if (frozen) {
     // 플레이어는 서 있고, 트럭은 손을 뗀 채로 흐른다(작업등 연료·꺼짐도 그대로 — #36 리뷰)
@@ -2099,7 +2137,7 @@ function stepWorld(dt, frozen) {
   }
 
   const spawning = !game.peaceful && env.night > 0.75;
-  const ev = shades.update(dt, game.time, { player, world, night: env.night, nights: game.nights, spawning, car, driving: game.driving });
+  const ev = shades.update(dt, game.time, { player, world, night: env.night, nights: game.nights, spawning, car, driving: game.driving, diff: diffNow() });
   if (ev.hits) {
     sound.play('hurt');
     game.shake = 0.45;
@@ -2369,6 +2407,7 @@ $('pause-journal-btn')?.addEventListener('click', openJournal);
 $('journal-close')?.addEventListener('click', closeJournal);
 $('pause-settings-btn')?.addEventListener('click', openSettings);
 $('settings-close')?.addEventListener('click', closeSettings);
+if ($('new-confirm')) newRunUi = bindSettings($('new-confirm'), settings, applySetting);
 if ($('settings')) {
   settingsUi = bindSettings($('settings'), settings, applySetting);
   recordsUi = initRecordsPanel({
@@ -2417,7 +2456,7 @@ addEventListener('pagehide', () => {
 // ?debug: 콘솔에서 상태를 들여다보고 시뮬레이션을 고정 간격으로 돌려 보는 개발용 핸들
 if (params.has('debug')) {
   window.lumen = {
-    THREE, scene, camera, renderer, world, env, post, player, shades, car, wisps, game, input, hud, sound, startGame,
+    THREE, scene, camera, renderer, world, env, post, player, shades, car, wisps, game, input, hud, sound, startGame, settings, newGame,
     saveRun, resumeGame, readRun: () => readRun(world), backToTitle, pauseGame, endGame,
     wardrobe, drops, closet, openCloset, closeCloset, board, openGrid, closeGrid, online, caches,
     story, dialogue, storyQueue, playScene, openDoc, queueStory, chapters, startChapter, minimap, autoQ, takeCache, get ground() { return ground; },

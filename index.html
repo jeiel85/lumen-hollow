@@ -37,6 +37,7 @@
       "./src/caches.js": "./src/caches.js?v=__BUILD__",
       "./src/chapters.js": "./src/chapters.js?v=__BUILD__",
       "./src/dialogue.js": "./src/dialogue.js?v=__BUILD__",
+      "./src/difficulty.js": "./src/difficulty.js?v=__BUILD__",
       "./src/env.js": "./src/env.js?v=__BUILD__",
       "./src/grid.js": "./src/grid.js?v=__BUILD__",
       "./src/geometry.js": "./src/geometry.js?v=__BUILD__",
@@ -151,9 +152,19 @@
           <button id="resume-run-btn" class="btn hidden" type="button" disabled>이어하기</button>
           <button id="start-btn" class="btn" type="button" disabled>불러오는 중…</button>
         </div>
-        <div id="new-confirm" class="title-actions hidden" role="group" aria-label="새로 시작 확인">
-          <button id="new-yes" class="btn" type="button">지우고 새로 시작</button>
-          <button id="new-no" class="btn ghost" type="button">취소</button>
+        <div id="new-confirm" class="new-run hidden" role="group" aria-labelledby="new-run-label">
+          <div class="new-run-row"><span id="new-run-label" class="new-run-label">난이도</span>
+          <div class="seg" role="radiogroup" aria-labelledby="new-run-label">
+            <label><input type="radio" name="new-difficulty" value="easy" data-setting="difficulty"><span>쉬움</span></label>
+            <label><input type="radio" name="new-difficulty" value="normal" data-setting="difficulty"><span>보통</span></label>
+            <label><input type="radio" name="new-difficulty" value="hard" data-setting="difficulty"><span>어려움</span></label>
+          </div>
+          </div>
+          <p id="new-diff-note" class="new-run-note"></p>
+          <div class="title-actions">
+            <button id="new-yes" class="btn" type="button">시작</button>
+            <button id="new-no" class="btn ghost" type="button">취소</button>
+          </div>
         </div>
         <p id="run-info" class="run-info" aria-live="polite"></p>
         <p id="app-only" class="app-only hidden" role="note"></p>
@@ -209,6 +220,7 @@
   <section id="pause" class="screen hidden">
     <div class="card small">
       <h2>일시정지</h2>
+      <p id="pause-diff" class="hint pause-diff"></p>
       <button id="resume-btn" class="btn" type="button">계속하기</button>
       <button id="pause-journal-btn" class="btn ghost" type="button">수첩</button>
       <button id="pause-settings-btn" class="btn ghost" type="button">설정</button>
@@ -239,6 +251,17 @@
       </div>
       <p id="settings-store" class="hint warn settings-store" role="status"></p>
       <div class="settings-grid">
+        <div class="group" role="group" aria-labelledby="g-game">
+          <h3 id="g-game">게임</h3>
+          <div class="row"><span id="d-label">난이도</span>
+            <div class="seg" role="radiogroup" aria-labelledby="d-label">
+              <label><input type="radio" name="difficulty" value="easy" data-setting="difficulty"><span>쉬움</span></label>
+              <label><input type="radio" name="difficulty" value="normal" data-setting="difficulty"><span>보통</span></label>
+              <label><input type="radio" name="difficulty" value="hard" data-setting="difficulty"><span>어려움</span></label>
+            </div>
+          </div>
+          <p id="d-hint" class="hint">2~4장은 바로 바뀌고, 1장 판은 새로 시작할 때부터 바뀌어요.</p>
+        </div>
         <div class="group" role="group" aria-labelledby="g-sound">
           <h3 id="g-sound">소리</h3>
           <label class="row slider"><span>전체 음량</span><input type="range" min="0" max="100" step="5" data-setting="volume" data-scale="100"><output data-out="volume"></output></label>

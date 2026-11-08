@@ -34,3 +34,24 @@ test('없으면 null, 형식이 틀리면 그 항목만 버리고 판은 이어 
   }
   localStorage.removeItem(RUN_KEY);
 });
+
+// 난이도 단계(#56): 보통이 아니면 run.diff에 남고, 없거나 모르는 이름이면 보통으로 읽는다(판은 이어 간다).
+test('난이도: 쉬움·어려움은 저장되고, 보통은 빠지며, 틀린 이름은 보통으로 읽는다', () => {
+  for (const level of ['easy', 'hard']) {
+    writeRun(captureRun({ world, player, car, env, game: { ...game, difficulty: level }, shades }));
+    assert.equal(JSON.parse(localStorage.getItem(RUN_KEY)).run.diff, level);
+    assert.equal(readRun(world).run.run.diff, level);
+  }
+  writeRun(captureRun({ world, player, car, env, game: { ...game, difficulty: 'normal' }, shades }));
+  const raw = JSON.parse(localStorage.getItem(RUN_KEY));
+  assert.equal('diff' in raw.run, false);
+  assert.equal(readRun(world).run.run.diff, 'normal');
+  for (const bad of ['nightmare', 3, null, {}]) {
+    raw.run.diff = bad;
+    localStorage.setItem(RUN_KEY, JSON.stringify(raw));
+    const r = readRun(world);
+    assert.equal(r.status, 'ok', JSON.stringify(bad));
+    assert.equal(r.run.run.diff, 'normal', JSON.stringify(bad));
+  }
+  localStorage.removeItem(RUN_KEY);
+});

@@ -164,6 +164,7 @@ export class Player {
     this.facing = 0;
     this.phase = 0;
     this.footfall = 0;
+    this.drain = 1; // 손전등 배터리가 닳는 빠르기 배율(난이도 단계, main이 판마다 정한다)
     this.reset(0, 0);
   }
 
@@ -321,7 +322,7 @@ export class Player {
     this.body.position.y = Math.abs(Math.sin(this.phase)) * 0.05 * moving;
     this.body.rotation.z = Math.sin(this.phase) * 0.04 * moving;
 
-    if (this.flashActive) this.battery = Math.max(0, this.battery - dt * 1.15);
+    if (this.flashActive) this.battery = Math.max(0, this.battery - dt * 1.15 * this.drain);
     const on = this.flashActive ? 1 : 0;
     const flick = this.battery < 15 && on ? (Math.sin(t * 37) * Math.sin(t * 13) > 0.6 ? 0.25 : 1) : 1;
     this.flash.intensity = on * flick * (14 + 26 * night);

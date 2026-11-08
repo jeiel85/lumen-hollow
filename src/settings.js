@@ -1,4 +1,5 @@
 import { load, save, storageAvailable } from './storage.js';
+import { DEFAULT_LEVEL, isLevel } from './difficulty.js';
 
 // 플레이어 설정: 저장·검증과 설정 화면의 입력 요소 연결.
 const KEY = 'lumen.settings';
@@ -25,6 +26,8 @@ function defaults({ mobile }) {
     fps: false,
     zoom: ZOOM.base,
     lefty: false,
+    // 난이도 단계(#56): 다음에 새로 시작하는 1장 판과 2~4장에 쓴다. 새 판 화면에서 고른 값이 여기 남는다.
+    difficulty: DEFAULT_LEVEL,
   };
 }
 
@@ -50,6 +53,7 @@ export function loadSettings(opts) {
   num('zoom', ZOOM.min, ZOOM.max);
   if (typeof raw.quality === 'string' && Object.prototype.hasOwnProperty.call(QUALITY, raw.quality)) s.quality = raw.quality;
   for (const k of ['tilt', 'shake', 'fps', 'lefty']) bool(k);
+  if (isLevel(raw.difficulty)) s.difficulty = raw.difficulty;
   return s;
 }
 
