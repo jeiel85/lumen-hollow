@@ -162,6 +162,18 @@
           </div>
           </div>
           <p id="new-diff-note" class="new-run-note"></p>
+          <div id="new-village-row" class="new-run-row hidden"><span id="new-village-label" class="new-run-label">마을</span>
+          <div class="seg" role="radiogroup" aria-labelledby="new-village-label">
+            <label><input type="radio" name="new-village" value="home"><span>기본 마을</span></label>
+            <label><input type="radio" name="new-village" value="other"><span>다른 마을</span></label>
+          </div>
+          </div>
+          <div id="new-village-pick" class="new-run-row hidden">
+            <label class="new-run-label" for="new-village-num">번호</label>
+            <input id="new-village-num" class="village-num" type="text" inputmode="numeric" maxlength="6" autocomplete="off" spellcheck="false">
+            <button id="new-village-roll" class="chip" type="button">새 번호</button>
+          </div>
+          <p id="new-village-note" class="new-run-note village-note"></p>
           <div class="title-actions">
             <button id="new-yes" class="btn" type="button">시작</button>
             <button id="new-no" class="btn ghost" type="button">취소</button>

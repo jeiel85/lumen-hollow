@@ -54,6 +54,50 @@ export const ZONE_NAMES = {
   F: '헛간 들판', G: '남쪽 광장', H: '은신처', I: '동남 주택가',
 };
 
+// 마을 번호(#59). 0은 이야기·공유 보급품이 묶인 기본 마을이고, 1~999999는 1장을 마친 뒤 새 판에서 고르는 다른 마을이다.
+// 다른 마을은 블록 종류 배치를 8가지 대칭(돌리기·뒤집기) 가운데 하나로 바꾸고(은신처는 가운데 그대로) 마을 난수를 바꾼다.
+// 구역 글자(A~I)는 자리(ZONE_GRID)를 가리키고, 이름은 그 자리에 온 동네와 방위로 다시 짓는다. 설계는 DECISIONS.md "마을 번호".
+export const DEFAULT_VILLAGE = 0;
+export const MAX_VILLAGE = 999999;
+export const isVillage = (v) => Number.isInteger(v) && v >= 0 && v <= MAX_VILLAGE;
+// 기본 마을에서 각 구역에 있던 동네: 이름 뒷부분과 방위를 붙이는지
+const QUARTER = {
+  A: ['농장', true], B: ['약국 거리', false], C: ['주택가', true], D: ['공원', true], E: ['골목식당 거리', false],
+  F: ['헛간 들판', false], G: ['광장', true], H: ['은신처', false], I: ['주택가', true],
+};
+const BEARING = { A: '서북', B: '북쪽', C: '동북', D: '서쪽', E: '동쪽', F: '서남', G: '남쪽', I: '동남' };
+
+// 다른 마을의 대칭 번호(1~7, 기본 마을은 0 = 그대로)
+export function villageTurn(v) {
+  return v === DEFAULT_VILLAGE ? 0 : 1 + ((Math.imul(v, 2654435761) >>> 0) % 7);
+}
+
+// 대칭 t로 (row, col) 자리에 올 원래 자리. t: 0~3은 90°씩 돌리기, 4~7은 좌우로 뒤집은 뒤 돌리기.
+function source(t, row, col) {
+  let r = row;
+  let c = t >= 4 ? 4 - col : col;
+  for (let k = 0; k < t % 4; k++) [r, c] = [4 - c, r];
+  return [r, c];
+}
+
+// 마을 번호의 블록 종류 배치와 구역 이름
+export function villageLayout(v) {
+  const t = villageTurn(v);
+  const types = [];
+  const names = {};
+  for (let row = 0; row < 5; row++) {
+    types.push([]);
+    for (let col = 0; col < 5; col++) {
+      const [r, c] = source(t, row, col);
+      types[row].push(TYPES[r][c]);
+      const here = ZONE_MAP[row][col];
+      const [word, bearing] = QUARTER[ZONE_MAP[r][c]];
+      names[here] = bearing ? `${BEARING[here]} ${word}` : word;
+    }
+  }
+  return { types, names };
+}
+
 const LOT_COLOR = {
   houses: C.grass, home: C.grass, park: C.grass, farm: C.dirt, barn: C.dirt,
   tower: C.gravel, shops: C.paving, pharmacy: C.paving, diner: C.paving,
@@ -312,7 +356,10 @@ export function pushOut(colliders, p, r) {
 }
 
 export class World {
-  constructor(scene, { mobile = false } = {}) {
+  constructor(scene, { mobile = false, village = DEFAULT_VILLAGE } = {}) {
+    if (!isVillage(village)) throw new Error(`마을 번호가 올바르지 않습니다: ${village}`);
+    this.village = village;
+    ({ types: this.types, names: this.zoneNames } = villageLayout(village));
     this.root = new THREE.Group();
     scene.add(this.root);
     this.sb = new Builder();
@@ -327,7 +374,7 @@ export class World {
     this.zones = {};
     for (const id of Object.keys(ZONE_NAMES)) {
       this.zones[id] = {
-        id, name: ZONE_NAMES[id], powered: false, on: true, load: 0, tripped: false,
+        id, name: this.zoneNames[id], powered: false, on: true, load: 0, tripped: false,
         level: 0, glow: 0, win: new Builder(), mat: null, seed: hash(id.charCodeAt(0)) * 100,
       };
     }
@@ -338,11 +385,11 @@ export class World {
     this.anchors = this._findAnchors();
     // 장식 전용 난수. 마을 생성 난수(rng)의 순서를 바꾸면 뒤질 곳·가로수 자리가 바뀌어
     // 공유 보급품 슬롯 목록(서버와의 약속)과 이야기 기록 자리가 어긋나므로, 새 장식은 모두 이것으로 고른다.
-    this.deco = new Rng(1926);
+    this.deco = new Rng(1926 + village * 31);
     this.signQuads = {}; // 구역별 간판 글귀 사각형(마감 때 구역마다 메시 하나로 합친다)
     this.homes = []; // 사람이 잠들어 있는 집의 현관(돌려보낸 그림자가 날아가는 곳)
     this.wireSparks = {}; // 구역별 점등 불꽃이 흐를 전선 조각
-    const rng = new Rng(20261105);
+    const rng = new Rng(20261105 + village * 104729);
     this._ground();
     this._roads(rng);
     for (let row = 0; row < 5; row++) for (let col = 0; col < 5; col++) this._block(row, col, rng);
@@ -403,7 +450,7 @@ export class World {
   }
 
   _block(row, col, rng) {
-    const type = TYPES[row][col];
+    const type = this.types[row][col];
     const zone = ZONE_MAP[row][col];
     const cx = (col - 2) * PITCH;
     const cz = (row - 2) * PITCH;
@@ -903,7 +950,7 @@ export class World {
   // 공원의 정자와 운동기구(#25 읍내 공원). 마을 난수(rng)도 공용 장식 난수(this.deco)도 쓰지 않고 블록마다 따로 씨를 둔다 —
   // 뒤따르는 장식·충돌체 자리와 보급품 슬롯·기록 자리가 바뀌지 않게. 연못 반대쪽부터 나무·벤치·뒤질 곳과 겹치지 않는 자리에 둔다.
   _parkFurniture(cx, cz, pond, ctx) {
-    const r = new Rng(7000 + ctx.row * 5 + ctx.col);
+    const r = new Rng(7000 + ctx.row * 5 + ctx.col + this.village * 97);
     // 연못이 없는 세 사분면의 후보 점들(길에서 2.6m, 담에서 2.4m 떨어진 곳). 연못 반대쪽 사분면을 먼저 본다.
     const quads = [[-pond[0], -pond[1]], ...(r.chance(0.5) ? [[pond[0], -pond[1]], [-pond[0], pond[1]]] : [[-pond[0], pond[1]], [pond[0], -pond[1]]])];
     const spots = [];
@@ -1121,6 +1168,9 @@ export class World {
       const x = vertical ? rc + lane : t;
       const z = vertical ? t : rc + lane;
       if (this.colliders.some((c) => c.car && Math.abs((c.x0 + c.x1) / 2 - x) < 6 && Math.abs((c.z0 + c.z1) / 2 - z) < 6)) continue;
+      // 다른 마을(#59)에서는 배전함·발전기·뒤질 곳 앞을 막는 자리에 세우지 않는다(차가 배전함 앞을 막아 판을 깰 수 없던 번호가 있었다).
+      // 기본 마을은 난수 순서가 공유 보급품 슬롯·기록 자리 약속에 묶여 있어 그대로 둔다(기본 마을에는 막힌 곳이 없다, tests/node/village.test.mjs).
+      if (this.village !== DEFAULT_VILLAGE && this._carBlocks(x, z, vertical)) continue;
       const a = (vertical ? 0 : Math.PI / 2) + (rng.chance(0.5) ? Math.PI : 0) + rng.range(-0.08, 0.08);
       const f = new Frame(x, z, a);
       const body = tint(rng.pick(C.cars), rng, 0.04);
@@ -1137,6 +1187,18 @@ export class World {
       if (rng.chance(0.55)) this._addLoot(f.px(0, -2.6), f.pz(0, -2.6), { near: false });
       made++;
     }
+  }
+
+  // 차(1.8×3.9m)를 이 자리에 세우면 손이 닿아야 하는 곳(배전함·발전기 앞, 뒤질 곳)에서 1.3m 안이거나 트럭 자리를 막는가
+  _carBlocks(x, z, vertical) {
+    const hw = (vertical ? 0.9 : 1.95) + 1.3;
+    const hd = (vertical ? 1.95 : 0.9) + 1.3;
+    const near = (px, pz) => Math.abs(px - x) < hw && Math.abs(pz - z) < hd;
+    if (this.fuseBoxes.some((f) => near(f.ix, f.iz) || near(f.x, f.z))) return true;
+    if (this.homeBreaker && near(this.homeBreaker.ix, this.homeBreaker.iz)) return true;
+    // 은신처 앞 트럭 자리(트럭 길이 4.6m를 넉넉히)
+    if (Math.abs(CAR_SPAWN.x - x) < hw + 3 && Math.abs(CAR_SPAWN.z - z) < hd + 1.5) return true;
+    return this.loot.some((l) => near(l.x, l.z));
   }
 
   // 전봇대와 전선: 안쪽 도로마다 한쪽 인도(블록 변 가운데)에 전봇대를 세우고 전선을 잇는다.

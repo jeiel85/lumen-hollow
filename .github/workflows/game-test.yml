@@ -82,5 +82,7 @@ jobs:
         run: node tests/e2e/difficulty.mjs 'http://127.0.0.1:8000/?debug' 960 540
       - name: Night variety
         run: node tests/e2e/nights.mjs 'http://127.0.0.1:8000/?debug' 960 540
+      - name: Village numbers
+        run: node tests/e2e/village.mjs 'http://127.0.0.1:8000/?debug' 960 540
       - name: Truck
         run: node tests/e2e/truck.mjs

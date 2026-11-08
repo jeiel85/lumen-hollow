@@ -1,7 +1,7 @@
 // 미니맵: 화면 구석의 작은 지도(내 주변)와 눌러서 펼치는 전체 지도.
 // 아이소 카메라와 같은 방향으로 45° 돌려 그린다: 화면 오른쪽 = (1,0,-1)/√2, 아래 = (1,0,1)/√2.
 // 움직이지 않는 바닥·건물은 무대마다 한 번 그려 두고(정적 층), 표시만 초당 10번 다시 그린다.
-import { BOUND, EDGE, PITCH, ZONE_NAMES } from './world.js';
+import { BOUND, EDGE, PITCH } from './world.js';
 
 const S2 = Math.SQRT1_2;
 const toU = (x, z) => (x - z) * S2;
@@ -259,7 +259,7 @@ export class Minimap {
       g.textAlign = 'center';
       g.fillStyle = COL.name;
       for (const [id, c] of Object.entries(this._zoneCenters())) {
-        g.fillText(ZONE_NAMES[id], w / 2 + s * (toU(c.x, c.z) - layer.cu), h / 2 + s * (toV(c.x, c.z) - layer.cv));
+        g.fillText(this.src.world.zones[id].name, w / 2 + s * (toU(c.x, c.z) - layer.cu), h / 2 + s * (toV(c.x, c.z) - layer.cv));
       }
     }
   }
