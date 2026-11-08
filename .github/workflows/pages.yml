@@ -60,7 +60,7 @@ jobs:
             grep -q "__BUILD__" "$f" || { echo "::error file=$f::__BUILD__ 표식이 없습니다."; exit 1; }
           done
           mkdir -p _site
-          cp -r index.html style.css favicon.svg manifest.webmanifest sw.js icons src vendor docs _site/
+          cp -r index.html style.css favicon.svg manifest.webmanifest sw.js icons art src vendor docs _site/
           sed -i "s/__BUILD__/${build}/g" _site/index.html _site/sw.js
           if grep -q "__BUILD__" _site/index.html _site/sw.js; then echo "::error::__BUILD__ 치환 실패"; exit 1; fi
           echo "build id: ${build}"

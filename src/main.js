@@ -234,10 +234,15 @@ function renderBest() {
 
 // 배포 직후 캐시된 옛 index.html과 섞이면 settings 화면이 없을 수 있다.
 const SCREENS = ['title', 'pause', 'end', 'settings', 'closet', 'journal', 'grid'];
+// index.html이 body.front로 시작하므로 처음에는 그림이 깔려 있다. 그림이 화면을 다 덮는 동안에는 3D 장면을 그리지 않는다.
+let titleArt = true;
 function setScreen(id) {
   if (id !== 'settings') settingsFrom = null;
   if (id !== 'journal') journalFrom = null;
   for (const s of SCREENS) $(s)?.classList.toggle('hidden', s !== id);
+  // 처음 화면 그림(#title-art)은 처음 화면과 거기서 연 설정·수첩 뒤에 깐다. 옷장·판에서는 걷어 3D 장면을 보인다.
+  titleArt = id === 'title' || (id === 'settings' && settingsFrom === 'title') || (id === 'journal' && journalFrom === 'title');
+  document.body.classList.toggle('front', titleArt);
 }
 
 // 옷장: 처음 화면에서 주인공을 은신처 앞에 세워 놓고 가까이서 돌려 보며 갈아입힌다.
@@ -2198,7 +2203,8 @@ function frame(now) {
   // 옷장은 전용 근접 카메라로 그리고, 인물이 화면 가운데가 아닐 수 있어 틸트시프트 흐림을 끈다.
   const inCloset = game.state === 'closet';
   // 화질을 바꿔 셰이더를 다시 컴파일하는 동안에는 숨긴 물체까지 켜져 있으니 그리지 않고 직전 화면을 둔다.
-  if (!(game.warming && game.ready)) {
+  // 처음 화면 그림이 덮고 있으면 그리지 않는다(휴대폰 배터리·발열). 판을 시작하면 그림이 걷히는 동안 바로 다시 그린다.
+  if (!(game.warming && game.ready) && !(titleArt && game.state === 'title')) {
     post.render(scene, inCloset ? closet.camera : camera, env.look, game.clock, {
       focus: 0.5, band: 0.07, blurScale: settings.tilt && !inCloset ? (game.state === 'title' ? 1.25 : 1.0) : 0,
       hurt: Math.max(player.hurtFx * (settings.shake ? 0.9 : 0.45), lowHp),

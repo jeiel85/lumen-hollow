@@ -27,6 +27,14 @@ const VENDOR = ['vendor/three/three.module.js?v=r187', 'vendor/three/three.core.
 const UNVERSIONED = [
   'favicon.svg', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png',
   'icons/apple-touch-icon.png',
+  // 처음 화면·메뉴 그림(index.html·style.css가 가리킨다). 버전 쿼리 없이 같은 주소라 옛 탭도 새 캐시에서 찾는다.
+  'art/title-wide.webp', 'art/title-tall.webp', 'art/logo-wide.webp', 'art/logo-stack.webp', 'art/panel.webp',
+  'art/btn-lit.webp', 'art/btn-dark.webp', 'art/icon-closet.webp', 'art/icon-journal.webp', 'art/icon-settings.webp',
+  'art/icon-install.webp', 'art/icon-grid.webp',
+  // 이야기 장면의 컷신 그림(src/script.js 줄의 art). 오프라인에서도 장면이 그림과 함께 나오게 미리 받는다.
+  ...['prologue-hand', 'prologue-road', 'confession-switch', 'finale-firstlight', 'ferry-row', 'landing-hands',
+    'bowls-riceballs', 'count-shoes', 'key-photo', 'chair-hands', 'mom-wakes', 'three-riceball', 'broadcast-morning',
+  ].map((n) => `art/story/${n}.webp`),
 ];
 const NAV_TIMEOUT = 4000;
 
@@ -53,7 +61,13 @@ async function diagnose(reqs) {
     try {
       res = await fetch(req.clone(), { method: 'HEAD', cache: 'no-store' });
     } catch {
-      return new InstallError('network');
+      // addAll이 실패하며 동시에 받던 요청들을 끊은 직후라, 첫 물음이 끊긴 연결에 걸려 실패할 수 있다.
+      // 한 번만 다시 물어, 빠진 파일을 '연결이 끊겼어요'로 잘못 알리지 않게 한다.
+      try {
+        res = await fetch(req.clone(), { method: 'HEAD', cache: 'no-store' });
+      } catch {
+        return new InstallError('network');
+      }
     }
     if (!res.ok) return new InstallError('missing', `${pathOf(req)} ${res.status}`);
   }

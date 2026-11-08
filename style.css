@@ -99,7 +99,7 @@ body.calm .fill { animation: none !important; }
    넘칠 때 위쪽이 잘려 보이지 않게 한다. */
 .screen { position: fixed; inset: 0; display: flex; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: var(--edge-t) var(--edge-r) var(--edge-b) var(--edge-l); background: radial-gradient(ellipse at center, rgba(8, 14, 16, 0.25), rgba(8, 14, 16, 0.7)); }
 .screen > .card { margin: auto; }
-#title { background: linear-gradient(180deg, rgba(8, 14, 16, 0.05), rgba(8, 14, 16, 0.55)); }
+#title { background: none; }
 #settings { background: rgba(8, 14, 16, 0.6); }
 .card { width: min(560px, 100%); text-align: center; padding: 34px 30px 26px; border-radius: 22px; background: rgba(12, 19, 21, 0.58); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35); }
 .card.small { width: min(420px, 100%); display: grid; gap: 10px; }
@@ -272,15 +272,7 @@ input[type="range"] { width: 100%; margin: 0; accent-color: #f4b45c; cursor: poi
   .touch-btns button { width: 64px; height: 64px; font-size: 12px; }
   .touch-btns button.big { height: 54px; }
   .stick-zone { height: 72%; }
-  /* 타이틀: 왼쪽 제목·시작, 오른쪽 안내 두 단 */
-  .title-card { width: min(880px, 100%); display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: center; gap: 0 30px; text-align: left; padding: 20px 26px; }
-  .title-card h1 { font-size: 44px; }
-  .title-card .tagline { margin: 10px 0 16px; font-size: 13.5px; line-height: 1.6; }
-  .title-card .title-links { justify-content: flex-start; margin-top: 12px; }
-  .title-card .title-actions { justify-content: flex-start; }
-  .title-card .run-info { margin-top: 8px; }
-  .title-card .howto { margin: 0; gap: 7px; font-size: 12.5px; }
-  .title-card .best { margin-top: 12px; }
+  /* 처음 화면은 맨 아래 '그림' 절에서 다룬다. */
   .card { padding: 22px 26px 20px; }
   .card.small { padding: 18px 22px; gap: 8px; }
   .card.small .tagline { margin: 6px 0 10px; }
@@ -557,4 +549,95 @@ body.chapter-mode .hud .zones, body.chapter-mode #power-btn, body.chapter-mode .
 /* 폭 721~759px에서는 '보급품 남기기'까지 뜨면 위 줄이 두 줄로 넘쳐 미니맵을 덮었다. 좁은 화면처럼 글자 이름표를 뺀다. */
 @media (pointer: fine) and (min-width: 721px) and (max-width: 759px) {
   .hud-top .wide-only { display: none; }
+}
+
+/* ---------- 그림: 처음 화면·메뉴 ---------- */
+/* art/의 그림은 코덱스 이미지 생성으로 만든 원본을 다듬은 것이다(LICENSE-CONTENT.md). 서비스 워커 사전 캐시에도 넣는다(sw.js). */
+
+/* 처음 화면 그림: 처음 화면과 거기서 연 설정·수첩 뒤에만 깐다(body.front). 판·옷장으로 가면 걷혀 3D 장면이 보인다. */
+.title-art { position: fixed; inset: 0; overflow: hidden; background: #071113; opacity: 0; visibility: hidden; transition: opacity 0.8s ease, visibility 0s linear 0.8s; }
+body.front .title-art { opacity: 1; visibility: visible; transition: opacity 0.8s ease; }
+.title-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 68% 50%; }
+/* 왼쪽 단(로고·메뉴)의 글씨가 그림 위에서 읽히게 왼쪽과 아래를 어둡게 한다. 그림의 주인공은 오른쪽에 있다. */
+.title-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(5, 10, 11, 0.8) 0%, rgba(5, 10, 11, 0.5) 32%, rgba(5, 10, 11, 0) 60%), linear-gradient(0deg, rgba(5, 10, 11, 0.55), rgba(5, 10, 11, 0) 30%); }
+@keyframes artDrift { from { transform: scale(1.02); } to { transform: scale(1.08) translate(-1%, -0.6%); } }
+
+#title > .title-card { width: min(480px, 100%); margin: auto auto auto clamp(0px, 6vw - 24px, 96px); padding: 6px 0 10px; background: none; border: 0; border-radius: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.title-logo { position: relative; width: min(100%, 460px); margin: 0 auto; font-size: 16px; font-weight: 400; line-height: 1.3; letter-spacing: 0; text-shadow: none; }
+.title-logo img { display: block; width: 100%; height: auto; }
+/* 로고의 전구(O 자리) 위에 얹는 빛. 위치는 로고 그림 안에서 전구가 있는 자리(가로 로고 61%·48%, 두 줄 로고 30%·65%). */
+.logo-glow { --bx: 61.1%; --by: 47.9%; position: absolute; left: var(--bx); top: var(--by); width: 15%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, rgba(255, 222, 160, 0.5) 0%, rgba(255, 190, 100, 0.18) 38%, rgba(255, 190, 100, 0) 68%); mix-blend-mode: screen; pointer-events: none; opacity: 0.85; }
+@keyframes bulbFlicker { 0%, 100% { opacity: 0.85; } 45% { opacity: 1; } 61% { opacity: 1; } 62% { opacity: 0.5; } 63.5% { opacity: 0.95; } 65% { opacity: 0.6; } 67% { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  body.front .title-art img { animation: artDrift 48s ease-in-out infinite alternate; }
+  .logo-glow { animation: bulbFlicker 7s linear infinite; }
+  body.calm .logo-glow { animation: none; }
+}
+.title-main .eyebrow { margin: 10px 0 0; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); }
+.title-main .tagline { color: rgba(244, 239, 228, 0.78); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85); }
+.title-main .run-info, .title-main .best, .online-summary { text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85); }
+.title-card .howto { margin-top: 26px; padding: 14px 16px; border-radius: 12px; background: rgba(6, 11, 12, 0.66); border: 1px solid var(--line); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+
+/* 버튼: 낡은 제어판의 조명 누름단추(art/btn-lit.webp·btn-dark.webp, 높이 96px, 양 끝 반원 48px)를 3조각으로 늘린다.
+   양 끝이 찌그러지지 않게 높이(--btn-h)를 정하고 끝 조각을 그 절반 폭으로 그린다. */
+.btn { --btn-h: 46px; display: inline-flex; align-items: center; justify-content: center; min-height: var(--btn-h); padding: 6px 32px; border: 0 solid transparent; border-image: url("art/btn-lit.webp") 0 48 fill / 0 calc(var(--btn-h) / 2) / 0 stretch; border-radius: 999px; background: none; color: #24180a; text-shadow: 0 1px 0 rgba(255, 238, 205, 0.55); box-shadow: 0 8px 28px rgba(255, 176, 80, 0.3); }
+.btn:hover { filter: brightness(1.07); box-shadow: 0 10px 34px rgba(255, 176, 80, 0.45); }
+.btn:disabled { filter: grayscale(0.35) brightness(0.85); }
+.btn.ghost { border-image-source: url("art/btn-dark.webp"); color: #eadcc4; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); }
+.btn.ghost:hover { filter: brightness(1.25); box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4); }
+
+/* 처음 화면의 옷장·수첩·설정·설치: 꺼진 누름단추 + 빛나는 아이콘 */
+.title-links .chip { --btn-h: 40px; display: inline-flex; align-items: center; gap: 7px; min-height: var(--btn-h); padding: 4px 18px 4px 14px; border: 0 solid transparent; border-image: url("art/btn-dark.webp") 0 48 fill / 0 calc(var(--btn-h) / 2) / 0 stretch; border-radius: 999px; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; color: #eadcc4; font-size: 13.5px; }
+.title-links .chip:hover:not(:disabled) { filter: brightness(1.25); color: #fff3dc; }
+.title-links .chip::before, .panel-title::before { content: ""; flex: none; background: center / contain no-repeat; }
+.title-links .chip::before { width: 20px; height: 20px; }
+#closet-btn::before, #closet-title::before { background-image: url("art/icon-closet.webp"); }
+#journal-btn::before, #journal-title::before { background-image: url("art/icon-journal.webp"); }
+#settings-btn::before, #settings-title::before { background-image: url("art/icon-settings.webp"); }
+#install-btn::before { background-image: url("art/icon-install.webp"); }
+#grid-title::before { background-image: url("art/icon-grid.webp"); }
+
+/* 메뉴 패널: 낡은 옥외 배전함 문짝(art/panel.webp, 640px, 테두리 띠 40px)을 9조각으로 늘린다. 안쪽도 그림으로 채워 불투명하다. */
+.card:not(.title-card) { border: 18px solid transparent; border-image: url("art/panel.webp") 40 fill / 18px / 0 stretch; border-radius: 3px; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: 0 28px 70px rgba(0, 0, 0, 0.55); }
+.card.small { padding: 16px 14px 14px; }
+.settings-card, .journal-card, .grid-card { padding: 8px 12px 14px; }
+.closet-panel { padding: 10px 10px 8px; }
+.panel-title { display: inline-flex; align-items: center; gap: 10px; text-shadow: 0 0 18px rgba(255, 207, 134, 0.25); }
+.panel-title::before { width: 28px; height: 28px; }
+
+/* 세로 화면: 세로 그림. 로고는 위, 시작 버튼은 아래, 가운데는 그림의 주인공을 비워 둔다. 안내는 스크롤해서 본다. */
+@media (max-aspect-ratio: 4/5) {
+  .title-art img { object-position: 50% 50%; }
+  .title-art::after { background: linear-gradient(180deg, rgba(5, 10, 11, 0.55) 0%, rgba(5, 10, 11, 0) 22%, rgba(5, 10, 11, 0) 50%, rgba(5, 10, 11, 0.78) 74%, rgba(5, 10, 11, 0.92) 100%); }
+  #title > .title-card { margin: 0 auto; width: min(440px, 100%); padding: 0; }
+  .title-main { display: flex; flex-direction: column; align-items: center; min-height: calc(100vh - var(--edge-t) - var(--edge-b)); min-height: calc(100svh - var(--edge-t) - var(--edge-b)); padding-bottom: 6px; }
+  .title-logo { width: min(78vw, 330px); margin-top: 2vh; }
+  .logo-glow { --bx: 29.6%; --by: 64.7%; width: 22%; }
+  .title-main .tagline { margin-top: auto; font-size: 13.5px; }
+}
+
+/* 가로로 눕힌 휴대폰: 왼쪽 단을 좁히고 버튼을 낮춘다. */
+@media (orientation: landscape) and (max-height: 540px) {
+  #title > .title-card { width: min(380px, 100%); margin-left: clamp(0px, 3vw, 40px); }
+  .title-logo { width: min(100%, 340px); }
+  .title-card .tagline { margin: 8px 0 12px; font-size: 13px; line-height: 1.55; }
+  .title-card .title-links { margin-top: 10px; }
+  .title-card .howto { margin-top: 18px; gap: 7px; font-size: 12.5px; }
+  .btn { --btn-h: 40px; }
+}
+
+/* 컷신 그림: 대본 줄의 art(src/script.js)가 장면 뒤에 까는 정지 화면. 암전한 사이에 바뀌고, 천천히 다가간다.
+   가로 화면은 꽉 채우고, 세로 화면은 그림이 잘리지 않게 가운데 띠로 보인다(위아래는 검정). */
+.story-art { position: absolute; inset: 0; background: #020405; opacity: 0; visibility: hidden; }
+.story-art.on { opacity: 1; visibility: visible; }
+.story-art img { position: relative; display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 45%; }
+/* 세로 화면에서 그림 띠 위아래를 같은 그림의 흐리고 어두운 확대로 채운다(--art는 src/dialogue.js가 정한다). */
+.story-art::before { content: ""; position: absolute; inset: -60px; display: none; background: var(--art, none) center / cover no-repeat; filter: blur(24px) brightness(0.42) saturate(0.9); }
+@keyframes artPush { from { transform: scale(1.04); } to { transform: scale(1.1) translate(-0.8%, -0.5%); } }
+@media (prefers-reduced-motion: no-preference) {
+  .story-art.on img { animation: artPush 22s ease-out both; }
+}
+@media (max-aspect-ratio: 1/1) {
+  .story-art img { object-fit: contain; object-position: 50% 40%; }
+  .story-art::before { display: block; }
 }
