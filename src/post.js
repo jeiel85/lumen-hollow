@@ -56,6 +56,7 @@ const TILT_H = `${TILT_COMMON}
 const FINAL = `${TILT_COMMON}
   uniform sampler2D tBloom; uniform float uBloom; uniform float uExposure; uniform vec3 uTint; uniform vec3 uLift;
   uniform float uSat; uniform float uVignette; uniform float uTime; uniform vec2 uRes; uniform float uHurt;
+  uniform float uFog; uniform vec3 uFogColor;
   float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
   vec3 toSRGB(vec3 c){
     c = clamp(c, 0.0, 1.0);
@@ -77,6 +78,13 @@ const FINAL = `${TILT_COMMON}
     vec2 q = vUv - 0.5;
     float v = 1.0 - dot(q, q) * uVignette;
     c *= clamp(v, 0.0, 1.0);
+    // 안개 낀 밤(#57): 화면 가운데(플레이어) 둘레만 보이고 바깥은 천천히 흐르는 안개에 묻힌다.
+    if (uFog > 0.001) {
+      vec2 p = q * vec2(uRes.x / max(uRes.y, 1.0), 1.0);
+      float drift = 0.5 + 0.5 * sin(p.x * 6.0 + uTime * 0.17) * sin(p.y * 8.0 - uTime * 0.13);
+      float fd = smoothstep(0.14, 0.48, length(p));
+      c = mix(c, uFogColor, clamp(uFog * fd * (0.78 + 0.18 * drift), 0.0, 1.0));
+    }
     float edge = smoothstep(0.25, 0.75, length(q));
     c = mix(c, vec3(0.55, 0.05, 0.05), uHurt * edge * 0.75);
     c = toSRGB(c);
@@ -111,6 +119,7 @@ export class Post {
       tBloom: { value: null }, uBloom: { value: 0.5 }, uExposure: { value: 1 }, uTint: { value: new THREE.Color(1, 1, 1) },
       uLift: { value: new THREE.Color(0, 0, 0) }, uSat: { value: 1 }, uVignette: { value: 1 }, uTime: { value: 0 },
       uRes: { value: new THREE.Vector2() }, uHurt: { value: 0 },
+      uFog: { value: 0 }, uFogColor: { value: new THREE.Color(0.075, 0.1, 0.11) },
     });
     this.w = 1;
     this.h = 1;
@@ -188,6 +197,7 @@ export class Post {
     u.uVignette.value = look.vignette;
     u.uTime.value = time;
     u.uHurt.value = opts.hurt;
+    u.uFog.value = opts.fog ?? 0;
     this._pass(this.mFinal, null);
   }
 }

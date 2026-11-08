@@ -11,6 +11,9 @@ export const TRUCK_LAMP_RADIUS = 4.2; // 트럭 짐칸 작업등의 안전 반�
 // 배전: 빛 경계에 붙어 버티는 그늘이 하나가 그 구역 부하를 초당 이만큼 올린다. 부하가 1이 되면 차단기가 내려간다.
 export const LOAD_PER_SHADE = 0.016;
 const LOAD_DECAY = 0.04; // 아무도 누르지 않을 때 초당 빠지는 부하
+// 전압 출렁임(#57 밤 사건): 깜박이며 알리는 시간과 그 뒤 꺼져 있는 시간(초)
+export const DIP_WARN = 0.8;
+export const DIP_DARK = 3.2;
 // 탈 수 있는 트럭을 세워 두는 곳: 은신처 남쪽 도로의 북쪽 차선, 앞이 트인 서쪽을 향해.
 export const CAR_SPAWN = { x: 4, z: 13.4, a: -Math.PI / 2 };
 const LOT_Y = 0.16;
@@ -1393,6 +1396,7 @@ export class World {
       z.level = z.powered ? 1 : 0;
       z.glow = z.level;
       z.pulse = -1;
+      z.dip = 0;
     }
     Object.assign(this.truckLamp, { on: false, level: 0, glow: 0, load: 0 });
     this.events.length = 0;
@@ -1557,6 +1561,15 @@ export class World {
     return true;
   }
 
+  // 전압 출렁임: 그 구역 가로등이 DIP_WARN 동안 깜박인 뒤 DIP_DARK 동안 꺼졌다가 다시 켜진다(차단기·부하와는 따로).
+  // 켜져 있는 구역에만 건다. 걸었으면 true.
+  dip(id) {
+    const z = this.zones[id];
+    if (!z || !z.powered || !z.on || z.tripped || z.dip > 0) return false;
+    z.dip = DIP_WARN + DIP_DARK;
+    return true;
+  }
+
   // 새벽: 내려간 차단기는 마을 관리 회로가 다시 올리고 부하도 비운다. 다시 올린 구역 수를 돌려준다.
   dawnReset() {
     let n = 0;
@@ -1712,13 +1725,15 @@ export class World {
   update(dt, t, night, focus, pxPerUnit) {
     this.night = night;
     for (const z of Object.values(this.zones)) {
-      const lit = z.powered && z.on && !z.tripped;
+      if (z.dip > 0) z.dip = Math.max(0, z.dip - dt);
+      const lit = z.powered && z.on && !z.tripped && !(z.dip > 0 && z.dip <= DIP_DARK);
       if (lit && z.level < 1) z.level = Math.min(1, z.level + dt / 1.8);
       else if (!lit && z.level > 0) z.level = Math.max(0, z.level - dt / (z.tripped ? 0.5 : 0.9));
       z.load = Math.max(0, z.load - dt * LOAD_DECAY);
       let flick = z.level > 0 && z.level < 1 ? (hash(Math.floor(t * 16) + z.seed) > 0.45 ? 1 : 0.12) : 1;
       // 과부하가 걸리면 부하가 클수록 자주 깜박인다(차단기가 내려가기 전 경고).
       if (lit && z.load > 0.5 && hash(Math.floor(t * 14) + z.seed * 3.1) < (z.load - 0.5) * 1.1) flick *= 0.3;
+      if (z.dip > DIP_DARK && hash(Math.floor(t * 18) + z.seed * 5.3) > 0.5) flick *= 0.2; // 출렁임 직전의 깜박임
       z.glow = z.level * flick;
       if (z.mat) z.mat.emissiveIntensity = 1.25 * night * z.glow;
       if (z.signMat) z.signMat.emissiveIntensity = 0.06 + 1.5 * night * z.glow;
