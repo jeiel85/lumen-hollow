@@ -6,6 +6,7 @@
   <title>Lumen Hollow — 빛으로 버티는 밤</title>
   <meta name="description" content="정전된 작은 마을에서 낮에는 퓨즈를 모으고, 밤에는 손전등과 가로등 불빛으로 그림자 형체를 버티는 아이소메트릭 생존 게임.">
   <meta name="theme-color" content="#0e1a1d">
+  <meta name="lumen-paywall" content="on">
   <meta property="og:title" content="Lumen Hollow — 빛으로 버티는 밤">
   <meta property="og:description" content="정전된 마을에 다시 불을 밝히는 아이소메트릭 로우폴리 생존 게임. 브라우저에서 바로 플레이.">
   <meta property="og:type" content="website">
@@ -59,6 +60,7 @@
       "./src/shades.js": "./src/shades.js?v=__BUILD__",
       "./src/slots.js": "./src/slots.js?v=__BUILD__",
       "./src/storage.js": "./src/storage.js?v=__BUILD__",
+      "./src/store.js": "./src/store.js?v=__BUILD__",
       "./src/story.js": "./src/story.js?v=__BUILD__",
       "./src/vehicle.js": "./src/vehicle.js?v=__BUILD__",
       "./src/wisps.js": "./src/wisps.js?v=__BUILD__",
@@ -354,6 +356,23 @@
         <button id="journal-reset" class="chip danger" type="button">이야기 처음부터</button>
         <span id="journal-reset-hint" class="hint"></span>
       </div>
+    </div>
+  </section>
+
+  <section id="paywall" class="screen hidden" aria-labelledby="paywall-title">
+    <div class="card small paywall-card">
+      <h2 id="paywall-title" class="panel-title" tabindex="-1">이야기 2~4장</h2>
+      <p id="paywall-lead" class="paywall-lead"></p>
+      <ul class="paywall-list">
+        <li><b>2장 인계</b> 섬에서 할머니와 다음 당직자를 부른다</li>
+        <li><b>3장 빈 들것</b> 강 건너 구호소에서 엄마의 행방을 찾는다</li>
+        <li><b>4장 점호</b> 옛 학교에서 마지막 밤을 지킨다</li>
+      </ul>
+      <p class="hint">한 번 사면 이 구글 계정의 기기에서 계속 열려요. 광고나 더 사야 하는 것은 없어요.</p>
+      <p id="paywall-msg" class="hint paywall-msg" role="status" aria-live="polite"></p>
+      <button id="paywall-buy" class="btn" type="button">2~4장 열기</button>
+      <button id="paywall-check" class="btn ghost" type="button">산 기록 다시 확인</button>
+      <button id="paywall-close" class="btn ghost" type="button">나중에</button>
     </div>
   </section>
 

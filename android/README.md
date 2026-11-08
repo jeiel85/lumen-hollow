@@ -36,6 +36,26 @@ cd android && ./gradlew assembleRelease bundleRelease
 - 올릴 때마다 `android/app/build.gradle`의 `versionCode`를 1 올리고, `versionName`을 게임 태그와 맞춘다.
 - 게임 코드(`src/` 등)를 고쳤으면 `npm run sync`부터 다시 한다. `android/app/src/main/assets/public`은 빌드 산출물이라 저장소에 넣지 않는다.
 
+## 앱 안 결제 (2~4장, #51)
+
+Play Billing Library 8.0.0을 직접 쓰는 앱 안 플러그인(`app/src/main/java/.../BillingPlugin.java`)이 일회성 상품 **`story_ch2_4`** 하나를 판다. 맛보기는 2장 '첫 대면' 장면까지이고, 그 뒤는 사야 열린다. 결정은 [DECISIONS.md](../DECISIONS.md) "2~4장 한 번 결제".
+
+Play Console에서 할 일(순서대로):
+
+1. 결제 프로필(#54). 유료 상품을 만들려면 먼저 있어야 한다.
+2. 결제 권한이 든 이 빌드(v0.22.0 이상)를 아무 트랙(비공개 테스트)에 올린다. 결제 권한이 든 빌드가 올라가야 상품을 만들 수 있다.
+3. 수익 창출 → 제품 → 일회성 상품: 상품 ID `story_ch2_4`(지우면 같은 ID를 다시 못 쓴다), 이름 '이야기 2~4장', 가격(2,500~3,900원 중), 활성화.
+4. 설정 → 라이선스 테스트: **비공개 테스트에 넣은 계정을 모두** 넣는다. 넣지 않은 테스터는 실제로 결제된다. 라이선스 테스터는 '항상 승인되는 테스트 카드'로 돈이 나가지 않는다.
+5. 확인: 라이선스 테스터 폰에서 2장 첫 대면 뒤 결제 화면 → 사기 → 바로 2장 찾기로 이어짐 → 앱을 지웠다 다시 깔아도 열림 → 주문 관리에서 그 주문을 환불 → 앱을 다시 열면 잠김.
+
+상품·라이선스 테스터를 갖추기 전에 테스터에게 줄 빌드는 결제 잠금을 끄고 만든다(프로덕션 빌드는 반드시 켠다).
+
+```bash
+LUMEN_PAYWALL=off npm run aab
+```
+
+릴리스 빌드는 WebView 원격 디버깅이 꺼져 있어, 결제 화면을 에뮬레이터에서 볼 때는 `assembleDebug`로 만든 디버그 앱에 `adb forward tcp:<포트> localabstract:webview_devtools_remote_<pid>`로 붙는다. Play 스토어가 없는 에뮬레이터 이미지(google_apis)에서는 결제 서비스에 닿지 못해(응답 3) '연결하지 못했어요'가 뜨는 것이 정상이다.
+
 ## 서명 키
 
 - 업로드 키스토어 원본: 메인 체크아웃의 `.keystore/lumen-hollow-upload.jks`와 `.keystore/release-signing.properties`(비밀번호·별칭). git에서 제외되고(`.gitignore`, `.git/info/exclude`), 저장소에 절대 커밋하지 않는다.

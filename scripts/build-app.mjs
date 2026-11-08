@@ -48,6 +48,13 @@ const indexPath = join(out, 'index.html');
 let html = readFileSync(indexPath, 'utf8');
 if (!html.includes('__BUILD__')) fail('index.html에 __BUILD__ 표식이 없습니다.');
 html = html.replaceAll('__BUILD__', id);
+// 2~4장 결제 잠금(#51). 기본은 켜짐. Play Console에 상품(story_ch2_4)과 라이선스 테스터를 갖추기 전에 테스터에게 줄 빌드는
+// LUMEN_PAYWALL=off로 만들면 2~4장이 그냥 열린다(src/main.js가 이 메타를 읽는다). 프로덕션 빌드는 반드시 켠다.
+const paywall = (process.env.LUMEN_PAYWALL ?? 'on').toLowerCase();
+if (!['on', 'off'].includes(paywall)) fail(`LUMEN_PAYWALL은 on 또는 off여야 합니다: ${paywall}`);
+const meta = '<meta name="lumen-paywall" content="on">';
+if (!html.includes(meta)) fail('index.html에 결제 잠금 메타가 없습니다.');
+html = html.replace(meta, `<meta name="lumen-paywall" content="${paywall}">`);
 // 스타일보다 먼저(모듈보다 확실히 앞에) 넣는다. capacitor.js가 capacitorExports를, app.js가 capacitorApp을 만든다.
 const anchor = '<link rel="stylesheet" href="style.css';
 if (!html.includes(anchor)) fail('index.html에서 스타일 링크를 찾지 못했습니다.');
@@ -55,4 +62,4 @@ html = html.replace(anchor, '<script src="vendor/capacitor/capacitor.js"></scrip
 if (html.includes('__BUILD__')) fail('__BUILD__ 치환 실패');
 writeFileSync(indexPath, html);
 
-console.log(`[build-app] ${out} (build ${id})`);
+console.log(`[build-app] ${out} (build ${id}, 2~4장 결제 잠금 ${paywall})`);
