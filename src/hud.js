@@ -188,18 +188,44 @@ export class Hud {
     this.el.prompt.classList.toggle('busy', progress > 0);
   }
 
+  // 안내는 게임 시간(tickToasts)으로 사라진다: 일시정지·탭 전환·장면 동안에는 그대로 남는다(#14).
+  // 지나간 안내는 log에 8개까지 남겨 일시정지 화면에서 다시 볼 수 있다.
   toast(text, kind = '') {
     const t = document.createElement('div');
     t.className = `toast ${kind}`;
     t.textContent = text;
     this.el.toasts.appendChild(t);
     while (this.el.toasts.children.length > 4) this.el.toasts.firstChild.remove();
-    setTimeout(() => t.classList.add('out'), 3200);
-    setTimeout(() => t.remove(), 3800);
+    (this._toasts ??= []).push({ el: t, left: 3.2 });
+    this.log = [{ text, kind }, ...(this.log ?? [])].slice(0, 8);
+  }
+
+  tickToasts(dt) {
+    if (!this._toasts?.length) return;
+    for (const it of this._toasts) {
+      it.left -= dt;
+      if (it.left <= 0) it.el.classList.add('out');
+      if (it.left <= -0.6) it.el.remove();
+    }
+    this._toasts = this._toasts.filter((it) => it.el.isConnected);
   }
 
   clearToasts() {
     this.el.toasts.replaceChildren();
+    this._toasts = [];
+  }
+
+  // 일시정지 화면의 '최근 안내'
+  renderLog(list) {
+    if (!list) return;
+    const rows = this.log ?? [];
+    list.replaceChildren(...rows.map(({ text, kind }) => {
+      const li = document.createElement('li');
+      li.textContent = text;
+      if (kind) li.className = kind;
+      return li;
+    }));
+    list.closest('details')?.classList.toggle('hidden', rows.length === 0);
   }
 
   // 화면 밖 목표를 가리키는 화살표. sx, sy는 화면 픽셀 좌표.

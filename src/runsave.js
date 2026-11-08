@@ -66,6 +66,8 @@ export function captureRun({ world, player, car, env, game, shades }) {
     run: {
       nights: game.nights, banished: shades.banished, returned: game.returned, cacheTaken: game.cacheTaken,
       hints: Object.keys(HINTS).filter((k) => game[HINTS[k]]),
+      // 꺼내기 요청이 오가는 중이었으면 그 상자(이어할 때 다시 물어 결과를 맞춘다, #14). 없으면 빠진다.
+      ...(game.pendingTake ? { pendingTake: { id: game.pendingTake.id, kind: game.pendingTake.kind } } : {}),
     },
   };
 }
@@ -144,8 +146,15 @@ function validate(raw, world) {
     run: {
       nights: run.nights, banished: run.banished, returned: run.returned, cacheTaken: run.cacheTaken,
       hints: run.hints.filter((k) => typeof k === 'string' && HINTS[k]).map((k) => HINTS[k]),
+      pendingTake: pendingTakeOf(run.pendingTake),
     },
   };
+}
+
+// 선택 항목: 형식이 틀리면 버린다(판 전체를 버리지는 않는다). 상자 id는 src/online.js의 ID_RE와 같은 형식.
+function pendingTakeOf(t) {
+  if (!obj(t) || typeof t.id !== 'string' || !/^c_[a-z2-7]{26}$/.test(t.id) || !['bandage', 'fuel', 'battery'].includes(t.kind)) return null;
+  return { id: t.id, kind: t.kind };
 }
 
 // 마을을 저장된 판의 상태로 되돌린다: 뒤질 곳의 물건과 뒤진 곳, 고친 구역의 스위치·차단기·부하.

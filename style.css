@@ -363,18 +363,19 @@ body.calm .gcell.tripped { animation: none; }
 .story-next { position: absolute; right: 18px; bottom: 10px; font-size: 11px; color: var(--warm); opacity: 0; }
 .story-next.on { opacity: 1; animation: pulse 1.1s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .letterbox, .story-fade { transition-duration: 0.2s; }
+  .story-fade { transition-duration: 0.2s; }
+  .letterbox { transition: none; }
   .radio-wave i, .story-next.on { animation: none; }
 }
 
 /* ---------- 이야기: 기록 읽기 ---------- */
 .doc { z-index: 6; background: rgba(4, 8, 9, 0.74); }
 .doc-wrap { margin: auto; width: min(560px, 100%); display: grid; gap: 14px; justify-items: center; padding: 8px 0; }
-.paper { width: 100%; text-align: left; padding: 24px 28px 22px; border-radius: 4px; background: #efe6d2; color: #2b2620; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); transform: rotate(-0.6deg); font-family: "Nanum Myeongjo", "NanumMyeongjo", "AppleMyungjo", "Noto Serif KR", "Batang", serif; -webkit-user-select: text; user-select: text; }
+.paper { width: 100%; text-align: left; padding: 24px 28px 22px; border-radius: 4px; background: #efe6d2; color: #2b2620; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); transform: rotate(-0.6deg); font-family: "Nanum Myeongjo", "NanumMyeongjo", "AppleMyungjo", "Noto Serif KR", "Noto Serif CJK KR", "Batang", serif; -webkit-user-select: text; user-select: text; }
 .paper-where { margin: 0 0 6px; font-family: var(--font); font-size: 11px; letter-spacing: 0.2em; color: #8a7a62; }
 .paper h2 { margin: 0 0 14px; font-size: 21px; font-weight: 700; line-height: 1.35; }
 .paper-body p { margin: 0 0 9px; font-size: 15px; line-height: 1.75; white-space: pre-wrap; }
-.paper-hand { margin: 12px 0 0; font-family: "Nanum Pen Script", "NanumPen", "Gaegu", cursive; font-size: 19px; color: #9a3b2a; transform: rotate(-2deg); }
+.paper-hand { margin: 12px 0 0; /* 손글씨 글꼴이 없는 기기(안드로이드 등)는 명조로 대신한다(cursive의 기본값이 기기마다 제각각이라) */ font-family: "Nanum Pen Script", "NanumPen", "Gaegu", "Nanum Myeongjo", "AppleMyungjo", "Noto Serif CJK KR", serif; font-size: 19px; color: #9a3b2a; transform: rotate(-2deg); }
 .paper-hand:empty, .doc-note:empty { display: none; }
 .doc-note { margin: 0; max-width: 46ch; text-align: center; font-size: 14px; line-height: 1.6; font-style: italic; color: var(--dim); }
 .kind-clipboard { border-top: 18px solid #8a6a48; font-variant-numeric: tabular-nums; }
@@ -439,7 +440,7 @@ body.chapter-mode .hud .zones, body.chapter-mode #power-btn, body.chapter-mode .
 .npc-tag { position: absolute; left: 0; top: 0; padding: 2px 8px; border-radius: 8px; background: rgba(8, 13, 15, 0.62); border: 1px solid var(--line); font-size: 11.5px; color: var(--warm); white-space: nowrap; }
 .chapter-card { position: fixed; inset: 0; z-index: 7; display: grid; place-items: center; background: #020405; pointer-events: none; animation: cardIn 0.35s ease both; }
 .chapter-card.out { opacity: 0; transition: opacity 0.9s ease; }
-.chapter-card p { margin: 0; padding: 0 24px; text-align: center; font-family: "Nanum Myeongjo", "NanumMyeongjo", "AppleMyungjo", "Noto Serif KR", "Batang", serif; font-size: clamp(22px, 5vw, 34px); letter-spacing: 0.12em; color: #efe6d2; }
+.chapter-card p { margin: 0; padding: 0 24px; text-align: center; font-family: "Nanum Myeongjo", "NanumMyeongjo", "AppleMyungjo", "Noto Serif KR", "Noto Serif CJK KR", "Batang", serif; font-size: clamp(22px, 5vw, 34px); letter-spacing: 0.12em; color: #efe6d2; }
 @keyframes cardIn { from { opacity: 0; } }
 @media (orientation: portrait) and (max-width: 600px) {
   .objective { top: auto; bottom: calc(var(--edge-b) + 168px); font-size: 12px; }
@@ -481,3 +482,10 @@ body.chapter-mode .hud .zones, body.chapter-mode #power-btn, body.chapter-mode .
 /* 화면 밖에서 다가오는 그늘이 표시(#14): 가장자리의 붉은 갈매기 표. 가까울수록 진하다. */
 .threat { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; pointer-events: none; }
 .threat::before { content: ""; position: absolute; left: 3px; top: 3px; width: 10px; height: 10px; border-top: 3px solid #ff5a4a; border-right: 3px solid #ff5a4a; transform: rotate(45deg); filter: drop-shadow(0 0 5px rgba(255, 70, 50, 0.9)); }
+
+/* 일시정지 화면의 최근 안내(#14) */
+.pause-log { margin-top: 6px; text-align: left; font-size: 12.5px; color: var(--dim); }
+.pause-log summary { cursor: pointer; padding: 4px 0; }
+.pause-log ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.pause-log li.warn { color: var(--warn); }
+.pause-log li.good { color: var(--good); }
