@@ -66,6 +66,22 @@ r = await B.ev(`${SETUP}
   return { owned: L.store.owned, paywall: shown(), chapter: L.game.chapter, step: L.chapters.step };`);
 check('사면 바로 2장의 다음 차례로 들어간다', r.owned && !r.paywall && r.chapter === 2 && r.step === 'search', r);
 
+// 대기 중이던 결제가 화면 밖에서 끝나면, 결제 화면을 다시 열 때 묻는 확인에서 열린다(#70 리뷰: 열 때마다 묻는다)
+r = await B.ev(`${SETUP}
+  L.store.owned = false; L.store.reachable = true; L.backToTitle();
+  let asked = 0; const real = L.store.refresh.bind(L.store);
+  L.store.refresh = async () => { asked++; return real(); };
+  $('chapter-btn').click();
+  await new Promise((ok) => setTimeout(ok, 50));
+  const first = asked;
+  $('paywall-close').click();
+  L.store.fake.owned = true; L.store.refresh = async () => { asked++; L.store._set(true, false); return { ok: true }; };
+  $('chapter-btn').click();
+  await new Promise((ok) => setTimeout(ok, 300));
+  L.step(1); skip();
+  return { first, asked, owned: L.store.owned, paywall: shown(), chapter: L.game.chapter };`);
+check('결제 화면을 열 때마다 구매를 다시 묻고, 그사이 끝난 결제면 바로 열린다', r.first === 1 && r.asked === 2 && r.owned && !r.paywall && r.chapter === 2, r);
+
 // 결과마다 안내: 대기·취소·오류(새로 열어 흉내 가게의 결과를 바꾼다)
 const outcome = async (kind) => {
   await B.send('Page.navigate', { url: at(kind) });

@@ -1520,7 +1520,8 @@ function openPaywall({ fromPreview = false } = {}) {
   renderPaywall();
   setScreen('paywall');
   $('paywall-buy')?.focus();
-  if (store.reachable !== true) bg(store.refresh().then(() => renderPaywall()));
+  // 열 때마다 묻는다: 앞서 닿았더라도 그사이 대기 중이던 결제가 끝났거나 환불됐을 수 있다.
+  bg(store.refresh().then(() => renderPaywall()));
 }
 
 function closePaywall() {
@@ -2862,6 +2863,11 @@ warmUp().then(() => {
   renderOnline();
   // 앱을 열 때마다 Play에 구매를 다시 묻는다(새 기기·다시 설치에서 복원, 환불이면 다시 잠금).
   if (store.mode === 'native') bg(store.refresh().then(() => renderChapter()));
+  // 앱으로 돌아올 때도 묻는다(#70 리뷰): 백그라운드에 있는 동안 대기 결제가 끝나면 결제 연결이 끊긴 채라 이벤트가 오지 않을 수 있다.
+  // 구글 안내도 onResume에서 구매를 조회하라고 한다. 사면 그때 확인(acknowledge)도 된다.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && store.mode === 'native') bg(store.refresh().then(() => renderChapter()));
+  });
   if (params.get('start') === '1' || boot.then === 'start') startGame();
   else if (boot.then === 'chapter') startChapter();
   else if (boot.then === 'resume') resumeGame();
