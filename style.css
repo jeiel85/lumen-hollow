@@ -131,6 +131,8 @@ html[lang="en"] .ko-only { display: none; }
 html[lang="en"] body { overflow-wrap: break-word; }
 html[lang="en"] .bar { grid-template-columns: 96px 1fr; }
 html[lang="en"] .bar .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 둥근 터치 단추(64~74px)에 'Flashlight'·'Work light'가 한 줄로 들어가게 */
+html[lang="en"] .touch-btns button:not(.big) { font-size: 11px; letter-spacing: -0.02em; padding: 0 2px; }
 /* 2~4장 결제 화면(#51) */
 .paywall-card { width: min(440px, 100%); }
 .paywall-lead { margin: 4px 0 10px; color: var(--ink); }

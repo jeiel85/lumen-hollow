@@ -51,6 +51,7 @@ Lumen Hollow: 빛으로 버티는 밤
 ## 영어 등록정보 (en-US, #60)
 
 Play Console → 스토어 등록정보 → 번역 관리 → 영어(미국)로 직접 추가한다. 게임 안 글·간판·로고가 영어로 바뀌는 v0.23.0부터 맞는다.
+그래픽은 영어판을 쓴다: 대표 그래픽 `graphics/feature-1024x500-en.png`(영어 로고), 스크린샷 `screenshots/en/`(영어 화면, `E2E_LANG=en node store/shoot.mjs`로 다시 찍는다). 아이콘은 글자가 없어 같다.
 
 앱 이름 (30자 이내)
 
