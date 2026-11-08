@@ -4,6 +4,18 @@ import { load, save } from './storage.js';
 const ENGINE_TAIL = 1.5;
 // 오디오가 끊겼을 때(전화·백그라운드) 다시 켜 보는 사용자 입력. iOS는 사용자 입력 처리 안에서 부른 resume()만 받는다.
 const RESUME_EVENTS = ['pointerdown', 'pointerup', 'touchend', 'keydown', 'click'];
+// 바탕 소리(빗소리·밤 저음·접근 속삭임·전기 웅웅거림). scale: setMix 값 1일 때의 게인, tau: 게인을 따라가는 시간 상수(초),
+// amb: 환경음 묶음(설정의 환경음 음량을 따름). 접근 속삭임과 웅웅거림은 위험 신호라 환경음 음량과 상관없이 master로 보낸다.
+const BEDS = {
+  rain: { scale: 0.22, tau: 0.4, amb: true },
+  night: { scale: 0.5, tau: 0.8, amb: true },
+  dread: { scale: 0.28, tau: 0.25, amb: false },
+  buzz: { scale: 0.05, tau: 0.15, amb: false },
+};
+// setMix 값이 이 아래면 꺼진 것으로 본다(빗소리는 그친 뒤 0에 다가가기만 하고 닿지 않는다). 빗소리 기준 -67dB.
+const BED_SILENT = 0.002;
+// 꺼진 뒤 노드를 정리하기까지: 시간 상수의 5배(-43dB)
+const BED_TAIL = 5;
 
 // WebAudio로 즉석 합성하는 소리. 외부 음원 파일 없이 빗소리·밤 저음·발소리·효과음·짧은 음악 신호를 만든다.
 export class Sound {
@@ -13,6 +25,7 @@ export class Sound {
     this.volume = 1; // 설정 화면의 전체 음량(0~1)
     this.ambience = 1; // 비·밤 저음 같은 환경음 배율(0~1). 그늘이 접근 속삭임은 경고음이라 여기에 묶지 않는다.
     this.engine = null; // 운전하는 동안만 있는 엔진·타이어 소리 노드
+    this.beds = {}; // 들리는 동안만 있는 바탕 소리 노드(BEDS의 이름 → 노드 묶음)
     this.started = false; // AudioContext가 한 번이라도 돌기 시작했는지
     this.resumeFailed = false;
   }
@@ -56,73 +69,88 @@ export class Sound {
     const ch = this.noise.getChannelData(0);
     for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
 
-    // 빗소리
-    this.rainGain = ctx.createGain();
-    this.rainGain.gain.value = 0;
-    const rain = this._noiseSource();
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 2400;
-    const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 500;
-    rain.connect(hp).connect(lp).connect(this.rainGain).connect(this.amb);
+    // 트럭 엔진·타이어 소리(setEngine)와 바탕 소리(setMix)는 들리는 동안만 만든다. 늘 돌려 두면 게인 0이어도
+    // 오디오 스레드가 소스를 계속 합성해 CPU를 쓴다(낮에도 소스 8개가 돌았다, #6 후속).
+  }
 
-    // 밤 저음
-    this.nightGain = ctx.createGain();
-    this.nightGain.gain.value = 0;
-    const dlp = ctx.createBiquadFilter();
-    dlp.type = 'lowpass';
-    dlp.frequency.value = 260;
-    for (const f of [55, 82.4, 110.6]) {
-      const o = ctx.createOscillator();
-      o.type = 'sawtooth';
-      o.frequency.value = f;
-      o.detune.value = (Math.random() - 0.5) * 14;
-      const g = ctx.createGain();
-      g.gain.value = 0.06;
-      o.connect(g).connect(dlp);
-      o.start();
+  _filter(type, freq, q) {
+    const f = this.ctx.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = freq;
+    if (q !== undefined) f.Q.value = q;
+    return f;
+  }
+
+  _osc(type, freq, detune = 0) {
+    const o = this.ctx.createOscillator();
+    o.type = type;
+    o.frequency.value = freq;
+    o.detune.value = detune;
+    o.start();
+    return o;
+  }
+
+  // 바탕 소리 하나를 만든다. 출력 게인은 0에서 시작해 setMix가 올린다.
+  _bedUp(name) {
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    out.gain.value = 0;
+    const sources = [];
+    const nodes = [out];
+    const src = (n) => (sources.push(n), nodes.push(n), n);
+    const node = (n) => (nodes.push(n), n);
+    const gain = (v) => { const g = node(ctx.createGain()); g.gain.value = v; return g; };
+    switch (name) {
+      case 'rain': // 빗소리: 잡음을 높은음·낮은음 필터로 깎는다
+        src(this._noiseSource()).connect(node(this._filter('highpass', 500))).connect(node(this._filter('lowpass', 2400))).connect(out);
+        out.connect(this.amb);
+        break;
+      case 'night': { // 밤 저음: 살짝 어긋난 톱니파 셋을 낮게 뭉갠다
+        const lp = node(this._filter('lowpass', 260));
+        for (const f of [55, 82.4, 110.6]) src(this._osc('sawtooth', f, (Math.random() - 0.5) * 14)).connect(gain(0.06)).connect(lp);
+        lp.connect(out);
+        out.connect(this.amb);
+        break;
+      }
+      case 'dread': { // 그늘이가 가까울 때 속삭임: 좁은 대역 잡음을 5.5Hz로 떨게 한다. 화면 밖에서 다가오는 것을 알리는 유일한 경고
+        const trem = gain(0.5);
+        src(this._osc('sine', 5.5)).connect(gain(0.5)).connect(trem.gain);
+        src(this._noiseSource()).connect(node(this._filter('bandpass', 900, 3))).connect(trem).connect(out);
+        out.connect(this.master);
+        break;
+      }
+      case 'buzz': { // 과부하 걸린 가로등의 전기 웅웅거림: 차단기가 내려가기 전에 귀로도 알린다
+        const bp = node(this._filter('bandpass', 240, 4));
+        for (const f of [120, 240.6]) src(this._osc('sawtooth', f)).connect(bp);
+        bp.connect(out);
+        out.connect(this.master);
+        break;
+      }
+      default:
+        throw new Error(`[sound] 모르는 바탕 소리: ${name}`);
     }
-    dlp.connect(this.nightGain).connect(this.amb);
+    const bed = { out, sources, nodes, offAt: null };
+    this.beds[name] = bed;
+    return bed;
+  }
 
-    // 그늘이가 가까울 때 속삭임. 화면 밖에서 다가오는 것을 알려 주는 유일한 경고라서 환경음 음량과 상관없이
-    // 효과음 쪽(master)으로 보낸다(환경음을 줄여도 들린다. 전체 음량·음소거는 따른다).
-    this.dreadGain = ctx.createGain();
-    this.dreadGain.gain.value = 0;
-    const whisper = this._noiseSource();
-    const bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 900;
-    bp.Q.value = 3;
-    const trem = ctx.createGain();
-    trem.gain.value = 0.5;
-    const lfo = ctx.createOscillator();
-    lfo.frequency.value = 5.5;
-    const lfoAmt = ctx.createGain();
-    lfoAmt.gain.value = 0.5;
-    lfo.connect(lfoAmt).connect(trem.gain);
-    lfo.start();
-    whisper.connect(bp).connect(trem).connect(this.dreadGain).connect(this.master);
-
-    // 트럭 엔진·타이어 소리는 운전하는 동안만 만든다(setEngine). 늘 돌려 두면 게인 0이어도 소리 합성이 CPU를 쓴다.
-
-    // 과부하 걸린 가로등의 전기 웅웅거림. 부하가 오를수록 커져 차단기가 내려가기 전에 귀로도 알린다.
-    // 위험 신호라서 환경음 음량과 상관없이 효과음 쪽(master)으로 보낸다.
-    this.buzzGain = ctx.createGain();
-    this.buzzGain.gain.value = 0;
-    const buzzF = ctx.createBiquadFilter();
-    buzzF.type = 'bandpass';
-    buzzF.frequency.value = 240;
-    buzzF.Q.value = 4;
-    for (const f of [120, 240.6]) {
-      const o = ctx.createOscillator();
-      o.type = 'sawtooth';
-      o.frequency.value = f;
-      o.connect(buzzF);
-      o.start();
+  // level 쪽으로 게인을 옮긴다. 0이 되면 줄어드는 꼬리(BED_TAIL × tau)가 지난 뒤 노드를 멈추고 정리한다.
+  _bed(name, level, tau, t) {
+    let b = this.beds[name];
+    if (level <= 0) {
+      if (!b) return;
+      if (b.offAt === null) {
+        b.offAt = t;
+        b.out.gain.setTargetAtTime(0, t, tau);
+      } else if (t - b.offAt >= BED_TAIL * tau) {
+        delete this.beds[name];
+        this._release(b, [b.out.gain], t);
+      }
+      return;
     }
-    buzzF.connect(this.buzzGain).connect(this.master);
+    b ??= this._bedUp(name);
+    b.offAt = null;
+    b.out.gain.setTargetAtTime(level, t, tau);
   }
 
   // 전화가 오거나 백그라운드로 가면 AudioContext가 멈춘다. iOS Safari는 'interrupted'(그 밖은 'suspended') 상태로
@@ -202,28 +230,36 @@ export class Sound {
     return this.engine;
   }
 
-  // 다 줄어든 엔진 소리를 0까지 짧게 내린 뒤 멈추고 연결을 끊는다(게인이 남은 채 멈추면 딸깍 소리가 난다).
+  // 다 줄어든 엔진 소리를 0까지 짧게 내린 뒤 멈추고 연결을 끊는다.
   _engineDown(t) {
     const e = this.engine;
     this.engine = null;
-    for (const p of [e.out.gain, e.skid.gain]) {
+    this._release(e, [e.out.gain, e.skid.gain], t);
+  }
+
+  // 게인을 0까지 짧게 내린 뒤 소스를 멈추고 연결을 끊는다(게인이 남은 채 멈추면 딸깍 소리가 난다).
+  _release({ sources, nodes }, gains, t) {
+    for (const p of gains) {
       p.cancelScheduledValues(t);
       p.setValueAtTime(p.value, t);
       p.linearRampToValueAtTime(0, t + 0.03);
     }
-    e.sources[0].onended = () => {
-      for (const n of e.nodes) n.disconnect();
+    sources[0].onended = () => {
+      for (const n of nodes) n.disconnect();
     };
-    for (const s of e.sources) s.stop(t + 0.05);
+    for (const s of sources) s.stop(t + 0.05);
   }
 
-  setMix({ rain = 0, night = 0, dread = 0, buzz = 0 }) {
+  // 매 프레임 부른다(처음 화면 제외). 값은 0~1. 음소거·전체 음량 0이면 모두, 환경음 음량 0이면 비·밤 저음을 끈다.
+  setMix(mix) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    this.rainGain.gain.setTargetAtTime(rain * 0.22, t, 0.4);
-    this.nightGain.gain.setTargetAtTime(night * 0.5, t, 0.8);
-    this.dreadGain.gain.setTargetAtTime(dread * 0.28, t, 0.25);
-    this.buzzGain.gain.setTargetAtTime(buzz * 0.05, t, 0.15);
+    const on = this._masterLevel() > 0;
+    for (const name in BEDS) {
+      const { scale, tau, amb } = BEDS[name];
+      const v = mix[name] ?? 0;
+      this._bed(name, on && v > BED_SILENT && !(amb && this.ambience <= 0) ? v * scale : 0, tau, t);
+    }
   }
 
   // 매 프레임 부른다. on: 시동이 걸려 있는지, rpm: 0~1(속도), load: 0~1(가속 페달), skid: 0~1(미끄러짐)

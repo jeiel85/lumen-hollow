@@ -1,5 +1,6 @@
 // 서비스 워커(#10): 첫 설치 → 오프라인 실행 준비됨, 새 빌드 활성화 → 처음 화면 '새 버전이 준비됐어요 · 다시 열기',
-// 파일이 빠진 새 빌드·덜 퍼진 배포 → '지난 버전으로 준비됨(이유)', 첫 설치부터 실패 → '아직 안 됐어요(이유)'.
+// 파일이 빠진 새 빌드·덜 퍼진 배포 → '지난 버전으로 준비됨(이유)', 열어 둔 탭의 한 시간 간격 새 버전 확인,
+// 첫 설치부터 실패 → '아직 안 됐어요(이유)'.
 // 저장소를 빌드 번호를 찍어 임시 폴더에 복사하고 그 폴더를 직접 띄운다(배포 워크플로의 __BUILD__ 치환과 같다). python이 필요하다.
 //   node tests/e2e/sw.mjs [포트]
 import { cpSync, rmSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, readdirSync, mkdtempSync } from 'node:fs';
@@ -72,6 +73,18 @@ try {
   await until(B, `return document.getElementById('offline-status').textContent.includes('퍼지지')`);
   r = await B.ev(state);
   check('페이지 빌드가 다르면: 새 버전이 아직 다 퍼지지 않았어요', r.offline.includes('아직 서버에 다 퍼지지 않았어요'), r.offline);
+
+  // 4-1) 열어 둔 탭이 스스로 새 버전을 확인한다(pwa.js watchForUpdates). 테스트가 reg.update()를 부르지 않는다.
+  // 마지막 확인에서 한 시간이 안 지났으면 화면 복귀(visibilitychange)에도 확인하지 않고, 지났으면 확인한다.
+  stamp('ffff6666');
+  await B.ev(`document.dispatchEvent(new Event('visibilitychange')); return true`);
+  await B.sleep(4000);
+  r = await B.ev(state);
+  check('한 시간이 안 지났으면 화면 복귀에도 새 버전을 확인하지 않는다', !r.update, r);
+  await B.ev(`const real = Date.now; Date.now = () => real() + 2 * 3600e3; document.dispatchEvent(new Event('visibilitychange')); return true`);
+  await until(B, `return !document.getElementById('update-note').classList.contains('hidden')`);
+  r = await B.ev(state);
+  check('한 시간이 지난 뒤 화면으로 돌아오면 스스로 확인해 새 버전 안내를 띄운다', r.update && r.build === 'bbbb2222', r);
   const errs = B.logs.filter((l) => /error|exception/i.test(l) && !/caches|online|fetch|CORS|ERR_|sw\.js|ServiceWorker|service worker/i.test(l));
   check('콘솔 오류 없음(서비스 워커 설치 실패 로그 제외)', errs.length === 0, errs);
   B.close();
