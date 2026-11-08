@@ -7,6 +7,7 @@ import { makeBeaconMaterial } from './world.js';
 const WISPS = 16;
 const FLASHES = 6;
 const CANDLES = 12; // 마을의 퓨즈(world.reset의 11개)를 모두 알려 줘도 모자라지 않게
+const WINDOWS = 24; // 깨어난 집 창(한 밤에 돌려보낼 만한 수보다 넉넉히, 모자라면 가장 먼저 켠 창을 다시 쓴다)
 
 export class Wisps {
   constructor(scene) {
@@ -39,6 +40,18 @@ export class Wisps {
       scene.add(s);
       this.flashes.push({ s, mat, t: -1 });
     }
+    // 깨어난 집의 창: 빛이 닿은 집 현관 위 창에 따뜻한 불이 켜져 새벽까지 남는다(#28). 촛불 밀랍과 같은
+    // MeshBasicMaterial 프로그램이라 셰이더를 더 컴파일하지 않는다.
+    const winGeo = new THREE.PlaneGeometry(0.95, 1.05);
+    this.winMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.6, 0.8), transparent: true, opacity: 0, side: THREE.DoubleSide });
+    this.windows = [];
+    for (let i = 0; i < WINDOWS; i++) {
+      const m = new THREE.Mesh(winGeo, this.winMat);
+      m.visible = false;
+      m.renderOrder = 2;
+      scene.add(m);
+      this.windows.push({ m, home: null });
+    }
     // 촛불: 작은 불꽃 + 금빛 기둥. 기둥 셰이더는 배전함 신호 기둥과 같은 프로그램이라 더 컴파일하지 않는다.
     this.beaconMat = makeBeaconMaterial(new THREE.Color(1.0, 0.72, 0.28));
     const beaconGeo = new THREE.CylinderGeometry(0.22, 0.22, 14, 10, 1, true).translate(0, 7, 0);
@@ -64,7 +77,28 @@ export class Wisps {
     }
   }
 
+  // 빛이 닿은 집의 창에 불을 켠다(같은 집이면 그대로)
+  wake(home) {
+    if (!home || this.windows.some((w) => w.home === home)) return;
+    const w = this.windows.find((q) => !q.home) ?? this.windows[this._winNext = ((this._winNext ?? -1) + 1) % WINDOWS];
+    w.home = home;
+    const nx = home.nx ?? 0;
+    const nz = home.nz ?? 1;
+    w.m.position.set(home.x + nx * 0.02, home.y, home.z + nz * 0.02);
+    w.m.rotation.set(0, Math.atan2(nx, nz), 0);
+    w.m.visible = true;
+  }
+
+  // 새벽: 깨어난 사람들은 불을 끄고 하루를 시작한다
+  dawn() {
+    for (const w of this.windows) {
+      w.home = null;
+      w.m.visible = false;
+    }
+  }
+
   clear() {
+    this.dawn();
     for (const w of this.wisps) {
       w.active = false;
       w.s.visible = false;
@@ -83,10 +117,13 @@ export class Wisps {
 
   // from(x, z)에서 to(x, y, z)로 호를 그리며 날아간다. 도착하면 done()을 부른다.
   spawn(from, to, done) {
-    const w = this.wisps.find((q) => !q.active);
+    let w = this.wisps.find((q) => !q.active);
     if (!w) {
-      done?.();
-      return;
+      // 빈 빛이 없으면(트럭으로 한꺼번에 들이받았을 때) 가장 오래 날던 빛을 도착시키고 그 자리를 쓴다(#28).
+      w = this.wisps.reduce((a, b) => (b.t / b.dur > a.t / a.dur ? b : a));
+      const prev = w.done;
+      w.done = null;
+      prev?.();
     }
     const d = Math.hypot(to.x - from.x, to.z - from.z);
     w.a.set(from.x, 1.4, from.z);
@@ -168,7 +205,11 @@ export class Wisps {
       f.mat.opacity = Math.sin(Math.PI * k) * (0.5 + 0.5 * night);
       f.s.scale.setScalar(1.2 + k * 2.2);
     }
-    this.beaconMat.uniforms.uOpacity.value = (0.14 + 0.42 * night) * (0.75 + 0.25 * Math.sin(t * 2.6));
+    // 금빛 기둥은 밤에만 보인다(밤에 싸운 보상). 낮에는 촛불만 남는다(#28).
+    const pillar = Math.max(0, (night - 0.15) / 0.85);
+    this.beaconMat.uniforms.uOpacity.value = 0.56 * pillar * (0.75 + 0.25 * Math.sin(t * 2.6));
+    for (const c of this.candles) if (c.loot) c.g.children[3].visible = pillar > 0.01;
+    this.winMat.opacity = Math.min(1, night * 1.4);
     this.flameMat.color.setRGB(3.2, 1.9, 0.7).multiplyScalar(0.8 + 0.2 * Math.sin(t * 17) * Math.sin(t * 7.3));
   }
 }

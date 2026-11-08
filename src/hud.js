@@ -212,6 +212,40 @@ export class Hud {
     if (this.el.storyPointer) this._pointer(this.el.storyPointer, this.el.storyPointerDist, 'sdist', sx, sy, dist, visible);
   }
 
+  // 화면 밖에서 다가오는 그늘이(#14 '어둠 속 그늘이가 거의 안 보인다'): 가장자리에 붉은 표시. list: [{ sx, sy, k }],
+  // sx, sy는 화면 좌표(밖일 수 있다), k는 가까울수록 1에 가까운 세기.
+  threats(list) {
+    const host = this.el.hud;
+    if (!host) return;
+    this._threatEls ??= [];
+    while (this._threatEls.length < list.length) {
+      const e = document.createElement('div');
+      e.className = 'threat';
+      e.setAttribute('aria-hidden', 'true');
+      host.appendChild(e);
+      this._threatEls.push(e);
+    }
+    const w = innerWidth;
+    const h = innerHeight;
+    const cx = w / 2;
+    const cy = h / 2;
+    const m = 22;
+    for (let i = 0; i < this._threatEls.length; i++) {
+      const e = this._threatEls[i];
+      const t = list[i];
+      if (!t) {
+        if (!e.hidden) e.hidden = true;
+        continue;
+      }
+      const dx = t.sx - cx;
+      const dy = t.sy - cy;
+      const sc = Math.min((cx - m) / Math.abs(dx || 1e-3), (cy - m) / Math.abs(dy || 1e-3));
+      e.hidden = false;
+      e.style.transform = `translate(${cx + dx * sc}px, ${cy + dy * sc}px) rotate(${Math.atan2(dy, dx)}rad)`;
+      e.style.opacity = (0.35 + 0.65 * t.k).toFixed(2);
+    }
+  }
+
   _pointer(p, distEl, key, sx, sy, dist, visible) {
     if (!visible) {
       p.classList.add('hidden');
