@@ -20,7 +20,9 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1416; color: var(--ink); font-family: var(--font); }
-body { word-break: keep-all; overflow-wrap: anywhere; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+/* 길게 눌러도 글자가 선택되거나(기록 종이 포함) iOS 호출 메뉴·그림 저장 메뉴가 뜨지 않게 한다. 글자 입력 칸이 없는 게임이라 전체에 건다. */
+body { word-break: keep-all; overflow-wrap: anywhere; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+img { pointer-events: none; -webkit-user-drag: none; }
 canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; opacity: 0; transition: opacity 1.2s ease; }
 body.ready canvas#game { opacity: 1; }
 .hidden { display: none !important; }
@@ -362,7 +364,7 @@ body.calm .gcell.tripped { animation: none; }
 /* ---------- 이야기: 기록 읽기 ---------- */
 .doc { z-index: 6; background: rgba(4, 8, 9, 0.74); }
 .doc-wrap { margin: auto; width: min(560px, 100%); display: grid; gap: 14px; justify-items: center; padding: 8px 0; }
-.paper { width: 100%; text-align: left; padding: 24px 28px 22px; border-radius: 4px; background: #efe6d2; color: #2b2620; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); transform: rotate(-0.6deg); font-family: "Nanum Myeongjo", "NanumMyeongjo", "AppleMyungjo", "Noto Serif KR", "Noto Serif CJK KR", "Batang", serif; -webkit-user-select: text; user-select: text; }
+.paper { width: 100%; text-align: left; padding: 24px 28px 22px; border-radius: 4px; background: #efe6d2; color: #2b2620; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); transform: rotate(-0.6deg); font-family: "Nanum Myeongjo", "NanumMyeongjo", "AppleMyungjo", "Noto Serif KR", "Noto Serif CJK KR", "Batang", serif; }
 .paper-where { margin: 0 0 6px; font-family: var(--font); font-size: 11px; letter-spacing: 0.2em; color: #8a7a62; }
 .paper h2 { margin: 0 0 14px; font-size: 21px; font-weight: 700; line-height: 1.35; }
 .paper-body p { margin: 0 0 9px; font-size: 15px; line-height: 1.75; white-space: pre-wrap; }
