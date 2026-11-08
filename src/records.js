@@ -3,6 +3,7 @@ import { SLOTS, itemById } from './wardrobe.js';
 import { SCENES, CLUES } from './script.js';
 import { isNativeApp, saveTextFile } from './native.js';
 import { DIFFICULTY } from './difficulty.js';
+import { tr } from './i18n.js';
 
 // 최고 기록: 이 브라우저의 localStorage에 두고, 파일로 내보내고 가져와 기기·브라우저 사이를 옮긴다.
 // 선택한 보관 방식과 그 한계는 DECISIONS.md의 "기록 보관" 항목에 있다.
@@ -21,7 +22,7 @@ const EMPTY = { nights: 0, zones: 1, winDay: 0 };
 
 // 파일의 각 부분은 그 저장 키의 형식을 그대로 담고, 그 키의 형식 버전(v)을 따른다.
 const PART_V = { wardrobe: 1, story: 1, chapters: 1 };
-const PART_NAME = { wardrobe: '옷장', story: '이야기 진행', chapters: '2~4장 진행' };
+const PART_NAME = { wardrobe: tr('옷장'), story: tr('이야기 진행'), chapters: tr('2~4장 진행') };
 // 2~4장 진행 표시. src/chapters.js의 FLAGS와 같아야 한다(tests/node/records.test.mjs가 검사한다).
 export const CHAPTER_FLAGS = ['lampDoor', 'lampYard', 'home1', 'home2', 'flip'];
 
@@ -71,8 +72,8 @@ export function hasRecords(b) {
 
 export function describeBest(b, totalZones) {
   const parts = [];
-  if (b.winDay) parts.push(`${b.winDay}일 만에 마을 복구`);
-  parts.push(`최장 ${b.nights}번의 밤`, `최대 ${b.zones}/${totalZones} 구역`);
+  if (b.winDay) parts.push(tr('{0}일 만에 마을 복구', [b.winDay]));
+  parts.push(tr('최장 {0}번의 밤', [b.nights]), tr('최대 {0}/{1} 구역', [b.zones, totalZones]));
   return parts.join(' · ');
 }
 
@@ -171,18 +172,18 @@ export function parseRecords(text, totalZones) {
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error('파일을 읽을 수 없어요. 이 게임에서 내보낸 .json 파일인지 확인해 주세요.');
+    throw new Error(tr('파일을 읽을 수 없어요. 이 게임에서 내보낸 .json 파일인지 확인해 주세요.'));
   }
-  if (!data || typeof data !== 'object' || data.format !== FORMAT) throw new Error('Lumen Hollow 기록 파일이 아니에요.');
-  if (!Number.isInteger(data.version) || data.version < 1) throw new Error('기록 파일 형식이 올바르지 않아요.');
-  if (data.version > VERSION) throw new Error('더 새 버전의 게임에서 내보낸 기록이에요. 새로고침해 최신 버전으로 연 뒤 다시 가져와 주세요.');
+  if (!data || typeof data !== 'object' || data.format !== FORMAT) throw new Error(tr('Lumen Hollow 기록 파일이 아니에요.'));
+  if (!Number.isInteger(data.version) || data.version < 1) throw new Error(tr('기록 파일 형식이 올바르지 않아요.'));
+  if (data.version > VERSION) throw new Error(tr('더 새 버전의 게임에서 내보낸 기록이에요. 새로고침해 최신 버전으로 연 뒤 다시 가져와 주세요.'));
   const skip = { n: 0, parts: [] };
   const best = data.best === undefined ? null : sanitize(data.best, totalZones, skip);
   if (data.best !== undefined && !best) skip.n++;
   const out = { version: data.version, best, bestBy: {}, wardrobe: null, story: null, chapters: null };
   if (data.version === 1) {
     // v1은 최고 기록만 담았다.
-    if (!best) throw new Error('기록 파일에 최고 기록이 없어요.');
+    if (!best) throw new Error(tr('기록 파일에 최고 기록이 없어요.'));
   } else {
     const w = part(data, 'wardrobe', skip);
     if (w) out.wardrobe = parseWardrobe(w, skip);
@@ -201,7 +202,7 @@ export function parseRecords(text, totalZones) {
       }
     }
     const any = best || Object.keys(out.bestBy).length || out.wardrobe || out.story || out.chapters;
-    if (!any && !skip.parts.length) throw new Error('기록 파일에 가져올 내용이 없어요.');
+    if (!any && !skip.parts.length) throw new Error(tr('기록 파일에 가져올 내용이 없어요.'));
   }
   out.skipped = skip.n;
   out.partsSkipped = skip.parts;
@@ -253,20 +254,20 @@ export function mergeRecords(local, incoming) {
 // 가져오기 결과 문장(설정 화면). 새로 더한 것, 건너뛴 것을 함께 알린다.
 export function describeImport(parsed, merged, totalZones) {
   const lines = describeBests(merged.best, merged.bestBy ?? {}, totalZones);
-  const out = [lines.length ? `기록을 가져왔어요. ${lines.join(' / ')}` : '기록을 가져왔어요.'];
+  const out = [lines.length ? tr('기록을 가져왔어요. {0}', [lines.join(' / ')]) : tr('기록을 가져왔어요.')];
   if (parsed.version >= 2) {
     const a = merged.add;
     const got = [];
-    if (a.owned.length) got.push(`옷가지 ${a.owned.length}개`);
-    if (a.seen.length) got.push(`들은 이야기 ${a.seen.length}개`);
-    if (a.found.length) got.push(`주운 기록 ${a.found.length}개`);
-    if (a.flags.length) got.push(`2~4장 진행 ${a.flags.length}개`);
-    out.push(got.length ? `새로 더한 것: ${got.join(' · ')}.` : '새로 더할 옷장·이야기 진행은 없었어요.');
-    if (Object.keys(a.wear).length) out.push('옷차림은 파일대로 갈아입었어요.');
+    if (a.owned.length) got.push(tr('옷가지 {0}개', [a.owned.length]));
+    if (a.seen.length) got.push(tr('들은 이야기 {0}개', [a.seen.length]));
+    if (a.found.length) got.push(tr('주운 기록 {0}개', [a.found.length]));
+    if (a.flags.length) got.push(tr('2~4장 진행 {0}개', [a.flags.length]));
+    out.push(got.length ? tr('새로 더한 것: {0}.', [got.join(' · ')]) : tr('새로 더할 옷장·이야기 진행은 없었어요.'));
+    if (Object.keys(a.wear).length) out.push(tr('옷차림은 파일대로 갈아입었어요.'));
   }
-  for (const p of parsed.partsSkipped) out.push(`${PART_NAME[p]}은 이 버전이 읽지 못하는 형식이라 건너뛰었어요.`);
-  for (const p of merged.locked) out.push(`이 기기의 ${PART_NAME[p]}은 더 새 버전이 저장해 둔 것이라 건드리지 않았어요.`);
-  if (parsed.skipped) out.push(`알아볼 수 없거나 범위를 벗어난 항목 ${parsed.skipped}개는 건너뛰었어요.`);
+  for (const p of parsed.partsSkipped) out.push(tr('{0}은 이 버전이 읽지 못하는 형식이라 건너뛰었어요.', [PART_NAME[p]]));
+  for (const p of merged.locked) out.push(tr('이 기기의 {0}은 더 새 버전이 저장해 둔 것이라 건드리지 않았어요.', [PART_NAME[p]]));
+  if (parsed.skipped) out.push(tr('알아볼 수 없거나 범위를 벗어난 항목 {0}개는 건너뛰었어요.', [parsed.skipped]));
   return out.join(' ');
 }
 
@@ -322,13 +323,13 @@ function applyProgress(progress, add) {
   };
   const has = (list, ids) => ids.every((id) => Array.isArray(list) && list.includes(id));
   const lost = [];
-  if (add.owned.length && !has(read('lumen.wardrobe').owned, add.owned)) lost.push('옷가지');
+  if (add.owned.length && !has(read('lumen.wardrobe').owned, add.owned)) lost.push(tr('옷가지'));
   if (add.seen.length || add.found.length) {
     const sv = read('lumen.story');
-    if (!has(sv.seen, add.seen) || !has(sv.found, add.found)) lost.push('이야기 진행');
+    if (!has(sv.seen, add.seen) || !has(sv.found, add.found)) lost.push(tr('이야기 진행'));
   }
   // 더 새 버전이 쓴 2~4장 진행은 일부러 건드리지 않으므로(잠금) 확인하지 않는다.
-  if (add.flags.length && !ch.locked && !has(read('lumen.chapters').flags, add.flags)) lost.push('2~4장 진행');
+  if (add.flags.length && !ch.locked && !has(read('lumen.chapters').flags, add.flags)) lost.push(tr('2~4장 진행'));
   return lost;
 }
 
@@ -354,25 +355,25 @@ export function initRecordsPanel({ totalZones, onChange, mobile, progress = null
   async function refresh() {
     const s = snapshot(progress, totalZones);
     const lines = describeBests(s.best, s.bestBy, totalZones);
-    el.best.textContent = lines.length ? lines.join('\n') : '아직 남긴 기록이 없어요.';
+    el.best.textContent = lines.length ? lines.join('\n') : tr('아직 남긴 기록이 없어요.');
     if (el.progress) {
       const w = progress?.wardrobe;
       const more = [];
-      if (w?.foundCount) more.push(`모은 옷가지 ${w.foundCount}/${w.findableCount}`);
-      if (s.story?.seen.length) more.push(`들은 이야기 ${s.story.seen.length}개`);
-      if (s.story?.found.length) more.push(`주운 기록 ${s.story.found.length}개`);
-      el.progress.textContent = more.length ? `내보내기에 함께 담는 진행: ${more.join(' · ')}` : '';
+      if (w?.foundCount) more.push(tr('모은 옷가지 {0}/{1}', [w.foundCount, w.findableCount]));
+      if (s.story?.seen.length) more.push(tr('들은 이야기 {0}개', [s.story.seen.length]));
+      if (s.story?.found.length) more.push(tr('주운 기록 {0}개', [s.story.found.length]));
+      el.progress.textContent = more.length ? tr('내보내기에 함께 담는 진행: {0}', [more.join(' · ')]) : '';
     }
     el.exportBtn.disabled = !hasProgress(s);
     el.clearBtn.disabled = !anyBest(s);
     el.importBtn.disabled = !canImport;
     if (!storageAvailable()) {
-      el.store.textContent = '이 브라우저는 저장소를 막아 두어 기록이 남지 않아요(사생활 보호 모드 등).';
+      el.store.textContent = tr('이 브라우저는 저장소를 막아 두어 기록이 남지 않아요(사생활 보호 모드 등).');
       return;
     }
     // 앱 기록은 앱 저장소에 있다. 앱을 지우거나 '저장공간 지우기'를 하면 사라진다(브라우저 공간 정리와는 상관없다).
     if (isNativeApp()) {
-      el.store.textContent = '이 앱에 저장돼요. 앱을 지우거나 앱 저장공간을 비우면 사라지니 가끔 내보내 두세요.';
+      el.store.textContent = tr('이 앱에 저장돼요. 앱을 지우거나 앱 저장공간을 비우면 사라지니 가끔 내보내 두세요.');
       return;
     }
     let persisted = false;
@@ -382,8 +383,8 @@ export function initRecordsPanel({ totalZones, onChange, mobile, progress = null
       persisted = false;
     }
     el.store.textContent = persisted
-      ? '이 브라우저에 저장되고, 브라우저가 자동으로 지우지 않도록 보호돼요. 사이트 데이터를 직접 지우면 사라져요.'
-      : '이 브라우저에만 저장돼요. 사이트 데이터를 지우거나 브라우저가 공간을 비우면 사라질 수 있으니 가끔 내보내 두세요.';
+      ? tr('이 브라우저에 저장되고, 브라우저가 자동으로 지우지 않도록 보호돼요. 사이트 데이터를 직접 지우면 사라져요.')
+      : tr('이 브라우저에만 저장돼요. 사이트 데이터를 지우거나 브라우저가 공간을 비우면 사라질 수 있으니 가끔 내보내 두세요.');
   }
 
   el.exportBtn.addEventListener('click', async () => {
@@ -392,18 +393,18 @@ export function initRecordsPanel({ totalZones, onChange, mobile, progress = null
     if (isNativeApp()) {
       try {
         const saved = await saveTextFile(file.name, await file.text());
-        say(saved ? `${file.name} 파일로 저장했어요. 다른 기기에서 "가져오기"로 불러오면 돼요.` : '저장을 취소했어요.', saved ? 'good' : '');
+        say(saved ? tr('{0} 파일로 저장했어요. 다른 기기에서 "가져오기"로 불러오면 돼요.', [file.name]) : tr('저장을 취소했어요.'), saved ? 'good' : '');
       } catch (err) {
         console.warn('[records] 앱에서 기록 파일 저장 실패', err);
-        say(`기록 파일을 저장하지 못했어요(${err?.message ?? err}).`, 'warn');
+        say(tr('기록 파일을 저장하지 못했어요({0}).', [err?.message ?? err]), 'warn');
       }
       return;
     }
     // 휴대폰은 공유 시트로 넘기면 '파일에 저장'·메신저 전송을 고를 수 있다(iOS 홈 화면 앱은 다운로드가 막혀 있다).
     if (mobile && navigator.canShare?.({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: 'Lumen Hollow 기록' });
-        say('기록 파일을 넘겼어요. 다른 기기에서 "가져오기"로 불러오면 돼요.', 'good');
+        await navigator.share({ files: [file], title: tr('Lumen Hollow 기록') });
+        say(tr('기록 파일을 넘겼어요. 다른 기기에서 "가져오기"로 불러오면 돼요.'), 'good');
         return;
       } catch (err) {
         if (err.name === 'AbortError') return;
@@ -418,7 +419,7 @@ export function initRecordsPanel({ totalZones, onChange, mobile, progress = null
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
-    say(`${file.name} 파일로 내보냈어요.`, 'good');
+    say(tr('{0} 파일로 내보냈어요.', [file.name]), 'good');
   });
 
   el.importBtn.addEventListener('click', () => canImport && el.file.click());
@@ -427,20 +428,20 @@ export function initRecordsPanel({ totalZones, onChange, mobile, progress = null
     el.file.value = '';
     if (!file || !canImport) return;
     try {
-      if (file.size > MAX_FILE) throw new Error('기록 파일치고 너무 커요. 내보낸 .json 파일을 골라 주세요.');
+      if (file.size > MAX_FILE) throw new Error(tr('기록 파일치고 너무 커요. 내보낸 .json 파일을 골라 주세요.'));
       const parsed = parseRecords(await file.text(), totalZones);
-      if (!storageAvailable()) throw new Error('이 브라우저가 저장소를 막아 두어 가져온 기록을 저장하지 못했어요.');
+      if (!storageAvailable()) throw new Error(tr('이 브라우저가 저장소를 막아 두어 가져온 기록을 저장하지 못했어요.'));
       // 가져온 기록과 지금 기록 중 더 좋은 쪽을 남기고, 진행은 더하기만 한다(가져오기로 이 기기의 진행이 줄지 않게).
       const merged = mergeRecords(snapshot(progress, totalZones), parsed);
       const bests = [[KEY, merged.best], ...OTHER_LEVELS.filter((l) => hasRecords(merged.bestBy[l])).map((l) => [LEVEL_KEY[l], merged.bestBy[l]])];
-      if (!bests.every(([k, b]) => save(k, JSON.stringify(b)))) throw new Error('이 브라우저가 저장소를 막아 두어 가져온 기록을 저장하지 못했어요.');
+      if (!bests.every(([k, b]) => save(k, JSON.stringify(b)))) throw new Error(tr('이 브라우저가 저장소를 막아 두어 가져온 기록을 저장하지 못했어요.'));
       const lost = progress ? applyProgress(progress, merged.add) : [];
       requestPersist();
       if (lost.length) {
         const what = lost.join('·');
         const code = what.charCodeAt(what.length - 1) - 0xac00; // 마지막 글자에 받침이 있으면 '은', 없으면 '는'
-        const topic = code >= 0 && code < 11172 && code % 28 ? '은' : '는';
-        say(`최고 기록은 가져왔지만 ${what}${topic} 이 기기에 저장하지 못했어요(저장 공간이 모자라요). 새로고침하면 사라져요.`, 'warn');
+        const topic = code >= 0 && code < 11172 && code % 28 ? tr('은') : tr('는');
+        say(tr('최고 기록은 가져왔지만 {0}{1} 이 기기에 저장하지 못했어요(저장 공간이 모자라요). 새로고침하면 사라져요.', [what, topic]), 'warn');
       } else {
         say(describeImport(parsed, merged, totalZones), 'good');
       }
@@ -458,7 +459,7 @@ export function initRecordsPanel({ totalZones, onChange, mobile, progress = null
     if (clearArmed === null || now - clearArmed > 4000) {
       const armedAt = now;
       clearArmed = armedAt;
-      el.clearBtn.textContent = '한 번 더 누르면 지워요';
+      el.clearBtn.textContent = tr('한 번 더 누르면 지워요');
       setTimeout(() => {
         if (clearArmed !== armedAt) return; // 그사이 지웠거나 다시 눌렀다
         clearArmed = null;
@@ -469,7 +470,7 @@ export function initRecordsPanel({ totalZones, onChange, mobile, progress = null
     clearArmed = null;
     el.clearBtn.textContent = CLEAR;
     for (const k of Object.values(LEVEL_KEY)) remove(k);
-    say('최고 기록을 지웠어요(모든 난이도).');
+    say(tr('최고 기록을 지웠어요(모든 난이도).'));
     onChange();
     refresh();
   });
@@ -479,7 +480,7 @@ export function initRecordsPanel({ totalZones, onChange, mobile, progress = null
     // (수첩의 '이야기 처음부터'와 같은 규칙).
     refresh({ inRun = false } = {}) {
       canImport = !inRun;
-      say(inRun ? '가져오기는 처음 화면의 설정에서 할 수 있어요(판 도중에는 진행이 바뀌지 않게 막아 두었어요).' : '');
+      say(inRun ? tr('가져오기는 처음 화면의 설정에서 할 수 있어요(판 도중에는 진행이 바뀌지 않게 막아 두었어요).') : '');
       clearArmed = null;
       el.clearBtn.textContent = CLEAR;
       return refresh();

@@ -1,3 +1,4 @@
+import { tr } from './i18n.js';
 // 안드로이드 앱(Capacitor) 안에서만 하는 일. 웹판에서는 아무것도 하지 않는다(#49).
 // 앱 빌드(scripts/build-app.mjs)가 index.html에 Capacitor 코어(capacitorExports)와 App 플러그인(capacitorApp)
 // 스크립트를 넣는다. 웹판에는 그 스크립트가 없어서 아래 전역이 비어 있다.
@@ -35,7 +36,7 @@ let fileSave = null;
 export async function saveTextFile(name, text, mime = 'application/json') {
   if (!isNativeApp()) return null;
   fileSave ??= globalThis.capacitorExports?.registerPlugin?.('FileSave') ?? null;
-  if (!fileSave) throw new Error('파일 저장 기능을 찾지 못했어요');
+  if (!fileSave) throw new Error(tr('파일 저장 기능을 찾지 못했어요'));
   const res = await fileSave.save({ name, text, mime });
   return !!res?.saved;
 }

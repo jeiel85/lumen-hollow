@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World, CAR_SPAWN, DEFAULT_VILLAGE, MAX_VILLAGE, isVillage } from './world.js';
-import { load as loadKey, save as saveKey, remove as removeKey } from './storage.js';
+import { load as loadKey, save as saveKey, remove as removeKey, storageAvailable } from './storage.js';
 import { Environment } from './env.js';
 import { Post } from './post.js';
 import { Player, PLAYER_R } from './player.js';
@@ -27,8 +27,11 @@ import { SCENES, FINALE, CHAPTERS } from './script.js';
 import { Chapters } from './chapters.js';
 import { Minimap } from './minimap.js';
 import { captureRun, writeRun, readRun, clearRun, restoreWorld, describeRun, savedVillage, RUN_KEY } from './runsave.js';
+import { tr, translateDom, isKo } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
+// index.html의 고정 글을 화면 언어로(#60). 다른 화면 글은 만들 때 tr()로 바꾼다.
+translateDom();
 const params = new URLSearchParams(location.search);
 // 웹판은 1장 데모다(#50, 2026-11-08 사용자 결정). 2~4장은 안드로이드 앱에서만 들어간다(결제로 여는 부분, #51).
 // 로컬 개발(localhost·127.0.0.1)에서만 ?app으로 앱처럼 2~4장을 연다 — 2~4장 브라우저 시험용, 배포 주소에서는 무시.
@@ -60,21 +63,21 @@ function showFatal(message, err, { canContinue = false } = {}) {
   halted = true;
   // 배포 직후 캐시된 옛 index.html과 섞일 수 있어, 새로 추가된 요소는 없을 수도 있다고 보고 다룬다.
   const errTitle = $('error-title');
-  if (errTitle) errTitle.textContent = canContinue ? '문제가 생겼어요' : '실행할 수 없어요';
+  if (errTitle) errTitle.textContent = canContinue ? tr('문제가 생겼어요') : tr('실행할 수 없어요');
   $('error-text').textContent = message;
   $('error-continue')?.classList.toggle('hidden', !canContinue);
   $('error').classList.remove('hidden');
   $('title').classList.add('hidden');
 }
 
-addEventListener('error', (e) => showFatal(`게임 실행 중 오류가 발생했습니다: ${e.message}`, e.error, { canContinue: booted }));
-addEventListener('unhandledrejection', (e) => showFatal(`게임 실행 중 오류가 발생했습니다: ${e.reason}`, e.reason, { canContinue: booted }));
+addEventListener('error', (e) => showFatal(tr('게임 실행 중 오류가 발생했습니다: {0}', [e.message]), e.error, { canContinue: booted }));
+addEventListener('unhandledrejection', (e) => showFatal(tr('게임 실행 중 오류가 발생했습니다: {0}', [e.reason]), e.reason, { canContinue: booted }));
 
 let renderer;
 try {
   renderer = new THREE.WebGLRenderer({ canvas: $('game'), antialias: false, powerPreference: 'high-performance' });
 } catch (err) {
-  showFatal('이 브라우저(또는 그래픽 드라이버)에서 WebGL2를 사용할 수 없어 게임을 시작하지 못했습니다.', err);
+  showFatal(tr('이 브라우저(또는 그래픽 드라이버)에서 WebGL2를 사용할 수 없어 게임을 시작하지 못했습니다.'), err);
   throw err;
 }
 renderer.shadowMap.enabled = QUALITY[settings.quality].shadows;
@@ -137,7 +140,7 @@ const START = new THREE.Vector3(0, 0, 3.2);
 player.reset(START.x, START.z);
 car.reset(CAR_SPAWN.x, CAR_SPAWN.z, CAR_SPAWN.a);
 
-const EMPTY_LINES = ['빈 서랍이다.', '오래된 영수증뿐이다.', '누군가 먼저 다녀갔다.', '쓸 만한 건 없다.', '젖은 신문만 남았다.', '라디오는 대답하지 않았다.'];
+const EMPTY_LINES = [tr('빈 서랍이다.'), tr('오래된 영수증뿐이다.'), tr('누군가 먼저 다녀갔다.'), tr('쓸 만한 건 없다.'), tr('젖은 신문만 남았다.'), tr('라디오는 대답하지 않았다.')];
 
 const game = {
   state: 'title',
@@ -298,7 +301,7 @@ function saveBest() {
 // 처음 화면에는 다음 판 난이도의 최고 기록만 보인다(모든 단계는 설정 → 기록).
 function renderBest() {
   const b = loadBest(world.totalZones, settings.difficulty);
-  $('best').textContent = hasRecords(b) ? `최고 기록(${DIFFICULTY[settings.difficulty].label}) · ${describeBest(b, world.totalZones)}` : '';
+  $('best').textContent = hasRecords(b) ? tr('최고 기록({0}) · {1}', [DIFFICULTY[settings.difficulty].label, describeBest(b, world.totalZones)]) : '';
 }
 
 // ---------------------------------------------------------------- 게임 흐름
@@ -338,7 +341,7 @@ function closeCloset() {
   $('closet-btn')?.focus({ preventScroll: true });
 }
 
-const WEAR_VERB = { coat: '입어', hat: '써', glasses: '써', pack: '메' };
+const WEAR_VERB = { coat: tr('입어'), hat: tr('써'), glasses: tr('써'), pack: tr('메') };
 
 function foundOutfit(item) {
   wardrobe.unlock(item.id);
@@ -346,8 +349,8 @@ function foundOutfit(item) {
   player.setOutfit(wardrobe.wear);
   sound.play('pickup');
   const label = itemLabel(item);
-  hud.toast(`${label}${objParticle(label)} 주웠다! 바로 ${WEAR_VERB[item.slot]} 봤다. 처음 화면 '옷장'에서 언제든 바꿀 수 있다.`, 'good');
-  if (!wardrobe.storeOk) hud.toast('브라우저 저장소가 막혀 있어 주운 옷은 이번 세션에만 남는다.', 'warn');
+  hud.toast(tr('{0}{1} 주웠다! 바로 {2} 봤다. 처음 화면 \'옷장\'에서 언제든 바꿀 수 있다.', [label, objParticle(label), WEAR_VERB[item.slot]]), 'good');
+  if (!wardrobe.storeOk) hud.toast(tr('브라우저 저장소가 막혀 있어 주운 옷은 이번 세션에만 남는다.'), 'warn');
 }
 
 // 새 판·이어하기·2~4장이 함께 쓰는 준비: 그늘이·타이머·이야기·온라인 상태와 화면을 판 시작 상태로 돌린다.
@@ -407,13 +410,13 @@ function startGame() {
   // 지난 판의 저장을 바로 이 판으로 덮는다. 첫 자동 저장 전에 탭이 죽어도 지난 판이 되살아나지 않게.
   saveRun();
   // 처음 하는 사람은 도착 장면이 같은 내용을 들려준다.
-  if (!queueStory('start')) hud.toast('정전된 골짜기. 은신처의 불 하나가 길을 지킨다.');
-  later(1.8, () => hud.toast('퓨즈를 모아 배전함을 고치자. 복구한 구역에 불을 보낼 수 있다.'));
-  later(3.8, () => hud.toast('화살표가 가까운 배전함을 가리킨다. 비상함에서 찾은 퓨즈 하나가 있다.'));
-  later(6.4, () => !game.driving && hud.toast('은신처 앞에 낡은 트럭이 남아 있다. 연료가 있으면 운전할 수 있다.'));
+  if (!queueStory('start')) hud.toast(tr('정전된 골짜기. 은신처의 불 하나가 길을 지킨다.'));
+  later(1.8, () => hud.toast(tr('퓨즈를 모아 배전함을 고치자. 복구한 구역에 불을 보낼 수 있다.')));
+  later(3.8, () => hud.toast(tr('화살표가 가까운 배전함을 가리킨다. 비상함에서 찾은 퓨즈 하나가 있다.')));
+  later(6.4, () => !game.driving && hud.toast(tr('은신처 앞에 낡은 트럭이 남아 있다. 연료가 있으면 운전할 수 있다.')));
   // 아직 옷가지를 하나도 줍지 않았을 때만 존재를 알려 준다.
   if (drops.spawn(world, wardrobe, START, { truck: car.pos, radius: PLAYER_R }) && wardrobe.foundCount === 0) {
-    later(9.5, () => hud.toast('누군가 남긴 옷가지 꾸러미가 빛난다. 주운 옷은 옷장에 남는다.'));
+    later(9.5, () => hud.toast(tr('누군가 남긴 옷가지 꾸러미가 빛난다. 주운 옷은 옷장에 남는다.')));
   }
   flushStory();
 }
@@ -430,16 +433,16 @@ function newGame() {
   }
   const r = readRun(world);
   // 더 새 버전이 쓴 저장도 새 판이 덮어쓰므로 함께 알린다.
-  const lose = r.status === 'ok' ? `진행 중인 판(${describeRun(r.run, world.totalZones)})이 지워져요.`
-    : r.status === 'newer' ? '더 새 버전에서 저장한 판이 지워져요.'
-      : r.status === 'village' ? `${r.village ? `마을 ${r.village}` : '기본 마을'}에서 하던 판이 지워져요.` : '';
+  const lose = r.status === 'ok' ? tr('진행 중인 판({0})이 지워져요.', [describeRun(r.run, world.totalZones)])
+    : r.status === 'newer' ? tr('더 새 버전에서 저장한 판이 지워져요.')
+      : r.status === 'village' ? tr('{0}에서 하던 판이 지워져요.', [r.village ? tr('마을 {0}', [r.village]) : tr('기본 마을')]) : '';
   newRunUi?.sync();
   renderDiffNote();
   villageUi.sync();
   $('title-actions').classList.add('hidden');
   $('new-confirm').classList.remove('hidden');
   $('run-info').textContent = lose;
-  $('new-yes').textContent = lose ? '지우고 시작' : '시작';
+  $('new-yes').textContent = lose ? tr('지우고 시작') : tr('시작');
   (lose ? $('new-no') : $('new-yes')).focus();
 }
 
@@ -470,7 +473,7 @@ addEventListener('storage', (e) => {
   }
   if (game.otherTab || game.chapter || !RUN_STATES.has(game.state)) return;
   game.otherTab = true;
-  hud.toast('다른 탭에서 이 판을 하고 있다. 이 탭의 진행은 이제 저장하지 않는다.', 'warn');
+  hud.toast(tr('다른 탭에서 이 판을 하고 있다. 이 탭의 진행은 이제 저장하지 않는다.'), 'warn');
 });
 
 function saveRun() {
@@ -541,7 +544,7 @@ function resumeGame() {
   if (c.driving) seatInCar();
   else player.flashOn = p.flash && player.battery > 0;
   camFocus.copy(player.pos);
-  hud.toast(`지난 판을 이어 간다 · ${env.day}일째, 복구한 구역 ${world.poweredZones}/${world.totalZones}`, 'good');
+  hud.toast(tr('지난 판을 이어 간다 · {0}일째, 복구한 구역 {1}/{2}', [env.day, world.poweredZones, world.totalZones]), 'good');
   // 첫 판의 도착 무전 도중에 탭이 닫혔다면 처음부터 다시 튼다. 장면은 끝까지 봐야 본 것으로 남고
   // 그때 첫 기록이 열리는데, 도착 무전은 새 판을 시작할 때만 줄을 서기 때문이다.
   queueStory('start');
@@ -568,13 +571,13 @@ function renderRun() {
   $('title-actions')?.classList.remove('hidden');
   $('new-confirm')?.classList.add('hidden');
   btn.classList.toggle('hidden', !ok);
-  btn.textContent = away ? `이어하기 · ${r.village ? `마을 ${r.village}` : '기본 마을'}` : '이어하기';
+  btn.textContent = away ? tr('이어하기 · {0}', [r.village ? tr('마을 {0}', [r.village]) : tr('기본 마을')]) : tr('이어하기');
   $('start-btn').classList.toggle('ghost', ok);
-  if (game.ready) $('start-btn').textContent = ok ? '새로 시작' : '시작하기';
+  if (game.ready) $('start-btn').textContent = ok ? tr('새로 시작') : tr('시작하기');
   if (r.status === 'ok') info.textContent = describeRun(r.run, world.totalZones);
-  else if (r.status === 'layout') info.textContent = '게임이 업데이트되어 마을이 바뀌었어요. 지난 판은 이어 갈 수 없어요.';
-  else if (away) info.textContent = `${r.village ? `마을 ${r.village}` : '기본 마을'}에서 하던 판이 있어요. 이어하기를 누르면 그 마을로 다시 열어요.`;
-  else if (r.status === 'newer') info.textContent = '더 새 버전에서 저장한 판이 있어요. 새로고침하면 이어 갈 수 있어요.';
+  else if (r.status === 'layout') info.textContent = tr('게임이 업데이트되어 마을이 바뀌었어요. 지난 판은 이어 갈 수 없어요.');
+  else if (away) info.textContent = tr('{0}에서 하던 판이 있어요. 이어하기를 누르면 그 마을로 다시 열어요.', [r.village ? tr('마을 {0}', [r.village]) : tr('기본 마을')]);
+  else if (r.status === 'newer') info.textContent = tr('더 새 버전에서 저장한 판이 있어요. 새로고침하면 이어 갈 수 있어요.');
   else info.textContent = '';
 }
 
@@ -619,11 +622,42 @@ function pauseGame(on) {
   }
 }
 
+// 언어 바꾸기(#60): 모든 모듈이 열 때 글을 정하므로 다시 연다. 다시 열면 저장된 설정으로 언어를 고르니 저장이 됐는지 먼저 본다(#71 리뷰).
+// 저장소가 막힌 브라우저: 처음 화면이면 잃을 것이 없어 주소의 ?lang=으로 다시 열고, 판 도중이면 진행을 잃으니 다시 열지 않고 되돌린다.
+let langPref = settings.lang;
+function switchLang() {
+  let saved = null;
+  try {
+    saved = JSON.parse(loadKey('lumen.settings'))?.lang ?? null;
+  } catch {
+    saved = null;
+  }
+  if (storageAvailable() && saved === settings.lang) {
+    langPref = settings.lang;
+    saveRun(); // 판 도중이면 처음 화면에서 이어 갈 수 있게
+    const u = new URL(location.href);
+    u.searchParams.delete('lang'); // 주소의 ?lang=이 설정을 덮지 않게
+    location.replace(u.href);
+    return;
+  }
+  if (game.state === 'title') {
+    const u = new URL(location.href);
+    if (settings.lang === 'auto') u.searchParams.delete('lang');
+    else u.searchParams.set('lang', settings.lang);
+    location.replace(u.href);
+    return;
+  }
+  settings.lang = langPref;
+  settingsUi?.sync();
+  const note = $('settings-store');
+  if (note) note.textContent = tr('이 브라우저는 저장소를 막아 두어 판 도중에는 언어를 바꿀 수 없어요. 처음 화면의 설정에서 바꿔 주세요.');
+}
+
 // 일시정지 화면의 난이도 한 줄. 2~4장은 설정에서 바로 바꿀 수 있다.
 function renderPauseDiff() {
   const el = $('pause-diff');
-  const village = !game.chapter && world.village !== DEFAULT_VILLAGE ? ` · 마을 ${world.village}` : '';
-  if (el) el.textContent = `난이도 ${diffNow().label}${game.chapter ? ' · 설정에서 바꿀 수 있어요' : village}`;
+  const village = !game.chapter && world.village !== DEFAULT_VILLAGE ? tr(' · 마을 {0}', [world.village]) : '';
+  if (el) el.textContent = tr('난이도 {0}{1}', [diffNow().label, game.chapter ? tr(' · 설정에서 바꿀 수 있어요') : village]);
 }
 
 // 마을을 바꿔 다시 연다. then: 다시 연 뒤 할 일('start' 새 판, 'chapter' 2~4장, 'resume' 이어하기). 저장소가 막혀 남기지 못하면 false.
@@ -653,7 +687,7 @@ const villageUi = {
     const other = this.open && document.querySelector('input[name="new-village"]:checked')?.value === 'other';
     $('new-village-pick')?.classList.toggle('hidden', !other);
     const note = $('new-village-note');
-    if (note) note.textContent = other ? '다른 마을에는 1장 기록과 다른 생존자의 보급품이 없어요. 번호를 알려 주면 같은 마을에서 할 수 있어요.' : '';
+    if (note) note.textContent = other ? tr('다른 마을에는 1장 기록과 다른 생존자의 보급품이 없어요. 번호를 알려 주면 같은 마을에서 할 수 있어요.') : '';
   },
   // 고른 마을 번호. 다른 마을인데 번호가 틀렸으면 null.
   value() {
@@ -668,7 +702,7 @@ const randomVillage = () => 1 + Math.floor(Math.random() * MAX_VILLAGE);
 function confirmNewGame() {
   const v = villageUi.value();
   if (v === null) {
-    $('new-village-note').textContent = `마을 번호는 1부터 ${MAX_VILLAGE}까지예요.`;
+    $('new-village-note').textContent = tr('마을 번호는 1부터 {0}까지예요.', [MAX_VILLAGE]);
     $('new-village-num').focus();
     return;
   }
@@ -676,7 +710,7 @@ function confirmNewGame() {
     startGame();
     return;
   }
-  if (!reopenIn(v, 'start')) $('new-village-note').textContent = '이 브라우저는 저장소를 막아 두어 다른 마을을 열 수 없어요.';
+  if (!reopenIn(v, 'start')) $('new-village-note').textContent = tr('이 브라우저는 저장소를 막아 두어 다른 마을을 열 수 없어요.');
 }
 
 // 끝 화면의 단추: 1장 승리(산책·다음 장), 1장·2~4장 패배(다시 하기), 이야기 끝(수첩·처음 화면)
@@ -689,9 +723,9 @@ function endButtons({ walk = false, retry = true, next = false, journal = false 
   $('restart-btn').classList.toggle('hidden', !retry);
   $('next-chapter-btn')?.classList.toggle('hidden', !next);
   $('end-journal-btn')?.classList.toggle('hidden', !journal);
-  $('title-btn').textContent = journal ? '처음 화면' : '처음 화면으로';
+  $('title-btn').textContent = journal ? tr('처음 화면') : tr('처음 화면으로');
   const info = next ? chapters.nextInfo() : null;
-  if (info && $('next-chapter-btn')) $('next-chapter-btn').textContent = `다음 장 · ${info.ch}장 ${info.title}`;
+  if (info && $('next-chapter-btn')) $('next-chapter-btn').textContent = tr('다음 장 · {0}장 {1}', [info.ch, info.title]);
 }
 
 function endGame(won) {
@@ -707,15 +741,15 @@ function endGame(won) {
   if (game.placing && !game.placing.busy) closePlace();
   const zones = `${world.poweredZones}/${world.totalZones}`;
   // 그늘이가 사람들의 그림자라는 걸 들은 뒤에는 '쫓아낸' 대신 '돌려보낸'이라고 적는다.
-  const sent = story.isSeen('return') ? '집으로 돌려보낸 그늘이' : '쫓아낸 그늘이';
+  const sent = story.isSeen('return') ? tr('집으로 돌려보낸 그늘이') : tr('쫓아낸 그늘이');
   if (won) {
     sound.play('win');
-    $('end-title').textContent = '첫 불이 돌아왔다';
-    $('end-text').textContent = `${env.day}일째, 아홉 구역을 잇고 첫 불을 밝혔다. 버틴 밤 ${game.nights}번 · ${sent} ${shades.banished}.`;
+    $('end-title').textContent = tr('첫 불이 돌아왔다');
+    $('end-text').textContent = tr('{0}일째, 아홉 구역을 잇고 첫 불을 밝혔다. 버틴 밤 {1}번 · {2} {3}.', [env.day, game.nights, sent, shades.banished]);
     endButtons({ walk: true, next: dialogue.ok && !!chapters.nextInfo() });
   } else {
-    $('end-title').textContent = '어둠에 삼켜졌다';
-    $('end-text').textContent = `버틴 밤 ${game.nights}번 · 복구한 구역 ${zones} · ${sent} ${shades.banished}.`;
+    $('end-title').textContent = tr('어둠에 삼켜졌다');
+    $('end-text').textContent = tr('버틴 밤 {0}번 · 복구한 구역 {1} · {2} {3}.', [game.nights, zones, sent, shades.banished]);
     endButtons();
   }
   const best = $('end-best');
@@ -726,11 +760,11 @@ function endGame(won) {
 // 끝 화면의 기록 비교: 이번 판이 지난 최고 기록을 넘었으면 무엇을 넘었는지, 아니면 지금 최고 기록(#14)
 function bestLine(prev) {
   const news = [];
-  if (game.won && (!prev.winDay || env.day < prev.winDay)) news.push(prev.winDay ? `가장 빠른 복구(전에는 ${prev.winDay}일)` : '처음으로 마을을 되살렸다');
-  if (game.nights > prev.nights) news.push(`가장 오래 버틴 밤(전에는 ${prev.nights}번)`);
-  if (world.poweredZones > prev.zones) news.push(`가장 많이 밝힌 구역(전에는 ${prev.zones}곳)`);
-  if (news.length) return `신기록(${DIFFICULTY[game.difficulty].label}) — ${news.join(' · ')}`;
-  return hasRecords(prev) ? `최고 기록(${DIFFICULTY[game.difficulty].label}) · ${describeBest(prev, world.totalZones)}` : '';
+  if (game.won && (!prev.winDay || env.day < prev.winDay)) news.push(prev.winDay ? tr('가장 빠른 복구(전에는 {0}일)', [prev.winDay]) : tr('처음으로 마을을 되살렸다'));
+  if (game.nights > prev.nights) news.push(tr('가장 오래 버틴 밤(전에는 {0}번)', [prev.nights]));
+  if (world.poweredZones > prev.zones) news.push(tr('가장 많이 밝힌 구역(전에는 {0}곳)', [prev.zones]));
+  if (news.length) return tr('신기록({0}) — {1}', [DIFFICULTY[game.difficulty].label, news.join(' · ')]);
+  return hasRecords(prev) ? tr('최고 기록({0}) · {1}', [DIFFICULTY[game.difficulty].label, describeBest(prev, world.totalZones)]) : '';
 }
 
 function continueWalk() {
@@ -738,7 +772,7 @@ function continueWalk() {
   game.peaceful = true;
   env.setHour(Math.max(env.hour, 19.4) % 24);
   setScreen(null);
-  hud.toast('고요해진 마을을 천천히 걸어 보자.', 'good');
+  hud.toast(tr('고요해진 마을을 천천히 걸어 보자.'), 'good');
 }
 
 // 안드로이드 앱의 뒤로 가기(#49). Esc와 같은 규칙으로 열린 것을 닫고, 판 도중이면 일시정지한다.
@@ -879,8 +913,8 @@ function playScene(id, after) {
       online.noteStory('scene', id, dialogue.skipped);
       const opened = story.markSeen(id);
       leaveStory();
-      for (const c of opened) hud.toast(`새 기록 — ${c.where}`, 'story');
-      if (id === 'arrival') later(1.2, () => hud.toast('푸른 빛기둥과 화살표가 아직 읽지 않은 기록을 가리킨다.', 'story'));
+      for (const c of opened) hud.toast(tr('새 기록 — {0}', [c.where]), 'story');
+      if (id === 'arrival') later(1.2, () => hud.toast(tr('푸른 빛기둥과 화살표가 아직 읽지 않은 기록을 가리킨다.'), 'story'));
       if (chapterOf(sc) > 1) chapters.after(id);
       after?.();
     },
@@ -921,8 +955,8 @@ function storyCamera(cam) {
 function noteFound(clue) {
   const ch = chapterOf(clue);
   sound.play('pickup');
-  hud.toast(`수첩에 적었다 (${story.foundDocs(ch)}/${DOCS.filter((c) => chapterOf(c) <= ch).length})`, 'story');
-  if (story.foundDocs(4) === 1) later(1.4, () => hud.toast('읽은 기록과 무전은 일시정지 → 수첩에서 다시 볼 수 있다.'));
+  hud.toast(tr('수첩에 적었다 ({0}/{1})', [story.foundDocs(ch), DOCS.filter((c) => chapterOf(c) <= ch).length]), 'story');
+  if (story.foundDocs(4) === 1) later(1.4, () => hud.toast(tr('읽은 기록과 무전은 일시정지 → 수첩에서 다시 볼 수 있다.')));
 }
 
 // 남은 기록을 읽는다. 처음 읽으면 수첩에 남는다.
@@ -995,7 +1029,7 @@ function renderNightNotes() {
     const b = document.createElement('b');
     b.textContent = known ? n.name : '???';
     const note = document.createElement('small');
-    note.textContent = known ? n.note : '아직 만나지 못했다.';
+    note.textContent = known ? n.note : tr('아직 만나지 못했다.');
     li.append(b, note);
     return li;
   }));
@@ -1105,7 +1139,7 @@ function watchQuality(now) {
   settings.quality = next;
   saveSettings(settings);
   applyQuality();
-  hud.toast(`화면이 느려 화질을 '${next === 'mid' ? '보통' : '낮음'}'으로 낮췄다. 설정에서 바꿀 수 있다.`);
+  hud.toast(tr('화면이 느려 화질을 \'{0}\'으로 낮췄다. 설정에서 바꿀 수 있다.', [next === 'mid' ? tr('보통') : tr('낮음')]));
 }
 
 function applySetting(key) {
@@ -1116,6 +1150,9 @@ function applySetting(key) {
       break;
     case 'music':
       sound.setMusicVolume(settings.music);
+      break;
+    case 'lang':
+      switchLang();
       break;
     case 'difficulty':
       // 1장 판은 시작할 때 정한 단계 그대로, 2~4장은 다음 프레임부터 바뀐다(diffNow).
@@ -1149,7 +1186,7 @@ function applySetting(key) {
 
 function toggleFlash() {
   if (player.battery <= 0) {
-    hud.toast('배터리가 없다. 켜진 가로등 아래에서 충전된다.', 'warn');
+    hud.toast(tr('배터리가 없다. 켜진 가로등 아래에서 충전된다.'), 'warn');
     return;
   }
   player.flashOn = !player.flashOn;
@@ -1158,17 +1195,17 @@ function toggleFlash() {
 
 function useBandage() {
   if (player.bandages <= 0) {
-    hud.toast('붕대가 없다.', 'warn');
+    hud.toast(tr('붕대가 없다.'), 'warn');
     return;
   }
   if (player.hp >= 100) {
-    hud.toast('지금은 다친 곳이 없다.');
+    hud.toast(tr('지금은 다친 곳이 없다.'));
     return;
   }
   player.bandages--;
   player.hp = Math.min(100, player.hp + 35);
   sound.play('heal');
-  hud.toast('붕대를 감았다. 체력 +35');
+  hud.toast(tr('붕대를 감았다. 체력 +35'));
 }
 
 function completeLoot(loot) {
@@ -1178,25 +1215,25 @@ function completeLoot(loot) {
     case 'fuse':
       player.fuses++;
       sound.play('pickup');
-      hud.toast('퓨즈를 찾았다!', 'good');
+      hud.toast(tr('퓨즈를 찾았다!'), 'good');
       break;
     case 'battery':
       player.battery = Math.min(100, player.battery + 45);
       sound.play('pickup');
-      hud.toast('배터리를 찾았다. 손전등 +45%', 'good');
+      hud.toast(tr('배터리를 찾았다. 손전등 +45%'), 'good');
       break;
     case 'fuel':
       player.cans++;
       sound.play('pickup');
-      hud.toast('연료통을 찾았다. 트럭에 타면 부어 넣는다.', 'good');
+      hud.toast(tr('연료통을 찾았다. 트럭에 타면 부어 넣는다.'), 'good');
       break;
     case 'bandage':
       if (player.bandages < 5) {
         player.bandages++;
-        hud.toast(`붕대를 찾았다. (${mobile ? '붕대 버튼' : 'Q'}로 사용)`, 'good');
+        hud.toast(tr('붕대를 찾았다. ({0}로 사용)', [mobile ? tr('붕대 버튼') : 'Q']), 'good');
       } else {
         player.hp = Math.min(100, player.hp + 35);
-        hud.toast('붕대가 가득 차서 바로 감았다. 체력 +35', 'good');
+        hud.toast(tr('붕대가 가득 차서 바로 감았다. 체력 +35'), 'good');
       }
       sound.play('pickup');
       break;
@@ -1214,21 +1251,21 @@ function restoreZone(box) {
   sound.play('power');
   if (world.poweredZones === world.totalZones) {
     world.restoreAll();
-    hud.toast('마지막 배전함을 고쳤다! 변전소가 출력을 되찾고 아홉 구역이 이어진다.', 'good');
+    hud.toast(tr('마지막 배전함을 고쳤다! 변전소가 출력을 되찾고 아홉 구역이 이어진다.'), 'good');
     // 불이 들어오는 걸 잠깐 보여 준 뒤 할머니의 무전(엔딩)이 온다.
     later(2.2, winGame);
     saveRun(); // 엔딩 전에 탭이 닫혀도 이어하면 엔딩부터 나온다
     return;
   }
-  const where = `배전반(${input.usingTouch || mobile ? '위쪽 전력 버튼' : 'Tab'})`;
+  const where = tr('배전반({0})', [input.usingTouch || mobile ? tr('위쪽 전력 버튼') : 'Tab']);
   if (res?.on) {
-    hud.toast(`${zone.name}의 배전함을 고쳤다! (${world.poweredZones}/${world.totalZones})`, 'good');
-    if (env.night < 0.3) later(1.5, () => hud.toast('불이 켜진 가로등은 밤에 그늘이를 막아 준다.'));
+    hud.toast(tr('{0}의 배전함을 고쳤다! ({1}/{2})', [zone.name, world.poweredZones, world.totalZones]), 'good');
+    if (env.night < 0.3) later(1.5, () => hud.toast(tr('불이 켜진 가로등은 밤에 그늘이를 막아 준다.')));
   } else {
-    hud.toast(`${zone.name} 배전함을 고쳤다. 변전소 출력이 모자라 꺼 두었다.`, 'warn');
-    later(1.5, () => hud.toast(`${where}에서 오늘 밤 켤 구역을 고르자.`));
+    hud.toast(tr('{0} 배전함을 고쳤다. 변전소 출력이 모자라 꺼 두었다.', [zone.name]), 'warn');
+    later(1.5, () => hud.toast(tr('{0}에서 오늘 밤 켤 구역을 고르자.', [where])));
   }
-  if (world.capacity > capBefore) later(3.0, () => hud.toast(`변전소 출력이 올랐다. 이제 ${world.capacity}곳까지 함께 켤 수 있다.`, 'good'));
+  if (world.capacity > capBefore) later(3.0, () => hud.toast(tr('변전소 출력이 올랐다. 이제 {0}곳까지 함께 켤 수 있다.', [world.capacity]), 'good'));
   later(2.4, () => queueStory({ zones: world.poweredZones }));
   saveRun();
 }
@@ -1267,8 +1304,8 @@ function revealFuse(home) {
   world.hintLoot(loot);
   sound.play('hint');
   hud.toast(game.hintTold
-    ? '누군가 또 퓨즈 곁에 촛불을 남겼다.'
-    : '깨어난 누군가가 퓨즈 곁에 촛불을 남겼다. 금빛 기둥을 찾아가 보자.', 'good');
+    ? tr('누군가 또 퓨즈 곁에 촛불을 남겼다.')
+    : tr('깨어난 누군가가 퓨즈 곁에 촛불을 남겼다. 금빛 기둥을 찾아가 보자.'), 'good');
   game.hintTold = true;
 }
 
@@ -1276,7 +1313,7 @@ function revealFuse(home) {
 function resetBreaker(ref) {
   if (!world.resetBreaker(ref.zone)) return;
   sound.play('breaker');
-  hud.toast(`${ref.zone === 'H' ? '은신처' : world.zones[ref.zone].name}에 다시 불이 들어왔다.`, 'good');
+  hud.toast(tr('{0}에 다시 불이 들어왔다.', [ref.zone === 'H' ? tr('은신처') : world.zones[ref.zone].name]), 'good');
 }
 
 function onGridEvent(e) {
@@ -1284,11 +1321,11 @@ function onGridEvent(e) {
     sound.play('trip');
     game.shake = Math.max(game.shake, 0.25);
     const home = e.zone === 'H';
-    hud.toast(`${home ? '은신처' : world.zones[e.zone].name} 차단기가 내려갔다! ${home ? '발전기' : '배전함'}에서 다시 올리자.`, 'warn');
+    hud.toast(tr('{0} 차단기가 내려갔다! {1}에서 다시 올리자.', [home ? tr('은신처') : world.zones[e.zone].name, home ? tr('발전기') : tr('배전함')]), 'warn');
   } else if (e.type === 'truckTrip') {
     car.lamp = false;
     sound.play('trip');
-    hud.toast('작업등이 과부하로 꺼졌다! 트럭에 타서 다시 켜자.', 'warn');
+    hud.toast(tr('작업등이 과부하로 꺼졌다! 트럭에 타서 다시 켜자.'), 'warn');
   }
 }
 
@@ -1298,17 +1335,17 @@ function toggleTruckLamp() {
   if (r === 'on' || r === 'off') sound.play('lamp');
   if (r === 'on' && !game.hintLamp) {
     game.hintLamp = true;
-    hud.toast('짐칸 작업등을 켰다. 세워 둔 트럭 둘레가 가로등 아래처럼 안전해진다. 대신 연료를 쓴다.', 'good');
+    hud.toast(tr('짐칸 작업등을 켰다. 세워 둔 트럭 둘레가 가로등 아래처럼 안전해진다. 대신 연료를 쓴다.'), 'good');
   } else if (r === 'moving') {
-    hud.toast('작업등은 트럭을 세운 뒤에 켤 수 있다.');
+    hud.toast(tr('작업등은 트럭을 세운 뒤에 켤 수 있다.'));
   } else if (r === 'nofuel') {
-    hud.toast('연료가 없어 발전기를 돌릴 수 없다.', 'warn');
+    hud.toast(tr('연료가 없어 발전기를 돌릴 수 없다.'), 'warn');
   }
 }
 
 function onCarEvent(ev) {
-  if (ev.lampOut === 'fuel') hud.toast('연료가 바닥나 작업등이 꺼졌다.', 'warn');
-  else if (ev.lampOut === 'moving' && env.night > 0.3) hud.toast('출발하면서 작업등을 껐다.');
+  if (ev.lampOut === 'fuel') hud.toast(tr('연료가 바닥나 작업등이 꺼졌다.'), 'warn');
+  else if (ev.lampOut === 'moving' && env.night > 0.3) hud.toast(tr('출발하면서 작업등을 껐다.'));
 }
 
 // ---------------------------------------------------------------- 2~4장
@@ -1353,7 +1390,7 @@ function startChapter() {
   game.nights = 1;
   hud.setChapter({ label: chapters.label });
   hud.setObjective(chapters.objective);
-  showCard(`${plan.ch}장 · ${plan.title}`);
+  showCard(tr('{0}장 · {1}', [plan.ch, plan.title]));
   // 진행에 따라 바로 이어 틀 장면은 제목 카드가 걷힌 뒤에 튼다.
   if (plan.play.length) later(1.6, () => plan.play.forEach((id) => storyQueue.includes(id) || storyQueue.push(id)));
 }
@@ -1404,7 +1441,7 @@ function chapterStep(dt) {
         sound.play('dusk');
         if (!game.hintFlash) {
           game.hintFlash = true;
-          later(1.6, () => hud.toast(`${mobile ? '손전등 버튼' : 'F 키나 마우스 클릭'}으로 손전등을 켜자. 오래 비추면 그늘이가 흩어진다.`));
+          later(1.6, () => hud.toast(tr('{0}으로 손전등을 켜자. 오래 비추면 그늘이가 흩어진다.', [mobile ? tr('손전등 버튼') : tr('F 키나 마우스 클릭')])));
         }
       } else if (ev === 'dawn') {
         game.nights++;
@@ -1422,7 +1459,7 @@ function chapterStep(dt) {
   else if (lit) player.hp = Math.min(100, player.hp + dt * 1.2);
   if (player.flashOn && player.battery <= 0) {
     player.flashOn = false;
-    hud.toast(chapters.canRecharge ? '손전등 전지가 다 됐다! 당직실 상자에 예비 전지가 있다.' : '손전등 전지가 다 됐다!', 'warn');
+    hud.toast(chapters.canRecharge ? tr('손전등 전지가 다 됐다! 당직실 상자에 예비 전지가 있다.') : tr('손전등 전지가 다 됐다!'), 'warn');
   }
   chapters.update(dt, player);
   const ev = shades.update(dt, game.time, {
@@ -1450,7 +1487,7 @@ function chapterStep(dt) {
 
 function chapterInteract(dt) {
   if (game.holdLock && !input.interactHeld) game.holdLock = false;
-  const how = input.usingTouch || mobile ? '버튼을 길게 눌러' : 'E를 길게 눌러';
+  const how = input.usingTouch || mobile ? tr('버튼을 길게 눌러') : tr('E를 길게 눌러');
   const t = chapters.nearest(player.pos.x, player.pos.z);
   const key = t ? t.key : null;
   if (key !== game.holdKey) {
@@ -1480,8 +1517,8 @@ function chapterFail() {
   game.state = 'end';
   hud.prompt(null);
   hud.tags([]);
-  $('end-title').textContent = '어둠에 삼켜졌다';
-  $('end-text').textContent = `${chapters.label} — 찾은 기록과 돌려보낸 그림자는 그대로 남는다. 불빛 곁에서 다시 해 보자.`;
+  $('end-title').textContent = tr('어둠에 삼켜졌다');
+  $('end-text').textContent = tr('{0} — 찾은 기록과 돌려보낸 그림자는 그대로 남는다. 불빛 곁에서 다시 해 보자.', [chapters.label]);
   if ($('end-best')) $('end-best').textContent = '';
   endButtons();
   setScreen('end');
@@ -1495,7 +1532,7 @@ function finishStory() {
   hud.prompt(null);
   hud.tags([]);
   sound.play('win');
-  $('end-title').textContent = `《${FINALE.title}》`;
+  $('end-title').textContent = isKo ? `《${FINALE.title}》` : `“${FINALE.title}”`;
   $('end-text').textContent = FINALE.text;
   if ($('end-best')) $('end-best').textContent = '';
   endButtons({ retry: false, journal: true });
@@ -1515,8 +1552,8 @@ function openPaywall({ fromPreview = false } = {}) {
   if (!$('paywall')) return;
   paywallOpen = true;
   $('paywall-lead').textContent = fromPreview
-    ? '할머니를 만났다. 이야기는 여기서부터 앱 안 결제로 이어져요.'
-    : '맛보기는 2장 첫 대면까지예요. 이어서 하려면 2~4장을 열어 주세요.';
+    ? tr('할머니를 만났다. 이야기는 여기서부터 앱 안 결제로 이어져요.')
+    : tr('맛보기는 2장 첫 대면까지예요. 이어서 하려면 2~4장을 열어 주세요.');
   renderPaywall();
   setScreen('paywall');
   $('paywall-buy')?.focus();
@@ -1535,20 +1572,20 @@ function closePaywall() {
 function renderPaywall(msg = null) {
   const buy = $('paywall-buy');
   if (!buy) return;
-  buy.textContent = store.price ? `2~4장 열기 · ${store.price}` : '2~4장 열기';
+  buy.textContent = store.price ? tr('2~4장 열기 · {0}', [store.price]) : tr('2~4장 열기');
   buy.disabled = store.busy || store.owned;
   const say = $('paywall-msg');
   if (msg !== null) say.textContent = msg;
-  else if (store.pending) say.textContent = '결제를 기다리고 있어요. 결제가 끝나면 바로 열려요.';
-  else if (store.reachable === false) say.textContent = 'Play 스토어에 연결하지 못했어요. 인터넷과 Play 스토어 로그인을 확인한 뒤 다시 확인해 주세요.';
+  else if (store.pending) say.textContent = tr('결제를 기다리고 있어요. 결제가 끝나면 바로 열려요.');
+  else if (store.reachable === false) say.textContent = tr('Play 스토어에 연결하지 못했어요. 인터넷과 Play 스토어 로그인을 확인한 뒤 다시 확인해 주세요.');
   else say.textContent = '';
 }
 
 const BUY_SAY = {
-  pending: '결제를 기다리고 있어요. 결제가 끝나면 바로 열려요.',
+  pending: tr('결제를 기다리고 있어요. 결제가 끝나면 바로 열려요.'),
   canceled: '',
-  unavailable: 'Play 스토어에서 이 상품을 찾지 못했어요. 잠시 뒤 다시 해 주세요.',
-  error: '결제를 마치지 못했어요. 잠시 뒤 다시 해 주세요.',
+  unavailable: tr('Play 스토어에서 이 상품을 찾지 못했어요. 잠시 뒤 다시 해 주세요.'),
+  error: tr('결제를 마치지 못했어요. 잠시 뒤 다시 해 주세요.'),
   busy: '',
 };
 
@@ -1564,10 +1601,10 @@ async function buyStory() {
 }
 
 async function checkStory() {
-  renderPaywall('Play 스토어에 확인하는 중…');
+  renderPaywall(tr('Play 스토어에 확인하는 중…'));
   const r = await store.refresh();
   if (store.owned) onStoryOwned();
-  else renderPaywall(r.ok ? (store.pending ? null : '이 구글 계정으로 산 기록이 없어요.') : null);
+  else renderPaywall(r.ok ? (store.pending ? null : tr('이 구글 계정으로 산 기록이 없어요.')) : null);
 }
 
 // 산 뒤(또는 대기 중이던 결제가 끝난 뒤): 결제 화면이 열려 있으면 닫고 그 장으로 들어간다.
@@ -1576,7 +1613,7 @@ function onStoryOwned() {
   if (!paywallOpen) return;
   paywallOpen = false;
   setScreen('title');
-  hud.toast('2~4장이 열렸어요. 고마워요!', 'good');
+  hud.toast(tr('2~4장이 열렸어요. 고마워요!'), 'good');
   startChapter();
 }
 store.onChange(() => {
@@ -1597,13 +1634,13 @@ function renderChapter() {
   const note = $('app-only');
   if (note) {
     note.classList.toggle('hidden', !appOnly);
-    if (appOnly) note.textContent = `이야기는 2~4장(${CHAPTERS.slice(1, 4).map((c) => c.title).join('·')})에서 이어지고, 안드로이드 앱(플레이 스토어 준비 중)에서 할 수 있어요. 웹에서 한 기록은 설정 → 기록 → 내보내기로 앱에 옮길 수 있어요.`;
+    if (appOnly) note.textContent = tr('이야기는 2~4장({0})에서 이어지고, 안드로이드 앱(플레이 스토어 준비 중)에서 할 수 있어요. 웹에서 한 기록은 설정 → 기록 → 내보내기로 앱에 옮길 수 있어요.', [CHAPTERS.slice(1, 4).map((c) => c.title).join('·')]);
   }
   btn.classList.toggle('hidden', (!info && !replay) || appOnly);
   btn.disabled = game.contextLost || !game.ready;
   replayArmed = null;
-  if (info) btn.textContent = `${info.fresh ? '다음 장' : '이어 가기'} · ${info.ch}장 ${info.title}${paywallDue() ? ' (2~4장 열기)' : ''}`;
-  else if (replay) btn.textContent = '2장부터 다시 걷기';
+  if (info) btn.textContent = tr('{0} · {1}장 {2}{3}', [info.fresh ? tr('다음 장') : tr('이어 가기'), info.ch, info.title, paywallDue() ? tr(' (2~4장 열기)') : '']);
+  else if (replay) btn.textContent = tr('2장부터 다시 걷기');
 }
 
 function chapterButton() {
@@ -1615,7 +1652,7 @@ function chapterButton() {
   const now = performance.now();
   if (replayArmed === null || now - replayArmed > 4000) {
     replayArmed = now;
-    $('chapter-btn').textContent = '한 번 더 누르면 2장부터';
+    $('chapter-btn').textContent = tr('한 번 더 누르면 2장부터');
     return;
   }
   replayArmed = null;
@@ -1644,7 +1681,7 @@ chapters.attach({
     recharge: () => {
       player.battery = 100;
       sound.play('pickup');
-      hud.toast('예비 전지를 끼웠다. 손전등 100%', 'good');
+      hud.toast(tr('예비 전지를 끼웠다. 손전등 100%'), 'good');
     },
   },
 });
@@ -1652,7 +1689,7 @@ chapters.attach({
 // ---------------------------------------------------------------- 공유 보급품
 // 설계: docs/online-caches.md. 서버를 못 쓰면 판은 보급품 없이 그대로 진행된다.
 
-const OBJ = { bandage: '붕대를', fuel: '연료통을', battery: '배터리 팩을' };
+const OBJ = { bandage: tr('붕대를'), fuel: tr('연료통을'), battery: tr('배터리 팩을') };
 
 // 온라인 처리는 부가 기능이라, 여기서 난 예외가 전역 오류 화면(unhandledrejection)으로 번져 판을 끝내면 안 된다.
 // 기록을 남기고 플레이어에게 알린 뒤 게임은 계속한다.
@@ -1661,7 +1698,7 @@ function bg(promise) {
     console.error('[online] 처리 중 오류', err);
     game.cacheBusy = false;
     if (game.placing?.busy) closePlace();
-    if (game.state === 'play') hud.toast('온라인 보급품을 처리하다 문제가 생겼다. 게임은 계속된다.', 'warn');
+    if (game.state === 'play') hud.toast(tr('온라인 보급품을 처리하다 문제가 생겼다. 게임은 계속된다.'), 'warn');
   });
 }
 
@@ -1671,7 +1708,7 @@ async function loadCaches(run) {
   if (run !== game.run || game.state === 'title') return;
   const at = Math.max(0.3, game.startedAt + 8.6 - game.time);
   if (!r.ok) {
-    later(at, () => hud.toast('다른 생존자의 흔적을 불러오지 못했다. 이번 판은 혼자 버틴다.', 'warn'));
+    later(at, () => hud.toast(tr('다른 생존자의 흔적을 불러오지 못했다. 이번 판은 혼자 버틴다.'), 'warn'));
     return;
   }
   if (!r.enabled) {
@@ -1683,38 +1720,38 @@ async function loadCaches(run) {
   hud.setOnline(true);
   const others = r.caches.filter((c) => !c.mine).length;
   later(at, () => hud.toast(others
-    ? `다른 생존자가 남긴 보급품 ${others}개. 청록빛을 찾아보자.`
-    : '아직 이 마을에 남겨진 보급품이 없다. 남는 물건이 있으면 다음 사람을 위해 남겨 보자.'));
+    ? tr('다른 생존자가 남긴 보급품 {0}개. 청록빛을 찾아보자.', [others])
+    : tr('아직 이 마을에 남겨진 보급품이 없다. 남는 물건이 있으면 다음 사람을 위해 남겨 보자.')));
 }
 
 // 서버 거절 사유를 플레이어에게 알릴 문장으로 바꾼다. 상태를 바꿔야 하는 사유는 여기서 함께 처리한다.
 function onlineError(r, c) {
   switch (r.error) {
-    case 'used_today': return '오늘은 이미 이 보급품을 꺼냈다.';
+    case 'used_today': return tr('오늘은 이미 이 보급품을 꺼냈다.');
     case 'gone':
     case 'not_found':
       if (c) caches.remove(c.id);
-      return '보급품이 이미 비었거나 사라졌다.';
+      return tr('보급품이 이미 비었거나 사라졌다.');
     case 'own_cache':
       if (c) c.mine = true;
-      return '내가 남긴 보급품이다.';
-    case 'already_thanked': return '이미 고마워요를 보냈다.';
-    case 'not_used': return '꺼내 쓴 보급품에만 고마워요를 보낼 수 있다.';
-    case 'slot_taken': return '누군가 방금 그 자리에 보급품을 두었다.';
-    case 'player_limit': return `한 사람이 남겨 둘 수 있는 보급품은 ${online.rules.maxActivePerPlayer}개까지다.`;
-    case 'ip_daily': return '오늘은 더 할 수 없다. 내일 다시 해 보자.';
-    case 'town_full': return '마을에 보급품이 가득 찼다.';
-    case 'rate': return '너무 빠르다. 잠시 뒤에 다시 해 보자.';
+      return tr('내가 남긴 보급품이다.');
+    case 'already_thanked': return tr('이미 고마워요를 보냈다.');
+    case 'not_used': return tr('꺼내 쓴 보급품에만 고마워요를 보낼 수 있다.');
+    case 'slot_taken': return tr('누군가 방금 그 자리에 보급품을 두었다.');
+    case 'player_limit': return tr('한 사람이 남겨 둘 수 있는 보급품은 {0}개까지다.', [online.rules.maxActivePerPlayer]);
+    case 'ip_daily': return tr('오늘은 더 할 수 없다. 내일 다시 해 보자.');
+    case 'town_full': return tr('마을에 보급품이 가득 찼다.');
+    case 'rate': return tr('너무 빠르다. 잠시 뒤에 다시 해 보자.');
     case 'disabled':
       game.onlineLive = false;
       game.onlinePaused = true;
       hud.setOnline(false);
       closePlace();
       caches.clear();
-      return '온라인 보급품이 잠시 꺼졌다.';
+      return tr('온라인 보급품이 잠시 꺼졌다.');
     case 'timeout':
-    case 'network': return '연결이 끊겨 서버에 닿지 않았다.';
-    default: return `서버가 요청을 처리하지 못했다 (${r.error}).`;
+    case 'network': return tr('연결이 끊겨 서버에 닿지 않았다.');
+    default: return tr('서버가 요청을 처리하지 못했다 ({0}).', [r.error]);
   }
 }
 
@@ -1722,17 +1759,17 @@ function grantShared(kind) {
   if (kind === 'bandage') {
     if (player.bandages < 5) {
       player.bandages++;
-      hud.toast('다른 생존자가 남긴 붕대를 꺼냈다.', 'good');
+      hud.toast(tr('다른 생존자가 남긴 붕대를 꺼냈다.'), 'good');
     } else {
       player.hp = Math.min(100, player.hp + 35);
-      hud.toast('붕대가 가득 차서 바로 감았다. 체력 +35', 'good');
+      hud.toast(tr('붕대가 가득 차서 바로 감았다. 체력 +35'), 'good');
     }
   } else if (kind === 'fuel') {
     player.cans++;
-    hud.toast('다른 생존자가 남긴 연료통을 꺼냈다. 트럭에 타면 부어 넣는다.', 'good');
+    hud.toast(tr('다른 생존자가 남긴 연료통을 꺼냈다. 트럭에 타면 부어 넣는다.'), 'good');
   } else {
     player.battery = Math.min(100, player.battery + BATTERY_PACK);
-    hud.toast(`다른 생존자가 남긴 배터리 팩. 손전등 +${BATTERY_PACK}%`, 'good');
+    hud.toast(tr('다른 생존자가 남긴 배터리 팩. 손전등 +{0}%', [BATTERY_PACK]), 'good');
   }
   sound.play('pickup');
 }
@@ -1763,7 +1800,7 @@ async function takeCache(c) {
     // 앞선 요청이 서버에서 이뤄졌다: 그 물건을 준다(상자 남은 수는 모르니 그대로 둔다).
     game.cacheTaken++;
     grantShared(c.kind);
-    hud.toast('지난번에 꺼내던 보급품을 마저 받았다.', 'good');
+    hud.toast(tr('지난번에 꺼내던 보급품을 마저 받았다.'), 'good');
     return;
   }
   game.cacheTaken++;
@@ -1772,10 +1809,10 @@ async function takeCache(c) {
   // 마지막 하나를 꺼냈어도 빈 상자는 이 판에 남겨 둔다. 서버는 소진된 상자에도 고마워요를 받으므로,
   // 바로 지우면 마지막 사람만 고마움을 전할 길이 없어진다. 고마워요를 보내면 그때 치운다.
   if (c.charges <= 0) {
-    later(1.6, () => hud.toast('마지막 하나였다. 상자 앞에서 다시 길게 누르면 남긴 사람에게 고마워요를 보낼 수 있다.'));
+    later(1.6, () => hud.toast(tr('마지막 하나였다. 상자 앞에서 다시 길게 누르면 남긴 사람에게 고마워요를 보낼 수 있다.')));
   } else if (!game.hintThanks) {
     game.hintThanks = true;
-    later(1.6, () => hud.toast('상자 앞에서 다시 길게 누르면 남긴 사람에게 고마워요를 보낼 수 있다.'));
+    later(1.6, () => hud.toast(tr('상자 앞에서 다시 길게 누르면 남긴 사람에게 고마워요를 보낼 수 있다.')));
   }
 }
 
@@ -1791,7 +1828,7 @@ async function settleTake(t, run) {
   if (r.ok || r.error === 'used_today') {
     game.cacheTaken++; // 앞 요청이 이뤄졌든 이번에 받았든 한 번 꺼낸 것이다(앞 요청은 세지 못한 채 닫혔다)
     grantShared(KIND_NAMES[r.data?.kind] ? r.data.kind : t.kind);
-    hud.toast('지난번에 꺼내던 보급품을 마저 받았다.', 'good');
+    hud.toast(tr('지난번에 꺼내던 보급품을 마저 받았다.'), 'good');
   }
   saveRun();
 }
@@ -1810,9 +1847,9 @@ async function sendThanks(c) {
   sound.play('click');
   if (c.charges <= 0) {
     caches.remove(c.id);
-    hud.toast('고마워요를 보냈다. 빈 상자는 치웠다.', 'good');
+    hud.toast(tr('고마워요를 보냈다. 빈 상자는 치웠다.'), 'good');
   } else {
-    hud.toast('고마워요를 보냈다. 이 보급품이 마을에 조금 더 오래 남는다.', 'good');
+    hud.toast(tr('고마워요를 보냈다. 이 보급품이 마을에 조금 더 오래 남는다.'), 'good');
   }
 }
 
@@ -1820,28 +1857,28 @@ function cacheInteract(dt, c, how) {
   const name = KIND_NAMES[c.kind];
   if (game.cacheBusy) {
     game.hold = 0;
-    hud.prompt('서버에 묻는 중…', 1);
+    hud.prompt(tr('서버에 묻는 중…'), 1);
     return;
   }
   if (c.mine) {
     game.hold = 0;
-    hud.prompt(`내가 남긴 ${name} · ${c.charges}번 남음`, 0);
+    hud.prompt(tr('내가 남긴 {0} · {1}번 남음', [name, c.charges]), 0);
     return;
   }
   const used = online.usedRecently(c.id);
   if (used && online.hasThanked(c.id)) {
     game.hold = 0;
-    hud.prompt(`고마워요를 보낸 ${name} 상자`, 0);
+    hud.prompt(tr('고마워요를 보낸 {0} 상자', [name]), 0);
     return;
   }
   if (!used && c.charges <= 0) {
     game.hold = 0;
-    hud.prompt(`빈 ${name} 상자`, 0);
+    hud.prompt(tr('빈 {0} 상자', [name]), 0);
     return;
   }
   if (used) {
     const done = holdProgress(dt, 0.6);
-    hud.prompt(`${how} 고마워요 보내기`, Math.min(1, game.hold / 0.6));
+    hud.prompt(tr('{0} 고마워요 보내기', [how]), Math.min(1, game.hold / 0.6));
     if (done) {
       game.hold = 0;
       game.holdLock = true;
@@ -1852,11 +1889,11 @@ function cacheInteract(dt, c, how) {
   const note = NOTES[c.note] ? ` · '${NOTES[c.note]}'` : '';
   if (game.cacheTaken >= RUN_TAKE_LIMIT) {
     game.hold = 0;
-    hud.prompt(`다른 생존자가 남긴 ${name}${note} — 이번 판에는 더 꺼낼 수 없다(${RUN_TAKE_LIMIT}번까지)`, 0);
+    hud.prompt(tr('다른 생존자가 남긴 {0}{1} — 이번 판에는 더 꺼낼 수 없다({2}번까지)', [name, note, RUN_TAKE_LIMIT]), 0);
     return;
   }
   const done = holdProgress(dt, 1.0);
-  hud.prompt(`${how} 다른 생존자가 남긴 ${name} 꺼내기 · ${c.charges}번 남음${note}`, Math.min(1, game.hold / 1.0));
+  hud.prompt(tr('{0} 다른 생존자가 남긴 {1} 꺼내기 · {2}번 남음{3}', [how, name, c.charges, note]), Math.min(1, game.hold / 1.0));
   if (done) {
     game.hold = 0;
     game.holdLock = true;
@@ -1882,21 +1919,21 @@ function togglePlace() {
   }
   if (!game.onlineLive) {
     if (online.available && hud.hasOnlineUi && world.village !== DEFAULT_VILLAGE) {
-      hud.toast('다른 마을에서는 보급품을 주고받을 수 없다. 기본 마을에서만 다른 생존자와 이어진다.');
+      hud.toast(tr('다른 마을에서는 보급품을 주고받을 수 없다. 기본 마을에서만 다른 생존자와 이어진다.'));
     } else if (online.available && hud.hasOnlineUi) {
-      if (!online.enabled) hud.toast('온라인 보급품이 꺼져 있다. 처음 화면의 설정에서 켤 수 있다.');
-      else if (game.onlinePaused) hud.toast('온라인 보급품이 잠시 꺼져 있다.');
-      else hud.toast('다른 생존자와 연결되지 않아 지금은 남길 수 없다.');
+      if (!online.enabled) hud.toast(tr('온라인 보급품이 꺼져 있다. 처음 화면의 설정에서 켤 수 있다.'));
+      else if (game.onlinePaused) hud.toast(tr('온라인 보급품이 잠시 꺼져 있다.'));
+      else hud.toast(tr('다른 생존자와 연결되지 않아 지금은 남길 수 없다.'));
     }
     return;
   }
   if (game.driving) {
-    hud.toast('트럭에서 내려야 남길 수 있다.');
+    hud.toast(tr('트럭에서 내려야 남길 수 있다.'));
     return;
   }
   const spot = caches.freeSlotNear(player.pos.x, player.pos.z, PLACE_RADIUS);
   if (!spot) {
-    hud.toast('여기엔 둘 자리가 없다. 인도 위 빈 곳으로 가 보자.');
+    hud.toast(tr('여기엔 둘 자리가 없다. 인도 위 빈 곳으로 가 보자.'));
     return;
   }
   game.placing = { spot, note: game.placeNote, busy: false };
@@ -1915,7 +1952,7 @@ function refreshPlace() {
     const spot = caches.freeSlotNear(player.pos.x, player.pos.z, PLACE_RADIUS);
     if (!spot) {
       closePlace();
-      hud.toast('둘 자리에서 멀어졌다.');
+      hud.toast(tr('둘 자리에서 멀어졌다.'));
       return;
     }
     p.spot = spot;
@@ -1924,8 +1961,8 @@ function refreshPlace() {
   const can = placeOptions();
   if (p.busy) for (const k of Object.keys(can)) can[k] = false;
   hud.showPlace({
-    counts: { bandage: `${player.bandages}개`, fuel: `${player.cans}개`, battery: `손전등 ${BATTERY_PACK}%` },
-    can, note: NOTES[p.note] || '없음', sub: `— ${online.rules.charges}명이 하나씩 꺼내 쓴다`, busy: p.busy,
+    counts: { bandage: tr('{0}개', [player.bandages]), fuel: tr('{0}개', [player.cans]), battery: tr('손전등 {0}%', [BATTERY_PACK]) },
+    can, note: NOTES[p.note] || tr('없음'), sub: tr('— {0}명이 하나씩 꺼내 쓴다', [online.rules.charges]), busy: p.busy,
   });
 }
 
@@ -1957,12 +1994,12 @@ async function placeCache(kind) {
   closePlace();
   if (!r.ok) {
     reserve(kind, +1);
-    hud.toast(`${onlineError(r)} 가진 것은 그대로다.`, 'warn');
+    hud.toast(tr('{0} 가진 것은 그대로다.', [onlineError(r)]), 'warn');
     return;
   }
   caches.add({ ...r.data.cache, mine: true });
   sound.play('pickup');
-  hud.toast(`${OBJ[kind]} 남겼다. 다른 생존자 ${r.data.cache.charges}명이 하나씩 꺼내 쓸 수 있다.`, 'good');
+  hud.toast(tr('{0} 남겼다. 다른 생존자 {1}명이 하나씩 꺼내 쓸 수 있다.', [OBJ[kind], r.data.cache.charges]), 'good');
 }
 
 // 처음 화면: 내 보급품 소식. 설정 화면 '온라인 보급품': 켜기/끄기, 기록 지우기(#17).
@@ -1978,7 +2015,7 @@ function renderOnline() {
   const on = online.enabled;
   const sum = $('online-summary');
   if (!on) {
-    sum.textContent = '온라인 보급품을 꺼 두었어요. 설정에서 다시 켤 수 있어요.';
+    sum.textContent = tr('온라인 보급품을 꺼 두었어요. 설정에서 다시 켤 수 있어요.');
     return;
   }
   if (performance.now() - summaryAt < 60000) return;
@@ -1988,11 +2025,11 @@ function renderOnline() {
     if (!online.enabled) return;
     if (!r.ok || !r.data) {
       summaryAt = -Infinity;
-      sum.textContent = r.error === 'disabled' ? '온라인 보급품이 잠시 꺼져 있어요.' : '온라인 소식을 불러오지 못했어요.';
+      sum.textContent = r.error === 'disabled' ? tr('온라인 보급품이 잠시 꺼져 있어요.') : tr('온라인 소식을 불러오지 못했어요.');
       return;
     }
     const d = r.data;
-    sum.textContent = d.placed ? `당신이 남긴 보급품 ${d.placed}개 · 다른 생존자 ${d.users}명이 꺼내 썼고, 고마워요 ${d.thanks}번` : '';
+    sum.textContent = d.placed ? tr('당신이 남긴 보급품 {0}개 · 다른 생존자 {1}명이 꺼내 썼고, 고마워요 {2}번', [d.placed, d.users, d.thanks]) : '';
   }));
 }
 
@@ -2004,25 +2041,25 @@ function renderOnlineControls() {
   const toggle = $('online-toggle');
   const locked = settingsFrom === 'pause';
   if (toggle) {
-    toggle.textContent = on ? '온라인 보급품 켜짐' : '온라인 보급품 꺼짐';
+    toggle.textContent = on ? tr('온라인 보급품 켜짐') : tr('온라인 보급품 꺼짐');
     toggle.setAttribute('aria-pressed', String(on));
     toggle.disabled = locked;
   }
   if ($('online-forget')) $('online-forget').disabled = locked;
   const msg = $('online-msg');
   if (msg && settingsFrom) {
-    msg.textContent = locked ? '처음 화면의 설정에서 바꿀 수 있어요(판 도중에는 그대로 둬요).' : on ? '' : '꺼 두면 서버에 아무것도 보내지 않아요.';
+    msg.textContent = locked ? tr('처음 화면의 설정에서 바꿀 수 있어요(판 도중에는 그대로 둬요).') : on ? '' : tr('꺼 두면 서버에 아무것도 보내지 않아요.');
   }
 }
 
 async function forgetOnline() {
-  if (!confirm('서버에 있는 내 온라인 기록(남긴 보급품, 꺼낸 기록, 고마워요)을 지울까요? 되돌릴 수 없어요.')) return;
+  if (!confirm(tr('서버에 있는 내 온라인 기록(남긴 보급품, 꺼낸 기록, 고마워요)을 지울까요? 되돌릴 수 없어요.'))) return;
   const btn = $('online-forget');
   btn.disabled = true;
   const r = await online.forget();
   btn.disabled = false;
   summaryAt = -Infinity;
-  const text = r.ok ? '내 온라인 기록을 지웠어요.' : `지우지 못했어요: ${onlineError(r)}`;
+  const text = r.ok ? tr('내 온라인 기록을 지웠어요.') : tr('지우지 못했어요: {0}', [onlineError(r)]);
   // 결과는 누른 단추 옆(설정 화면)에 적고, 지웠으면 처음 화면의 지난 소식도 비운다.
   const msg = $('online-msg');
   if (!msg) {
@@ -2040,7 +2077,7 @@ function enterCar() {
   player.cans -= poured;
   if (poured) {
     sound.play('pour');
-    hud.toast(`연료통 ${poured}개를 부었다. 연료 ${Math.round(car.fuel)}%`, 'good');
+    hud.toast(tr('연료통 {0}개를 부었다. 연료 {1}%', [poured, Math.round(car.fuel)]), 'good');
   }
   seatInCar();
   sound.play('door');
@@ -2048,9 +2085,9 @@ function enterCar() {
   if (!game.hintCar) {
     game.hintCar = true;
     later(0.6, () => hud.toast(input.usingTouch || mobile
-      ? '스틱을 민 쪽으로 달린다. 뒤로 당기면 후진. 멈춘 뒤 내리기 버튼을 길게.'
-      : 'W 가속 · S 브레이크·후진 · A/D 핸들. 멈춘 뒤 E를 길게 눌러 내린다.'));
-    later(3.2, () => hud.toast('연료는 달릴수록 줄어든다. 퓨즈를 끼우거나 뒤지려면 내려야 한다.'));
+      ? tr('스틱을 민 쪽으로 달린다. 뒤로 당기면 후진. 멈춘 뒤 내리기 버튼을 길게.')
+      : tr('W 가속 · S 브레이크·후진 · A/D 핸들. 멈춘 뒤 E를 길게 눌러 내린다.')));
+    later(3.2, () => hud.toast(tr('연료는 달릴수록 줄어든다. 퓨즈를 끼우거나 뒤지려면 내려야 한다.')));
   }
 }
 
@@ -2068,7 +2105,7 @@ function seatInCar() {
 function leaveCar(force = true) {
   const spot = car.exitSpot(world, { force });
   if (!spot) {
-    hud.toast('문 앞이 막혀 내릴 수 없다. 트럭을 조금 옮겨 세우자.', 'warn');
+    hud.toast(tr('문 앞이 막혀 내릴 수 없다. 트럭을 조금 옮겨 세우자.'), 'warn');
     return;
   }
   game.driving = false;
@@ -2090,7 +2127,7 @@ function holdProgress(dt, dur) {
 function interact(dt) {
   // 타고 내린 직후에는 키를 한 번 떼야 다음 길게 누르기를 받는다(누른 채로 곧바로 내리거나 뒤지지 않게).
   if (game.holdLock && !input.interactHeld) game.holdLock = false;
-  const how = input.usingTouch || mobile ? '버튼을 길게 눌러' : 'E를 길게 눌러';
+  const how = input.usingTouch || mobile ? tr('버튼을 길게 눌러') : tr('E를 길게 눌러');
 
   if (game.driving) {
     if (game.holdKey !== 'exit') {
@@ -2099,11 +2136,11 @@ function interact(dt) {
     }
     if (Math.abs(car.speed) > 2.5) {
       game.hold = 0;
-      hud.prompt(input.interactHeld && !game.holdLock ? '속도를 줄여야 내릴 수 있다' : null, 0);
+      hud.prompt(input.interactHeld && !game.holdLock ? tr('속도를 줄여야 내릴 수 있다') : null, 0);
       return;
     }
     const done = holdProgress(dt, 0.35);
-    hud.prompt(`${how} 내리기`, Math.min(1, game.hold / 0.35));
+    hud.prompt(tr('{0} 내리기', [how]), Math.min(1, game.hold / 0.35));
     if (done) {
       game.hold = 0;
       game.holdLock = true;
@@ -2139,13 +2176,13 @@ function interact(dt) {
   if (target.kind === 'car') {
     if (car.fuel <= 0 && player.cans <= 0) {
       game.hold = 0;
-      hud.prompt('트럭 — 연료가 바닥났다. 연료통이 필요하다', 0);
+      hud.prompt(tr('트럭 — 연료가 바닥났다. 연료통이 필요하다'), 0);
       return;
     }
     const cans = car.cansToPour(player.cans);
-    const pour = cans ? ` · 연료통 ${cans}개 붓기` : player.cans > 0 ? ' · 연료가 넉넉해 연료통은 아껴 둔다' : '';
+    const pour = cans ? tr(' · 연료통 {0}개 붓기', [cans]) : player.cans > 0 ? tr(' · 연료가 넉넉해 연료통은 아껴 둔다') : '';
     const done = holdProgress(dt, 0.5);
-    hud.prompt(`${how} 트럭 타기${pour}`, Math.min(1, game.hold / 0.5));
+    hud.prompt(tr('{0} 트럭 타기{1}', [how, pour]), Math.min(1, game.hold / 0.5));
     if (done) {
       game.hold = 0;
       game.holdLock = true;
@@ -2155,10 +2192,10 @@ function interact(dt) {
   }
   if (target.kind === 'breaker') {
     const ref = target.ref;
-    const name = ref.zone === 'H' ? '은신처 발전기' : `${world.zones[ref.zone].name} 배전함`;
+    const name = ref.zone === 'H' ? tr('은신처 발전기') : tr('{0} 배전함', [world.zones[ref.zone].name]);
     const dur = 1.2;
     const done = holdProgress(dt, dur);
-    hud.prompt(`${how} 차단기 올리기 · ${name}`, Math.min(1, game.hold / dur));
+    hud.prompt(tr('{0} 차단기 올리기 · {1}', [how, name]), Math.min(1, game.hold / dur));
     if (done) {
       game.hold = 0;
       resetBreaker(ref);
@@ -2169,7 +2206,7 @@ function interact(dt) {
     const c = target.clue;
     const dur = 0.6;
     const done = holdProgress(dt, dur);
-    const verb = c.scene ? '급수탑 오르기' : `${story.isFound(c.id) ? '다시 읽기' : '읽기'} · ${c.title}`;
+    const verb = c.scene ? tr('급수탑 오르기') : tr('{0} · {1}', [story.isFound(c.id) ? tr('다시 읽기') : tr('읽기'), c.title]);
     hud.prompt(`${how} ${verb}`, Math.min(1, game.hold / dur));
     if (done) {
       game.hold = 0;
@@ -2186,7 +2223,7 @@ function interact(dt) {
   if (target.kind === 'loot') {
     const dur = 1.0;
     const done = holdProgress(dt, dur);
-    hud.prompt(`${how} 뒤지기`, Math.min(1, game.hold / dur));
+    hud.prompt(tr('{0} 뒤지기', [how]), Math.min(1, game.hold / dur));
     if (done) {
       game.hold = 0;
       completeLoot(target.ref);
@@ -2196,12 +2233,12 @@ function interact(dt) {
   const name = world.zones[target.ref.zone].name;
   if (player.fuses <= 0) {
     game.hold = 0;
-    hud.prompt(`${name} 배전함 — 퓨즈가 필요하다`, 0);
+    hud.prompt(tr('{0} 배전함 — 퓨즈가 필요하다', [name]), 0);
     return;
   }
   const dur = 1.6;
   const done = holdProgress(dt, dur);
-  hud.prompt(`${how} 퓨즈 끼우기 · ${name}`, Math.min(1, game.hold / dur));
+  hud.prompt(tr('{0} 퓨즈 끼우기 · {1}', [how, name]), Math.min(1, game.hold / dur));
   if (done) {
     game.hold = 0;
     restoreZone(target.ref);
@@ -2212,7 +2249,7 @@ function onTimeEvent(ev) {
   if (ev === 'dusk') {
     env.rainyNight = game.nights === 0 || Math.random() < 0.55;
     sound.play('dusk');
-    if (!queueStory('dusk')) hud.toast('해가 진다. 불빛 가까이 머물자.', 'warn');
+    if (!queueStory('dusk')) hud.toast(tr('해가 진다. 불빛 가까이 머물자.'), 'warn');
     // 오늘 밤 사건(#57). 산책(peaceful) 중에는 없다.
     game.nightEvent = game.peaceful ? null : pickEvent(game.nights, game.prevEvent);
     game.prevEvent = game.nightEvent;
@@ -2224,14 +2261,14 @@ function onTimeEvent(ev) {
     }
     if (!game.hintFlash) {
       game.hintFlash = true;
-      later(1.6, () => hud.toast(`${mobile ? '손전등 버튼' : 'F 키나 마우스 클릭'}으로 손전등을 켜자. 오래 비추면 그늘이가 흩어진다.`));
+      later(1.6, () => hud.toast(tr('{0}으로 손전등을 켜자. 오래 비추면 그늘이가 흩어진다.', [mobile ? tr('손전등 버튼') : tr('F 키나 마우스 클릭')])));
     }
     saveRun();
   } else if (ev === 'night') {
-    if (!game.peaceful) hud.toast('어둠 속에서 그늘이가 움직인다.', 'warn');
+    if (!game.peaceful) hud.toast(tr('어둠 속에서 그늘이가 움직인다.'), 'warn');
     if (!game.peaceful && !game.hintLoad) {
       game.hintLoad = true;
-      later(2.4, () => hud.toast('그늘이가 가로등 가장자리에 몰려 버티면 과부하가 걸린다. 깜박이기 시작하면 손전등으로 흩어 놓자.'));
+      later(2.4, () => hud.toast(tr('그늘이가 가로등 가장자리에 몰려 버티면 과부하가 걸린다. 깜박이기 시작하면 손전등으로 흩어 놓자.')));
     }
   } else if (ev === 'dawn') {
     game.nights++;
@@ -2240,8 +2277,8 @@ function onTimeEvent(ev) {
     sound.play('dawn');
     const reset = world.dawnReset();
     wisps.dawn();
-    if (!game.peaceful) hud.toast(`${game.nights}번째 밤을 버텼다. 날이 밝는다.`, 'good');
-    if (reset) later(1.6, () => hud.toast('날이 밝자 내려갔던 차단기가 다시 올라갔다.'));
+    if (!game.peaceful) hud.toast(tr('{0}번째 밤을 버텼다. 날이 밝는다.', [game.nights]), 'good');
+    if (reset) later(1.6, () => hud.toast(tr('날이 밝자 내려갔던 차단기가 다시 올라갔다.')));
     if (player.flashOn) player.flashOn = false;
     if (!game.peaceful) queueStory('dawn');
     saveRun();
@@ -2310,7 +2347,7 @@ function drive(dt) {
   }
   if (ev.stalled) {
     sound.play('stall');
-    hud.toast('연료가 떨어졌다! 트럭이 멈춘다. 연료통을 찾아야 한다.', 'warn');
+    hud.toast(tr('연료가 떨어졌다! 트럭이 멈춘다. 연료통을 찾아야 한다.'), 'warn');
   }
   player.pos.copy(car.pos);
   player.facing = car.a;
@@ -2368,7 +2405,7 @@ function stepWorld(dt, frozen) {
   else if (lit) player.hp = Math.min(100, player.hp + dt * 1.2);
   if (player.flashOn && player.battery <= 0) {
     player.flashOn = false;
-    hud.toast('손전등 배터리가 다 됐다!', 'warn');
+    hud.toast(tr('손전등 배터리가 다 됐다!'), 'warn');
   }
 
   const spawning = !game.peaceful && env.night > 0.75;
@@ -2494,7 +2531,7 @@ function frame(now) {
   if (minimap.isOpen && game.state !== 'play' && game.state !== 'story') minimap.close();
   if (input.consume('KeyM')) {
     const muted = toggleMute();
-    if (game.state === 'play') hud.toast(muted ? '소리를 껐다.' : '소리를 켰다.');
+    if (game.state === 'play') hud.toast(muted ? tr('소리를 껐다.') : tr('소리를 켰다.'));
   }
   if (settings.fps) {
     fpsMeter.frames++;
@@ -2855,7 +2892,7 @@ requestAnimationFrame(loop);
 warmUp().then(() => {
   game.ready = true;
   document.body.classList.add('loaded');
-  $('start-btn').textContent = '시작하기';
+  $('start-btn').textContent = tr('시작하기');
   renderRun(); // 이어할 판이 있으면 '새로 시작'으로 바꾼다
   renderChapter();
   setContextLost(game.contextLost ?? false);

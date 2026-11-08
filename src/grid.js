@@ -1,4 +1,5 @@
 import { ZONE_GRID } from './world.js';
+import { tr } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -16,11 +17,11 @@ function stateOf(z) {
 function describe(z) {
   const pct = Math.round(z.load * 100);
   switch (stateOf(z)) {
-    case 'dead': return '퓨즈가 필요하다';
-    case 'tripped': return z.id === 'H' ? '차단됨 · 발전기에서 올리기' : '차단됨 · 배전함에서 올리기';
-    case 'off': return z.tripped ? '꺼 둠 · 차단기 내려감' : '꺼 둠';
-    case 'home': return pct >= 5 ? `자체 발전기 · 부하 ${pct}%` : '자체 발전기 · 늘 켜짐';
-    case 'on': return pct >= 5 ? `켜짐 · 부하 ${pct}%` : '켜짐';
+    case 'dead': return tr('퓨즈가 필요하다');
+    case 'tripped': return z.id === 'H' ? tr('차단됨 · 발전기에서 올리기') : tr('차단됨 · 배전함에서 올리기');
+    case 'off': return z.tripped ? tr('꺼 둠 · 차단기 내려감') : tr('꺼 둠');
+    case 'home': return pct >= 5 ? tr('자체 발전기 · 부하 {0}%', [pct]) : tr('자체 발전기 · 늘 켜짐');
+    case 'on': return pct >= 5 ? tr('켜짐 · 부하 {0}%', [pct]) : tr('켜짐');
     default: return '';
   }
 }
@@ -72,7 +73,7 @@ export class Switchboard {
   render() {
     const w = this.world;
     const full = w.repairedCount >= w.totalZones - 1;
-    this.el.cap.textContent = `변전소 출력 ${w.onCount} / ${w.capacity}곳 사용 중 · ${full ? '변전소가 제 출력을 되찾았다' : '배전함을 3곳 고칠 때마다 1곳씩 늘어난다'}`;
+    this.el.cap.textContent = tr('변전소 출력 {0} / {1}곳 사용 중 · {2}', [w.onCount, w.capacity, full ? tr('변전소가 제 출력을 되찾았다') : tr('배전함을 3곳 고칠 때마다 1곳씩 늘어난다')]);
     for (const id of Object.keys(this.cells)) {
       const z = w.zones[id];
       const st = stateOf(z);
@@ -94,7 +95,7 @@ export class Switchboard {
     const z = w.zones[id];
     if (!z.powered || id === 'H') return;
     if (!w.setSwitch(id, !z.on)) {
-      this.el.msg.textContent = `출력이 모자라 ${z.name}까지 켤 수 없다. 켜 둔 구역을 먼저 끄자.`;
+      this.el.msg.textContent = tr('출력이 모자라 {0}까지 켤 수 없다. 켜 둔 구역을 먼저 끄자.', [z.name]);
       return;
     }
     this.el.msg.textContent = '';

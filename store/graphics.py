@@ -1,6 +1,7 @@
 """플레이 스토어 그래픽을 게임 그림에서 만든다(#52).
 - graphics/icon-512.png: 앱 아이콘 512×512(정사각형 꽉 채움, 모서리는 Play가 둥글게 깎는다) — icons/maskable-512.png
 - graphics/feature-1024x500.png: 대표 그래픽 — 처음 화면 키 아트(art/title-wide.webp) + 로고(art/logo-wide.webp)
+- graphics/feature-1024x500-en.png: 영어 등록정보용(#60) — 같은 그림에 영어 로고(art/logo-wide-en.webp)
 사용: 저장소 루트에서 python -X utf8 store/graphics.py
 """
 import os
@@ -33,9 +34,12 @@ for x in range(W):
 dark = Image.new('RGBA', (W, H), (6, 10, 12, 255))
 feature = Image.composite(dark, feature, shade.filter(ImageFilter.GaussianBlur(20)))
 
-logo = Image.open(os.path.join(ROOT, 'art', 'logo-wide.webp')).convert('RGBA')
-lw = 470
-logo = logo.resize((lw, round(logo.height * lw / logo.width)), Image.LANCZOS)
-feature.alpha_composite(logo, (48, (H - logo.height) // 2 - 10))
-feature.convert('RGB').save(os.path.join(OUT, 'feature-1024x500.png'), optimize=True)
+base = feature
+for name, logo_file in [('feature-1024x500.png', 'logo-wide.webp'), ('feature-1024x500-en.png', 'logo-wide-en.webp')]:
+    logo = Image.open(os.path.join(ROOT, 'art', logo_file)).convert('RGBA')
+    lw = 470
+    logo = logo.resize((lw, round(logo.height * lw / logo.width)), Image.LANCZOS)
+    feature = base.copy()
+    feature.alpha_composite(logo, (48, (H - logo.height) // 2 - 10))
+    feature.convert('RGB').save(os.path.join(OUT, name), optimize=True)
 print('ok', os.listdir(OUT))

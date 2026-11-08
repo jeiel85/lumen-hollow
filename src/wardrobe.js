@@ -1,42 +1,43 @@
 import * as THREE from 'three';
 import { load, save, storageAvailable } from './storage.js';
 import { makeBeaconMaterial, BOUND } from './world.js';
+import { tr } from './i18n.js';
 
 // 옷장: 비옷 색·모자·안경·배낭. 능력치는 없는 순수 외형이다.
 // free 항목은 처음부터 갖고 있고, 나머지는 마을에 떨어진 꾸러미를 주워 영구히 얻는다.
 
 export const SLOTS = [
-  { id: 'coat', name: '비옷' },
-  { id: 'hat', name: '모자' },
-  { id: 'glasses', name: '안경' },
-  { id: 'pack', name: '배낭' },
+  { id: 'coat', name: tr('비옷') },
+  { id: 'hat', name: tr('모자') },
+  { id: 'glasses', name: tr('안경') },
+  { id: 'pack', name: tr('배낭') },
 ];
 
 export const ITEMS = [
-  { id: 'coat.yellow', slot: 'coat', name: '노랑', color: 0xe3b13d, free: true },
-  { id: 'coat.red', slot: 'coat', name: '빨강', color: 0xc4453a, free: true },
-  { id: 'coat.green', slot: 'coat', name: '숲초록', color: 0x55804c, free: true },
-  { id: 'coat.teal', slot: 'coat', name: '청록', color: 0x3f9c8f },
-  { id: 'coat.orange', slot: 'coat', name: '주황', color: 0xdd7a3a },
-  { id: 'coat.sky', slot: 'coat', name: '하늘', color: 0x7fb3d9 },
-  { id: 'coat.lilac', slot: 'coat', name: '라일락', color: 0x9a7fc0 },
-  { id: 'coat.pink', slot: 'coat', name: '분홍', color: 0xe08a9c },
-  { id: 'coat.white', slot: 'coat', name: '흰색', color: 0xe6e1d6 },
-  { id: 'hat.hood', slot: 'hat', name: '후드', color: null, free: true },
-  { id: 'hat.bare', slot: 'hat', name: '맨머리', color: 0x4a3426, free: true },
-  { id: 'hat.beanie', slot: 'hat', name: '비니', color: 0x2f6f73 },
-  { id: 'hat.cap', slot: 'hat', name: '야구 모자', color: 0x2f4a78 },
-  { id: 'hat.straw', slot: 'hat', name: '밀짚모자', color: 0xdcc07a },
-  { id: 'hat.bucket', slot: 'hat', name: '버킷햇', color: 0x7c8450 },
-  { id: 'glasses.none', slot: 'glasses', name: '없음', color: null, free: true },
-  { id: 'glasses.round', slot: 'glasses', name: '둥근 안경', color: 0x2b2420 },
-  { id: 'glasses.sun', slot: 'glasses', name: '선글라스', color: 0x15181c },
-  { id: 'glasses.goggles', slot: 'glasses', name: '고글', color: 0x4aa3b5 },
-  { id: 'pack.canvas', slot: 'pack', name: '캔버스 배낭', color: 0x7b5a3e, free: true },
-  { id: 'pack.none', slot: 'pack', name: '없음', color: null, free: true },
-  { id: 'pack.day', slot: 'pack', name: '데이팩', color: 0xc0503c },
-  { id: 'pack.hiking', slot: 'pack', name: '등산 배낭', color: 0x3c6a8a },
-  { id: 'pack.military', slot: 'pack', name: '군용 배낭', color: 0x5e6b3c },
+  { id: 'coat.yellow', slot: 'coat', name: tr('노랑'), color: 0xe3b13d, free: true },
+  { id: 'coat.red', slot: 'coat', name: tr('빨강'), color: 0xc4453a, free: true },
+  { id: 'coat.green', slot: 'coat', name: tr('숲초록'), color: 0x55804c, free: true },
+  { id: 'coat.teal', slot: 'coat', name: tr('청록'), color: 0x3f9c8f },
+  { id: 'coat.orange', slot: 'coat', name: tr('주황'), color: 0xdd7a3a },
+  { id: 'coat.sky', slot: 'coat', name: tr('하늘'), color: 0x7fb3d9 },
+  { id: 'coat.lilac', slot: 'coat', name: tr('라일락'), color: 0x9a7fc0 },
+  { id: 'coat.pink', slot: 'coat', name: tr('분홍'), color: 0xe08a9c },
+  { id: 'coat.white', slot: 'coat', name: tr('흰색'), color: 0xe6e1d6 },
+  { id: 'hat.hood', slot: 'hat', name: tr('후드'), color: null, free: true },
+  { id: 'hat.bare', slot: 'hat', name: tr('맨머리'), color: 0x4a3426, free: true },
+  { id: 'hat.beanie', slot: 'hat', name: tr('비니'), color: 0x2f6f73 },
+  { id: 'hat.cap', slot: 'hat', name: tr('야구 모자'), color: 0x2f4a78 },
+  { id: 'hat.straw', slot: 'hat', name: tr('밀짚모자'), color: 0xdcc07a },
+  { id: 'hat.bucket', slot: 'hat', name: tr('버킷햇'), color: 0x7c8450 },
+  { id: 'glasses.none', slot: 'glasses', name: tr('없음'), color: null, free: true },
+  { id: 'glasses.round', slot: 'glasses', name: tr('둥근 안경'), color: 0x2b2420 },
+  { id: 'glasses.sun', slot: 'glasses', name: tr('선글라스'), color: 0x15181c },
+  { id: 'glasses.goggles', slot: 'glasses', name: tr('고글'), color: 0x4aa3b5 },
+  { id: 'pack.canvas', slot: 'pack', name: tr('캔버스 배낭'), color: 0x7b5a3e, free: true },
+  { id: 'pack.none', slot: 'pack', name: tr('없음'), color: null, free: true },
+  { id: 'pack.day', slot: 'pack', name: tr('데이팩'), color: 0xc0503c },
+  { id: 'pack.hiking', slot: 'pack', name: tr('등산 배낭'), color: 0x3c6a8a },
+  { id: 'pack.military', slot: 'pack', name: tr('군용 배낭'), color: 0x5e6b3c },
 ];
 
 const BY_ID = new Map(ITEMS.map((it) => [it.id, it]));
@@ -44,12 +45,12 @@ export const itemById = (id) => BY_ID.get(id);
 export const DEFAULT_WEAR = Object.fromEntries(SLOTS.map((s) => [s.id, ITEMS.find((it) => it.slot === s.id && it.free).id]));
 
 // 토스트 문장용 이름: 비옷 색은 '청록 비옷'처럼 부른다.
-export const itemLabel = (it) => (it.slot === 'coat' ? `${it.name} 비옷` : it.name);
+export const itemLabel = (it) => (it.slot === 'coat' ? tr('{0} 비옷', [it.name]) : it.name);
 
 // 받침 유무로 '을/를'을 고른다.
 export function objParticle(word) {
   const c = word.charCodeAt(word.length - 1) - 0xac00;
-  return c >= 0 && c < 11172 && c % 28 !== 0 ? '을' : '를';
+  return c >= 0 && c < 11172 && c % 28 !== 0 ? tr('을') : tr('를');
 }
 
 // ---------------------------------------------------------------- 저장
@@ -566,8 +567,8 @@ export class Closet {
   render() {
     if (!this.ok) return;
     const w = this.wardrobe;
-    this.countEl.textContent = `모은 옷가지 ${w.foundCount} / ${w.findableCount}`;
-    if (this.storeEl) this.storeEl.textContent = w.storeOk ? '' : '이 브라우저는 저장소를 막아 두어 옷장이 이번 세션에만 남아요(사생활 보호 모드 등).';
+    this.countEl.textContent = tr('모은 옷가지 {0} / {1}', [w.foundCount, w.findableCount]);
+    if (this.storeEl) this.storeEl.textContent = w.storeOk ? '' : tr('이 브라우저는 저장소를 막아 두어 옷장이 이번 세션에만 남아요(사생활 보호 모드 등).');
     this.tabsEl.replaceChildren(...SLOTS.map((s) => {
       const b = document.createElement('button');
       b.type = 'button';
@@ -600,7 +601,7 @@ export class Closet {
       name.textContent = it.name;
       const note = document.createElement('span');
       note.className = 'note';
-      note.textContent = owned ? (on ? '입는 중' : '') : '마을에서 찾기';
+      note.textContent = owned ? (on ? tr('입는 중') : '') : tr('마을에서 찾기');
       b.append(sw, name, note);
       return b;
     }));

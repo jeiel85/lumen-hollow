@@ -1,5 +1,6 @@
 import { load, save } from './storage.js';
 import { isNativeApp } from './native.js';
+import { tr } from './i18n.js';
 
 // 2~4장 한 번 결제(#51). 앱에서는 Play 결제(android/.../BillingPlugin.java)에 묻고, 로컬 개발(?app)에서는 흉내 가게를 쓴다
 // (?paywall이면 사지 않은 상태에서 시작, ?paywall=pending·cancel·error로 결과를 고른다). 웹판은 2~4장이 앱에만 있어 쓰지 않는다.
@@ -92,7 +93,7 @@ export class Store {
       } else if (this.mode === 'native' && this._plugin()) {
         r = await this._plugin().buy({ product: STORY_PRODUCT });
       } else {
-        r = { result: 'error', message: '결제 기능이 없어요' };
+        r = { result: 'error', message: tr('결제 기능이 없어요') };
       }
       if (r.result === 'owned') this._set(true, false);
       else if (r.result === 'pending') this._set(false, true);

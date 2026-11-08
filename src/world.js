@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Builder, Frame, geo, tint } from './geometry.js';
 import { Rng } from './rng.js';
+import { tr, isKo } from './i18n.js';
 
 // 마을: 5x5 블록, 블록 24m(인도 포함) + 도로 8m = 피치 32m.
 export const PITCH = 32;
@@ -50,8 +51,8 @@ const ZONE_MAP = ['AABCC', 'AABCC', 'DDHEE', 'FFGII', 'FFGII'];
 export const ZONE_GRID = ['ABC', 'DHE', 'FGI'];
 
 export const ZONE_NAMES = {
-  A: '서북 농장', B: '약국 거리', C: '동북 주택가', D: '서쪽 공원', E: '골목식당 거리',
-  F: '헛간 들판', G: '남쪽 광장', H: '은신처', I: '동남 주택가',
+  A: tr('서북 농장'), B: tr('약국 거리'), C: tr('동북 주택가'), D: tr('서쪽 공원'), E: tr('골목식당 거리'),
+  F: tr('헛간 들판'), G: tr('남쪽 광장'), H: tr('은신처'), I: tr('동남 주택가'),
 };
 
 // 마을 번호(#59). 0은 이야기·공유 보급품이 묶인 기본 마을이고, 1~999999는 1장을 마친 뒤 새 판에서 고르는 다른 마을이다.
@@ -62,10 +63,10 @@ export const MAX_VILLAGE = 999999;
 export const isVillage = (v) => Number.isInteger(v) && v >= 0 && v <= MAX_VILLAGE;
 // 기본 마을에서 각 구역에 있던 동네: 이름 뒷부분과 방위를 붙이는지
 const QUARTER = {
-  A: ['농장', true], B: ['약국 거리', false], C: ['주택가', true], D: ['공원', true], E: ['골목식당 거리', false],
-  F: ['헛간 들판', false], G: ['광장', true], H: ['은신처', false], I: ['주택가', true],
+  A: [tr('농장'), true], B: [tr('약국 거리'), false], C: [tr('주택가'), true], D: [tr('공원'), true], E: [tr('골목식당 거리'), false],
+  F: [tr('헛간 들판'), false], G: [tr('광장'), true], H: [tr('은신처'), false], I: [tr('주택가'), true],
 };
-const BEARING = { A: '서북', B: '북쪽', C: '동북', D: '서쪽', E: '동쪽', F: '서남', G: '남쪽', I: '동남' };
+const BEARING = { A: tr('서북'), B: tr('북쪽'), C: tr('동북'), D: tr('서쪽'), E: tr('동쪽'), F: tr('서남'), G: tr('남쪽'), I: tr('동남') };
 
 // 다른 마을의 대칭 번호(1~7, 기본 마을은 0 = 그대로)
 export function villageTurn(v) {
@@ -119,6 +120,7 @@ export function makeBeaconMaterial(color) {
 }
 
 // 한글 간판. [글귀, 바탕, 글자색]. 약국·골목식당은 이야기에 나오는 가게라 따로 고정한다.
+// 글귀는 한국어가 열쇠이고(가게 고르기), 그릴 때 tr()로 화면 언어로 바꾼다(영어판은 간판도 영어, #60 사용자 결정).
 const SIGNS = [
   ['약국', '#2f7d5a', '#ffffff'], ['골목식당', '#b34d5a', '#fff3e6'],
   ['슈퍼', '#c8372d', '#ffffff'], ['철물점', '#2d5f9a', '#ffffff'], ['세탁소', '#ffffff', '#2d5f9a'],
@@ -147,11 +149,12 @@ function makeSignAtlas() {
     g.fillStyle = fg;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    const size = text.length > 3 ? 36 : 44;
+    const label = isKo ? text : tr(text).toUpperCase();
+    const size = isKo ? (text.length > 3 ? 36 : 44) : label.length > 9 ? 28 : label.length > 6 ? 32 : 38;
     // 한글 글꼴은 주요 운영체제에 다 있다(윈도 맑은 고딕, 애플 SD 산돌고딕, 안드로이드 Noto Sans CJK). 없는 기기(한글 글꼴 없는 리눅스)는
     // 빈 상자가 될 수 있어, 간판 글귀만 담은 부분 글꼴을 함께 둘지는 Backlog(#25).
     g.font = `800 ${size}px "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", "Noto Sans CJK KR", sans-serif`;
-    g.fillText(text, x + cw / 2, y + ch / 2 + 2, cw - 24);
+    g.fillText(label, x + cw / 2, y + ch / 2 + 2, cw - 24);
   });
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace;
@@ -1685,7 +1688,7 @@ export class World {
     }
     const T = this.truckLamp;
     if (T.on && (T.x - x) ** 2 + (T.z - z) ** 2 < (T.r + reach) ** 2 && (!best || (!best.tripped && T.load > best.load))) {
-      return { name: '트럭 작업등', load: T.load, tripped: false };
+      return { name: tr('트럭 작업등'), load: T.load, tripped: false };
     }
     return best ? { name: best.name, load: best.load, tripped: best.tripped } : null;
   }

@@ -2,13 +2,14 @@
 // 저장소 폴더를 정적 서버로 띄우고 실행한다. ?app으로 앱처럼 연다(로컬 개발에서만 된다, 웹판은 1장 데모).
 //   node store/shoot.mjs [url]          (url 기본값 http://127.0.0.1:8000/?debug)
 // 결과: store/screenshots/*.jpg(Play는 24비트 JPEG·PNG를 받는다. 저장소가 커지지 않게 JPEG 92). 게임 화면이 바뀌면 다시 찍는다.
+// 영어 등록정보용(#60)은 E2E_LANG=en으로 돌리면 영어 화면을 store/screenshots/en/에 찍는다.
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { launch } from '../tests/e2e/cdp.mjs';
 
 const [,, rawUrl = 'http://127.0.0.1:8000/?debug'] = process.argv;
 const url = (() => { const u = new URL(rawUrl); u.searchParams.set('app', '1'); return u.href; })();
-const out = fileURLToPath(new URL('./screenshots/', import.meta.url));
+const out = fileURLToPath(new URL(process.env.E2E_LANG === 'en' ? './screenshots/en/' : './screenshots/', import.meta.url));
 mkdirSync(out, { recursive: true });
 
 const CH1 = ['arrival', 'dusk', 'dawn', 'light1', 'shadows', 'return', 'founders', 'lookout', 'promise', 'line', 'last', 'finale'];

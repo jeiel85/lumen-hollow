@@ -1,3 +1,4 @@
+import { tr } from './i18n.js';
 // 난이도 단계(#56). 1장 판은 새로 시작할 때 고른 단계로 끝까지 가고(판 저장에 남는다), 2~4장은 설정의 단계를 바로 따른다.
 // 최고 기록은 단계마다 따로 남긴다(records.js). 값은 tests/e2e/balance.mjs(완벽 조준 봇)로 잰 것: DECISIONS.md "난이도 단계".
 //
@@ -9,15 +10,15 @@
 // 시작하는 밤 번호와 한 떼의 수. surge: 전압 출렁임 간격 배율.
 export const DIFFICULTY = {
   easy: {
-    label: '쉬움', count: 0.6, cap: 8, speed: 0.82, damage: 8, deep: null, gap: 1.4, drain: 0.55, load: 0.45, tough: 0.8,
+    label: tr('쉬움'), count: 0.6, cap: 8, speed: 0.82, damage: 8, deep: null, gap: 1.4, drain: 0.55, load: 0.45, tough: 0.8,
     eater: { from: 3, max: 1 }, swarm: { from: 3, size: 2 }, surge: 1.4,
   },
   normal: {
-    label: '보통', count: 1, cap: 14, speed: 1, damage: 15, deep: 2, gap: 1, drain: 1, load: 1, tough: 1,
+    label: tr('보통'), count: 1, cap: 14, speed: 1, damage: 15, deep: 2, gap: 1, drain: 1, load: 1, tough: 1,
     eater: { from: 1, max: 1 }, swarm: { from: 2, size: 3 }, surge: 1,
   },
   hard: {
-    label: '어려움', count: 1.3, cap: 18, speed: 1.12, damage: 18, deep: 0, gap: 0.8, drain: 1.25, load: 1.35, tough: 1.15,
+    label: tr('어려움'), count: 1.3, cap: 18, speed: 1.12, damage: 18, deep: 0, gap: 0.8, drain: 1.25, load: 1.35, tough: 1.15,
     eater: { from: 0, max: 2 }, swarm: { from: 1, size: 4 }, surge: 0.75,
   },
 };
@@ -26,9 +27,9 @@ export const DEFAULT_LEVEL = 'normal';
 
 // 고를 때 보이는 한 줄 설명
 export const LEVEL_NOTE = {
-  easy: '그늘이가 적고 느리다. 이야기를 따라가고 싶을 때',
-  normal: '밤마다 그늘이가 늘고, 셋째 밤부터 등 뒤에서도 온다',
-  hard: '첫 밤부터 사방에서 온다. 손전등과 가로등을 아껴 써야 한다',
+  easy: tr('그늘이가 적고 느리다. 이야기를 따라가고 싶을 때'),
+  normal: tr('밤마다 그늘이가 늘고, 셋째 밤부터 등 뒤에서도 온다'),
+  hard: tr('첫 밤부터 사방에서 온다. 손전등과 가로등을 아껴 써야 한다'),
 };
 
 export const isLevel = (v) => typeof v === 'string' && Object.prototype.hasOwnProperty.call(DIFFICULTY, v);

@@ -1,6 +1,6 @@
 # 스토어 등록정보 (한국어)
 
-Play Console → 성장 → 스토어 등록정보 → 기본 스토어 등록정보에 그대로 붙여 넣는다. 영어는 #60(영어 지원)에서 더한다.
+Play Console → 성장 → 스토어 등록정보 → 기본 스토어 등록정보에 그대로 붙여 넣는다. 영어(en-US)는 아래 '영어 등록정보'를 번역 추가로 넣는다(#60).
 
 ## 앱 이름 (30자 이내)
 
@@ -46,6 +46,58 @@ Lumen Hollow: 빛으로 버티는 밤
 · 진행은 자동 저장, 기록 파일로 다른 기기에 옮기기
 
 1장 '돌아갈 자리'는 무료로 끝까지 할 수 있고, 2~4장은 앱 안에서 한 번 구매로 이어진다.
+```
+
+## 영어 등록정보 (en-US, #60)
+
+Play Console → 스토어 등록정보 → 번역 관리 → 영어(미국)로 직접 추가한다. 게임 안 글·간판·로고가 영어로 바뀌는 v0.23.0부터 맞는다.
+그래픽은 영어판을 쓴다: 대표 그래픽 `graphics/feature-1024x500-en.png`(영어 로고), 스크린샷 `screenshots/en/`(영어 화면, `E2E_LANG=en node store/shoot.mjs`로 다시 찍는다). 아이콘은 글자가 없어 같다.
+
+앱 이름 (30자 이내)
+
+```
+Lumen Hollow: Night by Light
+```
+
+간단한 설명 (80자 이내)
+
+```
+Relight a blacked-out town and survive the night with one flashlight.
+```
+
+자세한 설명 (4000자 이내)
+
+```
+That night, every light in the world went out.
+
+A rain-soaked town in the dark. By day, search the alleys for fuses and batteries. By night, hold out against the shades with a flashlight and the glow of the streetlights. Each fuse you fit into a dead fuse box brings a district back to light — and Grandma's crackling radio tells you a little more about what really happened that night.
+
+■ Light is survival
+Shades hate light. They can't enter a lit streetlight's circle, but if they crowd its edge for too long, the overload trips the breaker. Hold your flashlight on them and they scatter, drifting home to the sleepers they belong to — and someone who wakes leaves a candle where a hidden fuse lies.
+
+■ Where will the lights go tonight?
+The substation's power is limited. Choose on the switchboard which districts get light tonight — think about where you'll search tomorrow and where you'll shelter in the dark.
+
+■ Different every night
+Fog that swallows your flashlight beam. Power surges that black out the streetlights for a few seconds. Light-eaters that go for the lamps, and fast little swarms. Three difficulty levels, and after chapter one, whole new villages to play by number.
+
+■ A small Korean town at night
+Utility poles and sagging wires, rooftop water tanks, flooded rice paddies. Fix a fuse box and the light runs along the wires, waking the shop signs.
+
+■ An old one-ton truck
+Drive while the fuel lasts — the headlights burn the shades. Park it and switch on the work light for a moving refuge.
+
+■ A Place to Return — a story in four chapters
+A lighthouse keeper's radio, the notes survivors left behind, a relief station across the river and an old school. Follow a scattered family finding each other again, told with illustrated scenes.
+
+■ Also
+· No account, no ads
+· Plays offline once downloaded (only the shared supply caches need a connection)
+· Asynchronous online: leave and take supply caches from other survivors (can be turned off)
+· Portrait and landscape, left-handed mode, graphics settings, music and sound volume
+· Auto-save; move your records to another device with a record file
+
+Chapter one, "A Place to Return", is free to play to the end. Chapters two to four continue with a single in-app purchase.
 ```
 
 ## 분류·연락처

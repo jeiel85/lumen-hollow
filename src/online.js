@@ -1,5 +1,6 @@
 import { load, save } from './storage.js';
 import { SLOT_LAYOUT, SLOT_COUNT } from './slots.js';
+import { tr } from './i18n.js';
 
 // 공유 보급품 API 클라이언트와 이 브라우저의 기록. 설계: docs/online-caches.md 4·8·9·13절.
 // 온라인 요소는 부가 기능이다. 요청이 실패해도 예외를 던지지 않고 { ok:false, error }를 돌려주며,
@@ -10,8 +11,8 @@ import { SLOT_LAYOUT, SLOT_COUNT } from './slots.js';
 export const ONLINE_API = 'https://lumen-hollow-caches.jeiel85.workers.dev';
 
 // 서버 rules.js의 noteCount와 개수를 맞춘다. 번호가 저장되므로 순서를 바꾸지 말고 끝에만 추가한다.
-export const NOTES = ['', '같이 버텨요', '여기서 잠깐 쉬어 가요', '밤이 길어요, 조심해요', '곧 불이 켜질 거예요', '먼저 지나간 사람이', '아껴 쓰세요', '트럭에 기름 넣고 가요'];
-export const KIND_NAMES = { bandage: '붕대', fuel: '연료통', battery: '배터리 팩' };
+export const NOTES = ['', tr('같이 버텨요'), tr('여기서 잠깐 쉬어 가요'), tr('밤이 길어요, 조심해요'), tr('곧 불이 켜질 거예요'), tr('먼저 지나간 사람이'), tr('아껴 쓰세요'), tr('트럭에 기름 넣고 가요')];
+export const KIND_NAMES = { bandage: tr('붕대'), fuel: tr('연료통'), battery: tr('배터리 팩') };
 export const RUN_TAKE_LIMIT = 3; // 한 판에 남의 보급품을 꺼낼 수 있는 횟수
 export const BATTERY_PACK = 30; // 배터리 팩 하나에 담는 손전등 배터리(%)
 export const BATTERY_PACK_MIN = 50; // 이만큼은 있어야 배터리 팩을 만들 수 있다

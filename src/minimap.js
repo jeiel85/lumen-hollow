@@ -2,6 +2,7 @@
 // 아이소 카메라와 같은 방향으로 45° 돌려 그린다: 화면 오른쪽 = (1,0,-1)/√2, 아래 = (1,0,1)/√2.
 // 움직이지 않는 바닥·건물은 무대마다 한 번 그려 두고(정적 층), 표시만 초당 10번 다시 그린다.
 import { BOUND, EDGE, PITCH } from './world.js';
+import { tr } from './i18n.js';
 
 const S2 = Math.SQRT1_2;
 const toU = (x, z) => (x - z) * S2;
@@ -357,8 +358,8 @@ export class Minimap {
     const el = this.el.legend;
     if (!el) return;
     const rows = chapter
-      ? [['me', '나'], ['clue', '갈 곳'], ['lamp', '켜진 불빛']]
-      : [['me', '나'], ['dead', '고장 난 배전함'], ['ok', '고친 배전함'], ['lamp', '켜진 가로등'], ['clue', '읽을 기록'], ['candle', '촛불 단서'], ['truck', '트럭']];
+      ? [['me', tr('나')], ['clue', tr('갈 곳')], ['lamp', tr('켜진 불빛')]]
+      : [['me', tr('나')], ['dead', tr('고장 난 배전함')], ['ok', tr('고친 배전함')], ['lamp', tr('켜진 가로등')], ['clue', tr('읽을 기록')], ['candle', tr('촛불 단서')], ['truck', tr('트럭')]];
     el.replaceChildren(...rows.map(([k, t]) => {
       const li = document.createElement('li');
       const i = document.createElement('i');
@@ -366,6 +367,6 @@ export class Minimap {
       li.append(i, t);
       return li;
     }));
-    if (this.el.title) this.el.title.textContent = chapter ? this.src.chapters.label : '마을 지도';
+    if (this.el.title) this.el.title.textContent = chapter ? this.src.chapters.label : tr('마을 지도');
   }
 }
