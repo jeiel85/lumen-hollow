@@ -166,3 +166,33 @@ test('기록 파일의 2~4장 표시 목록이 src/chapters.js FLAGS와 같다',
   const flags = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
   assert.deepEqual([...R.CHAPTER_FLAGS].sort(), flags.sort());
 });
+
+// 난이도 단계(#56): 보통은 best(예전 기록 키 그대로), 쉬움·어려움은 bestBy. 기록이 있는 단계만 파일에 담는다.
+test('난이도별 최고 기록: 내보내기·읽기·합치기, 모르는 단계는 건너뜀', () => {
+  const state = {
+    best: { nights: 3, zones: 9, winDay: 6 },
+    bestBy: { easy: { nights: 5, zones: 9, winDay: 4 }, hard: { nights: 0, zones: 1, winDay: 0 } },
+    wardrobe: null, story: null, chapters: null,
+  };
+  const data = R.recordsFile(state, new Date('2026-11-08T00:00:00Z'));
+  assert.deepEqual(data.bestBy, { easy: { nights: 5, zones: 9, winDay: 4 } }, '기록이 없는 어려움은 빠진다');
+  const r = R.parseRecords(JSON.stringify(data), ZONES);
+  assert.deepEqual(r.bestBy, { easy: { nights: 5, zones: 9, winDay: 4 } });
+  const m = R.mergeRecords(local({ bestBy: { easy: { nights: 7, zones: 3, winDay: 9 }, hard: { nights: 1, zones: 2, winDay: 0 } } }), r);
+  assert.deepEqual(m.bestBy.easy, { nights: 7, zones: 9, winDay: 4 });
+  assert.deepEqual(m.bestBy.hard, { nights: 1, zones: 2, winDay: 0 }, '파일에 없는 단계는 이 기기 기록 그대로');
+  assert.match(R.describeImport(r, m, ZONES), /쉬움 — 4일 만에 마을 복구/);
+
+  const odd = R.parseRecords(file({ version: 2, bestBy: { nightmare: { nights: 1, zones: 1, winDay: 0 }, hard: { nights: 2, zones: 3, winDay: 0 }, normal: { nights: 9, zones: 9, winDay: 1 } } }), ZONES);
+  assert.deepEqual(odd.bestBy, { hard: { nights: 2, zones: 3, winDay: 0 } }, '보통은 best에만 있다');
+  assert.equal(odd.skipped, 2);
+  assert.throws(() => R.parseRecords(file({ version: 2, bestBy: [] }), ZONES), /가져올 내용이 없어요/);
+});
+
+test('bestBy만 있는 파일도 가져온다, 옛 파일(bestBy 없음)은 이 기기의 쉬움·어려움 기록을 그대로 둔다', () => {
+  const only = R.parseRecords(file({ version: 2, bestBy: { hard: { nights: 4, zones: 5, winDay: 0 } } }), ZONES);
+  assert.equal(only.best, null);
+  const old = R.parseRecords(file({ version: 2, best: { nights: 1, zones: 2, winDay: 0 } }), ZONES);
+  const m = R.mergeRecords(local({ bestBy: { easy: { nights: 2, zones: 2, winDay: 0 }, hard: { nights: 0, zones: 1, winDay: 0 } } }), old);
+  assert.deepEqual(m.bestBy.easy, { nights: 2, zones: 2, winDay: 0 });
+});

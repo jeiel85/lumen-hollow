@@ -2,6 +2,7 @@ import { load, save, remove } from './storage.js';
 import { BOUND } from './world.js';
 import { phaseName } from './env.js';
 import { RUN_TAKE_LIMIT } from './online.js';
+import { DIFFICULTY, DEFAULT_LEVEL, isLevel } from './difficulty.js';
 
 // 진행 중인 판 저장(이어하기). 모바일에서 백그라운드로 간 탭이 종료돼도 처음 화면의 '이어하기'로 돌아온다.
 // 형식과 그 이유는 DECISIONS.md "판 중간 저장" 항목. 형식을 바꾸면 RUN_VERSION을 올리고 이전 형식도 읽게 한다.
@@ -68,6 +69,8 @@ export function captureRun({ world, player, car, env, game, shades }) {
       hints: Object.keys(HINTS).filter((k) => game[HINTS[k]]),
       // 꺼내기 요청이 오가는 중이었으면 그 상자(이어할 때 다시 물어 결과를 맞춘다, #14). 없으면 빠진다.
       ...(game.pendingTake ? { pendingTake: { id: game.pendingTake.id, kind: game.pendingTake.kind } } : {}),
+      // 난이도 단계(#56). 보통이면 빠진다(단계가 생기기 전의 저장도 보통으로 읽는다).
+      ...(game.difficulty && game.difficulty !== DEFAULT_LEVEL ? { diff: game.difficulty } : {}),
     },
   };
 }
@@ -147,6 +150,8 @@ function validate(raw, world) {
       nights: run.nights, banished: run.banished, returned: run.returned, cacheTaken: run.cacheTaken,
       hints: run.hints.filter((k) => typeof k === 'string' && HINTS[k]).map((k) => HINTS[k]),
       pendingTake: pendingTakeOf(run.pendingTake),
+      // 선택 항목: 모르는 단계 이름이면 보통으로 읽는다(판 전체를 버리지는 않는다).
+      diff: isLevel(run.diff) ? run.diff : DEFAULT_LEVEL,
     },
   };
 }
@@ -188,5 +193,6 @@ export function restoreWorld(world, run) {
 // 처음 화면에 보여 줄 한 줄 요약
 export function describeRun(run, totalZones) {
   const nights = run.run.nights ? ` · 버틴 밤 ${run.run.nights}번` : '';
-  return `${run.env.day}일째 ${phaseName(run.env.hour)} · 밝힌 구역 ${run.zones.length}/${totalZones}${nights}`;
+  const level = run.run.diff !== DEFAULT_LEVEL ? ` · ${DIFFICULTY[run.run.diff].label}` : '';
+  return `${run.env.day}일째 ${phaseName(run.env.hour)} · 밝힌 구역 ${run.zones.length}/${totalZones}${nights}${level}`;
 }

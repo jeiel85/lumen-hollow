@@ -15,7 +15,7 @@
 const BUILD = '__BUILD__';
 const CACHE = `lumen-${BUILD}`;
 const MODULES = [
-  'src/main.js', 'src/audio.js', 'src/caches.js', 'src/chapters.js', 'src/dialogue.js', 'src/env.js', 'src/geometry.js', 'src/grid.js', 'src/hud.js',
+  'src/main.js', 'src/audio.js', 'src/caches.js', 'src/chapters.js', 'src/dialogue.js', 'src/difficulty.js', 'src/env.js', 'src/geometry.js', 'src/grid.js', 'src/hud.js',
   'src/input.js', 'src/minimap.js', 'src/music.js', 'src/native.js', 'src/online.js', 'src/player.js', 'src/post.js', 'src/pwa.js', 'src/records.js', 'src/rng.js',
   'src/runsave.js', 'src/script.js', 'src/settings.js', 'src/shades.js', 'src/slots.js', 'src/storage.js', 'src/story.js',
   'src/vehicle.js', 'src/wardrobe.js', 'src/wisps.js', 'src/world.js',
