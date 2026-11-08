@@ -542,3 +542,19 @@ body.chapter-mode .hud .zones, body.chapter-mode #power-btn, body.chapter-mode .
   .place { width: min(440px, calc(100vw - 2 * (max(var(--edge-l), var(--edge-r)) + 124px))); padding: 8px 10px; gap: 6px; bottom: calc(var(--edge-b) + 2px); }
   .place-items button { padding: 6px 4px; font-size: 12px; }
 }
+
+/* ---------- 마우스로 하는 창(폭 721px 이상) ---------- */
+/* 데스크톱은 아래 줄 왼쪽이 상태 창, 오른쪽이 조작 안내다(터치 버튼이 없다). 창 폭이 1100px보다 좁으면 가운데 남기기 창이
+   둘을 덮었고, 높이 540px 이하이면 휴대폰 가로 화면용으로 아래 가운데에 둔 장 목표가 조작 안내와 겹쳤다.
+   - 남기기 창은 상태 창(가장 넓은 240px + 간격 12px) 오른쪽으로 비켜 앉는다. 넓은 창에서는 그대로 가운데다.
+   - 남기기 창이 열린 동안에는 조작 안내를 숨긴다(창 안에 1·2·3·N·G가 있다).
+   - 장 목표는 높이와 상관없이 키 큰 창과 같은 왼쪽 위에 둔다(데스크톱의 상태 창은 늘 아래에 있다). */
+@media (pointer: fine) and (min-width: 721px) {
+  .place { --place-w: min(440px, calc(100vw - var(--edge-l) - var(--edge-r) - 252px)); width: var(--place-w); left: max(50%, calc(var(--edge-l) + 252px + var(--place-w) / 2)); }
+  body:has(#place:not(.hidden)) #key-hints { visibility: hidden; }
+  .objective { top: calc(var(--edge-t) + 46px); bottom: auto; left: var(--edge-l); right: auto; transform: none; width: auto; max-width: min(440px, calc(100vw - 2 * var(--edge-l))); text-align: left; }
+}
+/* 폭 721~759px에서는 '보급품 남기기'까지 뜨면 위 줄이 두 줄로 넘쳐 미니맵을 덮었다. 좁은 화면처럼 글자 이름표를 뺀다. */
+@media (pointer: fine) and (min-width: 721px) and (max-width: 759px) {
+  .hud-top .wide-only { display: none; }
+}

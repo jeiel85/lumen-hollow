@@ -73,6 +73,32 @@ check('운전하면 엔진·타이어 소스 3개가 생긴다', r.driving && r.
 check('내린 뒤 1.5초가 지나면 엔진 노드를 멈추고 정리한다(운전 전과 같은 수)', r.exited && !r.afterEngine && r.afterLive === r.idle, r);
 check('정리할 때 엔진 소리는 이미 거의 0(-40dB 아래)', r.downGain !== null && r.downGain < 0.002, r.downGain);
 
+// 바탕 소리(#6 후속): 게인 0인 소스를 늘 돌리지 않는다. 낮·맑음·그늘이 없음이면 하나도 돌지 않고, 밤이 되면 밤 저음만 생기며,
+// 음소거하거나 다시 낮이 되면 줄어드는 꼬리(시간 상수 × 5) 뒤에 정리된다.
+r = await B.ev(`${RUN}
+  const clear = () => { L.env.rainLevel = 0; L.env.rainyNight = false; };
+  noon(); clear();
+  await run(4.5); // 앞 시험에서 남은 소리의 꼬리(밤 저음 0.8초 × 5)가 지나기를 기다린다
+  const day = { beds: Object.keys(S.beds), live: live() };
+  L.game.peaceful = true; L.env.setHour(23); clear();
+  await run(0.5);
+  const night = { beds: Object.keys(S.beds), live: live() };
+  let downGain = null;
+  const release = S._release.bind(S);
+  S._release = (b, gains, t) => { downGain = Math.max(...gains.map((g) => g.value)); release(b, gains, t); };
+  S.toggleMute(); await run(4.5);
+  const muted = { beds: Object.keys(S.beds), live: live(), downGain };
+  S.toggleMute(); await run(0.3);
+  const unmuted = Object.keys(S.beds);
+  S._release = release;
+  L.game.peaceful = false; noon(); clear(); await run(4.5);
+  const back = { beds: Object.keys(S.beds), live: live() };
+  return { day, night, muted, unmuted, back };`);
+check('낮·맑음·그늘이 없음: 바탕 소리 소스가 하나도 돌지 않는다', r.day.beds.length === 0, r.day);
+check('밤: 밤 저음(톱니파 셋)만 생긴다', r.night.beds.join() === 'night' && r.night.live === r.day.live + 3, r.night);
+check('음소거하면 다 줄어든 뒤(-40dB 아래) 정리하고, 풀면 다시 만든다', r.muted.beds.length === 0 && r.muted.live === r.day.live && r.muted.downGain !== null && r.muted.downGain < 0.005 && r.unmuted.includes('night'), { muted: r.muted, unmuted: r.unmuted });
+check('다시 낮이 되면 꼬리가 지난 뒤 정리된다', r.back.beds.length === 0 && r.back.live === r.day.live, r.back);
+
 // 멈춘 AudioContext 다시 켜기
 r = await B.ev(`${RUN}
   const out = {};

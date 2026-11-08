@@ -36,7 +36,7 @@ export function offlineStatus() {
   switch (sw.state) {
     case 'ready':
       return sw.updateFailed
-        ? `오프라인 실행: 준비됐어요(지난 버전으로). 새 버전은 다음에 열 때 다시 받아요 — ${sw.updateFailed}.`
+        ? `오프라인 실행: 준비됐어요(지난 버전으로). 새 버전은 한 시간쯤 뒤나 다음에 열 때 다시 받아요 — ${sw.updateFailed}.`
         : '오프라인 실행: 준비됐어요. 한 번 받아 둔 게임이라 인터넷 없이도 열려요.';
     case 'installing': return '오프라인 실행: 게임 파일을 받아 두는 중이에요.';
     case 'failed': return `오프라인 실행: 아직 안 됐어요 — ${sw.reason}. 다음에 열 때 다시 시도해요.`;
@@ -135,6 +135,25 @@ async function registerServiceWorker() {
   if (reg.active) setState('ready');
   track(reg, reg.installing || reg.waiting);
   reg.addEventListener('updatefound', () => track(reg, reg.installing));
+  watchForUpdates(reg);
+}
+
+// 브라우저는 페이지를 새로 열 때만 서비스 워커(새 배포)를 확인한다. 며칠씩 켜 두는 설치 앱·탭은 그동안 새 버전을 모른다.
+// 화면이 보이는 동안 UPDATE_EVERY마다, 그리고 가려졌다가 돌아왔을 때 마지막 확인에서 그만큼 지났으면 다시 확인한다.
+// 새 빌드가 받아지면 sw.js가 바로 활성화하고 알려 처음 화면에 '새 버전이 준비됐어요'가 뜬다(진행 중인 판은 그대로 돈다:
+// 모든 모듈을 시작할 때 받아 두는 전제는 sw.js 머리 주석). 확인 한 번은 sw.js 한 파일(약 8KB)을 받는 것이고,
+// 빌드가 바뀌었을 때만 게임 파일을 새로 받는다. 오프라인이면 건너뛰고 다음 점검(UPDATE_POLL) 때 다시 본다.
+const UPDATE_EVERY = 60 * 60 * 1000;
+const UPDATE_POLL = 5 * 60 * 1000;
+function watchForUpdates(reg) {
+  let last = Date.now();
+  const check = () => {
+    if (document.hidden || navigator.onLine === false || Date.now() - last < UPDATE_EVERY) return;
+    last = Date.now();
+    reg.update().catch((err) => console.info('[pwa] 새 버전 확인에 실패했습니다. 한 시간 뒤 다시 확인합니다.', err?.name ?? err));
+  };
+  setInterval(check, UPDATE_POLL);
+  document.addEventListener('visibilitychange', check);
 }
 
 // 설정 화면의 "앱 설치" 묶음, 타이틀의 설치 버튼, 전체 화면 버튼을 잇는다.
