@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>개인정보처리방침 — Lumen Hollow</title>
+  <meta name="description" content="Lumen Hollow(웹판·안드로이드 앱)의 개인정보처리방침">
+  <meta name="robots" content="index, follow">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <style>
+    :root { color-scheme: dark; --bg: #0b1416; --card: #111e20; --ink: #e8e2d4; --dim: #a9b3ad; --warm: #f2c46b; --line: #22383a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.7 system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; word-break: keep-all; overflow-wrap: anywhere; }
+    main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+    h1 { font-size: 24px; margin: 0 0 4px; color: var(--warm); }
+    h2 { font-size: 18px; margin: 32px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+    h3 { font-size: 15px; margin: 18px 0 6px; }
+    p, li { color: var(--ink); }
+    .meta, small { color: var(--dim); }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 14px; }
+    th, td { text-align: left; vertical-align: top; padding: 8px; border-bottom: 1px solid var(--line); }
+    th { color: var(--dim); font-weight: 600; }
+    .wrap { overflow-x: auto; }
+    a { color: var(--warm); }
+    code { background: var(--card); padding: 1px 5px; border-radius: 4px; }
+    nav { margin: 12px 0 0; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Lumen Hollow 개인정보처리방침</h1>
+  <p class="meta">시행일 2026년 11월 8일 · 대상: 웹판(jeiel85.github.io/lumen-hollow)과 안드로이드 앱(com.jeiel85.lumenhollow)</p>
+  <nav><a href="#en">English</a></nav>
+
+  <p>Lumen Hollow(이하 "게임")는 개인 개발자 박용은(jeiel85)이 만들고 운영합니다. 게임은 계정이 없고, 이름·연락처·위치정보(GPS)·광고 ID를 받지 않으며, 광고나 분석용 외부 도구를 넣지 않았습니다. 아래는 게임이 다루는 정보 전부와 그 이유입니다.</p>
+
+  <h2>1. 기기 안에만 저장하는 정보</h2>
+  <p>설정, 최고 기록, 옷장, 이야기 진행, 진행 중인 판은 이용자의 기기(브라우저 저장소 또는 앱 저장소)에만 저장되고 서버로 보내지 않습니다. 브라우저의 사이트 데이터를 지우거나 앱을 지우면 함께 사라집니다. 설정 → 기록 → 내보내기로 파일을 받아 직접 보관할 수 있습니다. 안드로이드 기기 백업을 켜 둔 경우, 기기 설정에 따라 앱 저장소가 Google 계정 백업에 포함될 수 있습니다.</p>
+
+  <h2>2. 온라인 보급품 기능이 서버에 보내는 정보</h2>
+  <p>다른 플레이어가 마을에 남긴 보급품을 주고받는 기능입니다. 처음부터 켜져 있고, <b>설정 → 온라인 보급품</b>에서 끌 수 있습니다. 끄면 아래 정보를 보내지 않습니다.</p>
+  <div class="wrap"><table>
+    <tr><th>정보</th><th>목적</th><th>보유 기간</th></tr>
+    <tr><td>무작위 플레이어 ID — 기기에서 만든 임의의 값. 서버에는 그 값의 SHA-256 해시만 저장</td><td>내가 남긴 보급품과 사용 기록을 구분하고, 한 사람당 한도(남기기 3개 등)를 지키기 위해</td><td>아래 기록이 지워질 때 함께</td></tr>
+    <tr><td>남긴 보급품: 마을 안 자리 번호, 종류(붕대·연료통·배터리), 고른 문구(정해진 문구 중 하나)</td><td>다른 플레이어에게 보여 주기 위해</td><td>마을에 최대 7일 놓이고, 정리된 뒤 90일 후 삭제</td></tr>
+    <tr><td>사용·고마워요 기록, 접속한 날(UTC 날짜)</td><td>같은 상자를 하루에 한 번만 쓰게 하고, 기능이 쓰이는지 보기 위해</td><td>90일 후 자동 삭제(그 뒤에는 사람을 알아볼 수 없는 일별 합계만 남음)</td></tr>
+    <tr><td>IP 주소의 HMAC-SHA256 값 — 날마다 바뀌는 비밀값으로 만들며, 원문 IP는 저장하지 않음</td><td>대량 등록 같은 남용을 막기 위한 하루 횟수 제한</td><td>2일 안에 삭제</td></tr>
+  </table></div>
+  <p>자유롭게 쓰는 글, 이름, 연락처는 받지 않습니다.</p>
+
+  <h2>3. 이야기 진행 집계</h2>
+  <p>온라인 보급품이 켜져 있으면, 이야기 장면을 끝까지 봤는지·건너뛰었는지와 장을 시작·마쳤는지를 <b>날짜별 횟수로만</b> 보냅니다. 플레이어 ID와 IP를 함께 보내거나 저장하지 않아 누가 보냈는지 알 수 없습니다. 어디서 게임을 그만두는지 보고 게임을 고치기 위해서이며, 400일 뒤 삭제합니다. 온라인 보급품을 끄면 보내지 않습니다.</p>
+
+  <h2>4. 호스팅 회사의 접속 기록</h2>
+  <p>서버(Cloudflare)와 웹판 호스팅(GitHub Pages)은 서비스 운영과 보안을 위해 IP 주소 등 접속 기록을 남길 수 있고, 그 보관은 각 회사의 정책을 따릅니다. 개발자는 이 기록을 따로 모으거나 위 정보와 합치지 않습니다.</p>
+
+  <h2>5. 처리 위탁과 국외 이전</h2>
+  <div class="wrap"><table>
+    <tr><th>받는 곳</th><th>하는 일</th><th>나라</th></tr>
+    <tr><td>Cloudflare, Inc.</td><td>온라인 보급품 서버 실행(Workers)과 2·3절 정보 보관(D1 데이터베이스)</td><td>미국 회사. 데이터베이스는 아시아·태평양 지역 데이터센터에 두도록 설정했고, 요청은 가까운 Cloudflare 데이터센터를 거칩니다</td></tr>
+    <tr><td>GitHub, Inc.</td><td>웹판 파일 호스팅</td><td>미국</td></tr>
+    <tr><td>Google LLC</td><td>안드로이드 앱 배포(Google Play)</td><td>미국</td></tr>
+  </table></div>
+  <p>2·3절 정보는 게임이 온라인 기능을 쓸 때마다 암호화된 연결(HTTPS)로 전송되고, 위 보유 기간 동안 보관됩니다. 국외 이전을 원하지 않으면 온라인 보급품을 끄면 됩니다(게임은 혼자 하는 판으로 그대로 됩니다).</p>
+
+  <h2>6. 제3자 제공</h2>
+  <p>위 정보를 다른 회사나 개인에게 팔거나 제공하지 않습니다. 법령에 따른 요구가 있는 경우는 예외입니다.</p>
+
+  <h2>7. 이용자의 권리</h2>
+  <ul>
+    <li><b>지우기</b>: 처음 화면에서 연 설정 → 온라인 보급품 → <b>내 온라인 기록 지우기</b>를 누르면 서버의 내 사용·고마워요·접속 기록을 지우고, 내가 남긴 보급품을 내리고 나와의 연결을 끊습니다. 서버에는 이름이 없어 이 방법이 가장 확실합니다.</li>
+    <li><b>멈추기</b>: 설정에서 온라인 보급품을 끄면 그때부터 아무것도 보내지 않습니다.</li>
+    <li><b>열람·정정·삭제·처리정지 요청</b>: 아래 연락처로 요청할 수 있습니다. 서버의 정보는 플레이어 ID 해시로만 구분되므로, 요청하실 때 어느 기기인지 확인할 방법을 함께 안내해 드립니다.</li>
+  </ul>
+
+  <h2>8. 자동 수집 장치</h2>
+  <p>쿠키를 쓰지 않습니다. 게임 진행과 무작위 플레이어 ID는 기기 저장소(localStorage)에 둡니다. 브라우저에서 사이트 데이터 저장을 막거나 지울 수 있지만, 그러면 게임 진행이 남지 않습니다.</p>
+
+  <h2>9. 아동</h2>
+  <p>게임은 나이를 묻지 않으며, 사람을 직접 알아볼 수 있는 정보(이름·연락처·사진 등)를 받지 않습니다.</p>
+
+  <h2>10. 안전조치</h2>
+  <p>모든 전송은 HTTPS로 암호화합니다. 원문 IP를 저장하지 않고 플레이어 ID는 해시로만 저장합니다. 정해진 기간이 지난 기록은 매일 도는 정리 작업이 자동으로 지웁니다. 운영 도구는 비밀 토큰으로만 열립니다.</p>
+
+  <h2>11. 개인정보 보호책임자와 문의</h2>
+  <p>개인정보 보호책임자: 박용은 · 이메일 <a href="mailto:jeiel85@gmail.com">jeiel85@gmail.com</a></p>
+  <p>개인정보 침해에 대한 상담·신고는 개인정보침해 신고센터(국번 없이 118, <a href="https://privacy.kisa.or.kr/" rel="noopener">privacy.kisa.or.kr</a>)나 개인정보 분쟁조정위원회(1833-6972, <a href="https://www.kopico.go.kr/" rel="noopener">kopico.go.kr</a>)에도 할 수 있습니다.</p>
+
+  <h2>12. 바뀔 때</h2>
+  <p>이 방침을 바꾸면 이 페이지에 새 시행일과 함께 올립니다. 이전 내용은 <a href="https://github.com/jeiel85/lumen-hollow/commits/main/privacy.html" rel="noopener">저장소 기록</a>에서 볼 수 있습니다.</p>
+
+  <h2 id="en">Privacy Policy (English summary)</h2>
+  <p class="meta">Effective November 8, 2026 · Applies to the web version and the Android app (com.jeiel85.lumenhollow). The Korean text above prevails.</p>
+  <p>Lumen Hollow is made and run by an individual developer, Park Yongeun (jeiel85). There are no accounts. The game does not collect names, contact details, GPS location, or advertising IDs, and it contains no third-party ads or analytics SDKs.</p>
+  <h3>Stored only on your device</h3>
+  <p>Settings, best records, wardrobe, story progress, and the run in progress are stored only on your device (browser storage or app storage) and are never sent to the server. If Android device backup is on, app storage may be included in your Google account backup according to your device settings.</p>
+  <h3>Online supply caches (on by default, can be turned off in Settings)</h3>
+  <ul>
+    <li>A random player ID generated on your device (the server stores only its SHA-256 hash); caches you leave (slot in the town, item type, a preset message); use and "thanks" records; the UTC dates you connected. Purpose: sharing caches between players and enforcing per-player limits. Deleted 90 days after use/removal; caches stay in the town for at most 7 days.</li>
+    <li>An HMAC-SHA256 of your IP address with a secret that changes daily (the raw IP is not stored), for abuse-prevention rate limits. Deleted within 2 days.</li>
+    <li>Story progress counts (whether scenes were finished or skipped, chapters started/finished) as daily totals only, without player ID or IP, to improve the game. Deleted after 400 days.</li>
+  </ul>
+  <p>Hosting providers (Cloudflare for the server, GitHub Pages for the web version) may keep access logs including IP addresses under their own policies. Data is processed by Cloudflare, Inc. (USA; database located in the Asia-Pacific region), GitHub, Inc. (USA), and Google LLC (USA, app distribution). We do not sell or share this data with third parties.</p>
+  <h3>Your choices</h3>
+  <p>Turn off online caches in Settings to stop sending anything. Use Settings (opened from the title screen) → Online caches → "Delete my online records" to delete your use, thanks, and connection records on the server and remove your caches. For other requests, contact <a href="mailto:jeiel85@gmail.com">jeiel85@gmail.com</a>.</p>
+</main>
+</body>
+</html>

@@ -48,6 +48,7 @@ body.calm .power.alert { animation: none; box-shadow: 0 0 10px 1px rgba(255, 140
 .hud-buttons { margin-left: auto; display: flex; gap: 8px; pointer-events: auto; }
 .chip { pointer-events: auto; cursor: pointer; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--glass); color: var(--dim); font-size: 12px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .chip:hover { color: var(--ink); }
+a.chip { display: inline-block; text-decoration: none; } /* 설정 '정보'의 개인정보처리방침 링크 */
 .chip:focus-visible, .btn:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
 .chip:disabled { opacity: 0.45; cursor: default; }
 .icon-chip { display: inline-flex; align-items: center; gap: 6px; }
