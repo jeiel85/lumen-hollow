@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#111E20</color>
+    <!-- 시작 화면 바탕: 웹판 manifest의 background_color와 같다 -->
+    <color name="splash_background">#0B1416</color>
+</resources>

@@ -11,6 +11,7 @@ import { Sound } from './audio.js';
 import { QUALITY, ZOOM, loadSettings, saveSettings, bindSettings } from './settings.js';
 import { loadBest, recordRun, hasRecords, describeBest, initRecordsPanel } from './records.js';
 import { initPwa } from './pwa.js';
+import { initNative } from './native.js';
 import { Wardrobe, OutfitDrops, Closet, itemLabel, objParticle } from './wardrobe.js';
 import { Switchboard } from './grid.js';
 import { Wisps } from './wisps.js';
@@ -576,6 +577,31 @@ function continueWalk() {
   env.setHour(Math.max(env.hour, 19.4) % 24);
   setScreen(null);
   hud.toast('고요해진 마을을 천천히 걸어 보자.', 'good');
+}
+
+// 안드로이드 앱의 뒤로 가기(#49). Esc와 같은 규칙으로 열린 것을 닫고, 판 도중이면 일시정지한다.
+// 처음 화면에서 더 닫을 것이 없을 때만 false를 돌려줘 앱을 닫는다(판은 처음 화면으로 나올 때 이미 저장된다).
+// 이야기 장면은 뒤로 가기로 건너뛰지 않는다: 손이 스쳐도 처음 보는 장면을 잃지 않게, 건너뛰기는 단추로만.
+function onBack() {
+  if (dialogue.docOpen) {
+    dialogue.closeDoc();
+    return true;
+  }
+  if (dialogue.scene) return true;
+  if (game.state === 'title' && !settingsFrom && !journalFrom) {
+    // '지우고 새로 시작' 확인이 떠 있으면 취소만 한다.
+    if ($('new-confirm') && !$('new-confirm').classList.contains('hidden')) {
+      $('new-no')?.click();
+      return true;
+    }
+    return false;
+  }
+  if (game.state === 'end' && !journalFrom) {
+    backToTitle();
+    return true;
+  }
+  input.pressed.add('Escape');
+  return true;
 }
 
 function backToTitle() {
@@ -2306,6 +2332,7 @@ if ($('settings')) {
   });
 }
 pwaUi = initPwa({ onAskInstall: openSettings });
+initNative({ onBack });
 for (const key of ['lefty', 'fps', 'shake']) applySetting(key);
 // 공유 보급품 화면 요소. 배포 직후 옛 index.html과 섞이면 없을 수 있다(hud.hasOnlineUi가 기능을 숨긴다).
 // 누른 버튼에 포커스가 남으면 Space(상호작용 키)가 그 버튼을 다시 눌러 버리므로 바로 놓는다.
