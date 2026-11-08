@@ -16,8 +16,8 @@ const PORT = Number(process.argv[2] ?? 8790);
 
 function stamp(build, { drop = null, pageBuild = build } = {}) {
   mkdirSync(SITE, { recursive: true });
-  for (const e of readdirSync(SITE)) rmSync(join(SITE, e), { recursive: true, force: true });
-  for (const f of ['index.html', 'style.css', 'favicon.svg', 'manifest.webmanifest', 'sw.js', 'icons', 'src', 'vendor', 'docs']) cpSync(join(REPO, f), join(SITE, f), { recursive: true });
+  for (const e of readdirSync(SITE)) rmSync(join(SITE, e), { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); // Windows: 서버가 막 내준 파일이 잠깐 잠겨 있을 수 있다
+  for (const f of ['index.html', 'style.css', 'favicon.svg', 'manifest.webmanifest', 'sw.js', 'icons', 'art', 'src', 'vendor', 'docs']) cpSync(join(REPO, f), join(SITE, f), { recursive: true });
   writeFileSync(join(SITE, 'index.html'), readFileSync(join(SITE, 'index.html'), 'utf8').replaceAll('__BUILD__', pageBuild));
   writeFileSync(join(SITE, 'sw.js'), readFileSync(join(SITE, 'sw.js'), 'utf8').replaceAll('__BUILD__', build));
   if (drop) unlinkSync(join(SITE, drop));

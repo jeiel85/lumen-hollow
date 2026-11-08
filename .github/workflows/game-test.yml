@@ -11,6 +11,8 @@ on:
       - 'vendor/**'
       - 'server/src/slots.js'
       - 'index.html'
+      - 'style.css'
+      - 'art/**'
       - 'sw.js'
       - 'manifest.webmanifest'
       - 'icons/**'
@@ -24,6 +26,8 @@ on:
       - 'server/src/slots.js'
       - 'sw.js'
       - 'index.html'
+      - 'style.css'
+      - 'art/**'
   workflow_dispatch:
     inputs:
       e2e:

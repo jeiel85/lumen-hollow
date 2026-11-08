@@ -9,11 +9,13 @@ Lumen Hollow의 **코드**는 [LICENSE](LICENSE)의 MIT 라이선스로 가져�
 
 | 구분 | 해당하는 것 | 라이선스 |
 |---|---|---|
-| 이미지 | `docs/`의 스크린샷, `icons/`의 아이콘, `favicon.svg` | CC BY 4.0 |
+| 이미지 | `docs/`의 스크린샷, `icons/`의 아이콘, `favicon.svg`, `art/`의 처음 화면·메뉴 그림(로고·키 아트·패널·버튼·아이콘) | CC BY 4.0 |
 | 게임 속 글 | 화면에 나오는 제목·부제·안내·도움말·메시지 같은 문구. 코드 파일(`index.html`, `src/*.js`, `manifest.webmanifest` 등) 안에 문자열로 들어 있어도 콘텐츠다 | CC BY 4.0 |
 | 세계관과 등장 요소 | 게임 이름 "Lumen Hollow", 정전된 마을을 빛으로 버틴다는 설정, 그늘이처럼 이름 붙은 등장 요소와 그 설정 | CC BY 4.0 |
 | 코드 | 위를 뺀 나머지: `src/`, `index.html`, `style.css`, `sw.js`, `manifest.webmanifest`, 배포 워크플로, 문서. 마을·모델·조명·소리를 절차적으로 만드는 코드도 코드다 | MIT ([LICENSE](LICENSE)) |
 | 외부 라이브러리 | `vendor/three/` (three.js) | three.js 저작자의 MIT ([vendor/three/LICENSE](vendor/three/LICENSE)) |
+
+`art/`의 그림은 OpenAI Codex의 이미지 생성으로 만든 원본을 고르고 다듬은 것입니다(투명 배경·잘라내기·크기 조정).
 
 이 문서가 콘텐츠로 정한 것은 LICENSE(MIT)가 말하는 "Software"에 들어가지 않습니다. 한 파일에 둘이 섞여 있으면 코드 부분은 MIT, 콘텐츠 부분은 CC BY 4.0을 따릅니다.
 

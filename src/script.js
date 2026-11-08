@@ -9,6 +9,9 @@
 //   cam  : 이 줄에서 카메라를 옮긴다. at = 'player' | 'lighthouse' | 'dock' | 'town' | 기록 id | 장의 장소 이름,
 //          cut = 암전 뒤 옮기기, zoom = 그때의 카메라 거리, hour = 시각 바꾸기,
 //          weather = 'clear'(비 그침), fx = 'lighthouse'(등대 점등, 그늘이가 물러난다)
+//   art  : 이 줄부터 컷신 그림 art/story/<이름>.webp를 장면 뒤에 깐다. null이면 걷고 3D 화면으로 돌아간다.
+//          다음 art가 나올 때까지 이어지고, 바꿀 때마다 암전한다. 그림을 깐 채 끝난 장면은 암전한 뒤 걷힌다.
+//          그림 파일은 sw.js 사전 캐시에도 넣는다(tests/node/sw.test.mjs가 짝을 맞춘다).
 // when : 1장 — 'start' 첫 판 시작 · 'dusk' 첫 해질녘 · 'dawn' 첫 새벽 · { zones: n } 은신처를 포함해 고친 구역이 n개가 될 때
 //        · 'win' 마지막 구역 · 'clue' 기록을 읽을 때(급수탑). 'chapter' — 2~4장, src/chapters.js가 차례에 맞춰 튼다.
 // ch   : 몇 장의 장면·기록인지(빠지면 1장). 수첩은 다다른 장까지만 보여 준다.
@@ -57,16 +60,16 @@ export const SCENES = [
     when: 'start',
     unlocks: ['log'],
     lines: [
-      { who: 'nar', text: '그날 밤 엄마는 내 손에 손전등을 쥐여 주었다.' },
+      { who: 'nar', text: '그날 밤 엄마는 내 손에 손전등을 쥐여 주었다.', art: 'prologue-hand' },
       { who: 'nar', text: '불빛이 흔들리는 동안 엄마가 내 이름을 불렀다.' },
       { who: 'nar', text: '건전지 뚜껑이 벌어졌다. 엄마가 내 손가락을 그 위에 꼭 포개 주었다.' },
       { who: 'nar', text: '그 손을 다시 잡았을 때 엄마는 대답하지 않았다.' },
       { who: 'nar', text: '사흘 동안 이어지던 재난 방송은 넷째 날 끊겼다.' },
       { who: 'gran', text: '…지직… 누구든 들리면 루멘 할로로 오너라.' },
       { who: 'gran', text: '불을 다시 켜야 한다. 누구든 들리면…' },
-      { who: 'nar', text: '도시 체육관 사람들에게 엄마와 집 주소를 부탁하고 길을 나섰다.' },
+      { who: 'nar', text: '도시 체육관 사람들에게 엄마와 집 주소를 부탁하고 길을 나섰다.', art: 'prologue-road' },
       { who: 'nar', text: '스무 날을 걸어, 어릴 적 살던 골짜기에 닿았다.' },
-      { who: 'nar', text: '은신처의 발전기만 돌고 있었다. 비상함에는 퓨즈 하나가 남아 있었다.' },
+      { who: 'nar', text: '은신처의 발전기만 돌고 있었다. 비상함에는 퓨즈 하나가 남아 있었다.', art: null },
       { who: 'me', text: '할머니, 저예요. 은신처에 왔어요.' },
       { who: 'gran', text: '우리 강아지… 살아 있었구나.' },
       { who: 'gran', text: '해가 지면 불빛 곁에 있어라. 그늘이는 밤에 움직인다.' },
@@ -181,7 +184,7 @@ export const SCENES = [
     unlocks: ['letter'],
     lines: [
       { who: 'gran', text: '다섯 번째 배전함이구나. 더는 미룰 수 없겠다.' },
-      { who: 'gran', text: '의회의 소등 결정에 반대했다. 그래 놓고 스위치를 내렸다.' },
+      { who: 'gran', text: '의회의 소등 결정에 반대했다. 그래 놓고 스위치를 내렸다.', art: 'confession-switch' },
       { who: 'me', text: '할머니가요?' },
       { who: 'gran', text: '옛 경고가 사실일까 무서웠다. 거짓일까 봐도 무서웠고.' },
       { who: 'gran', text: '끝까지 막지 못했다. 네 엄마가 잠든 데 내 몫이 있다.' },
@@ -236,7 +239,7 @@ export const SCENES = [
       { who: 'nar', text: '마을의 창마다 불이 번졌다. 돌아갈 자리를 찾는 작은 빛들이 보였다.', cam: { at: 'town', cut: true, zoom: 19 } },
       { who: 'me', text: '할머니, 저 창가에도 이제 누가 있는 거죠?' },
       { who: 'gran', text: '그래. 이제 저 집에서도 밖에 누가 있나 내다볼 수 있겠구나.' },
-      { who: 'other', text: '…지직… 강 건너 대피소다. 방금 불이 들어왔다. 누구 들리나?' },
+      { who: 'other', text: '…지직… 강 건너 대피소다. 방금 불이 들어왔다. 누구 들리나?', art: 'finale-firstlight' },
       { who: 'me', text: '들려요! 여기는 루멘 할로예요. 저희도 살아 있어요.' },
       { who: 'gran', text: '들었니? 어둠이 지나간 길로 불도 가고 있다.' },
       { who: 'me', text: '엄마가 대답할 때까지 계속 부를래요.' },
@@ -253,7 +256,7 @@ export const SCENES = [
     when: 'chapter',
     inPerson: true,
     lines: [
-      { who: 'nar', text: '어릴 때는 물살이 무서워 배 바닥만 봤다. 이번에는 건너편 난간을 보고 노를 저었다.', cam: { at: 'lake', cut: true, zoom: 16 } },
+      { who: 'nar', text: '어릴 때는 물살이 무서워 배 바닥만 봤다. 이번에는 건너편 난간을 보고 노를 저었다.', cam: { at: 'lake', cut: true, zoom: 16 }, art: 'ferry-row' },
       { who: 'gran', radio: true, text: '뱃머리를 조금만 왼쪽으로. 그래, 거기서부턴 물이 데려온다.' },
       { who: 'me', radio: true, text: '저 보여요?' },
       { who: 'gran', radio: true, text: '노 젓는 솜씨 보니 너 맞다.' },
@@ -267,11 +270,11 @@ export const SCENES = [
     inPerson: true,
     unlocks: ['islandbook', 'spare'],
     lines: [
-      { who: 'nar', text: '할머니가 내 손을 끌어 올렸다. 엄지에 반창고가 세 겹이었다.', cam: { at: 'pier', cut: true, zoom: 9 } },
+      { who: 'nar', text: '할머니가 내 손을 끌어 올렸다. 엄지에 반창고가 세 겹이었다.', cam: { at: 'pier', cut: true, zoom: 9 }, art: 'landing-hands' },
       { who: 'me', text: '손은 왜 그래요?' },
       { who: 'gran', text: '무전기 누르는 자리가 하도 쓰려서. 너는 밥 먹었니?' },
       { who: 'me', text: '엄마 얘기부터 해요.' },
-      { who: 'nar', text: '할머니는 차려 둔 두 그릇 위에 다시 뚜껑을 덮었다.', cam: { at: 'table', zoom: 9 } },
+      { who: 'nar', text: '할머니는 차려 둔 두 그릇 위에 다시 뚜껑을 덮었다.', cam: { at: 'table', zoom: 9 }, art: null },
     ],
   },
   {
@@ -300,7 +303,7 @@ export const SCENES = [
     inPerson: true,
     lines: [
       { who: 'me', text: '아까 그 밥, 이제 먹어도 돼요?', cam: { at: 'table', cut: true, zoom: 9 } },
-      { who: 'nar', text: '할머니는 식은 밥을 주먹만 하게 뭉쳤다. 한 덩이는 내 손에, 한 덩이는 외투 주머니에 넣었다.' },
+      { who: 'nar', text: '할머니는 식은 밥을 주먹만 하게 뭉쳤다. 한 덩이는 내 손에, 한 덩이는 외투 주머니에 넣었다.', art: 'bowls-riceballs' },
       { who: 'pharm', radio: true, text: '강 건너 대피소입니다. 도시에서 환자들을 옮겼어요. 가족 찾는 분은 이쪽으로 오세요.' },
       { who: 'me', radio: true, text: '엄마가 살던 동네도요?' },
       { who: 'pharm', radio: true, text: '이름을 잃어버린 분들이 있어요. 오시면 짐부터 같이 봐요.' },
@@ -320,7 +323,7 @@ export const SCENES = [
       { who: 'pharm', text: '한서윤이에요. 처음에 약국으로 온 분은 열둘. 여기까지 열둘 다 데려왔어요.', cam: { at: 'tent', cut: true, zoom: 10 } },
       { who: 'me', text: '다 깨어났어요?' },
       { who: 'pharm', text: '열한 분요. 마지막 한 분은 여전히 주무세요. 그런데 그분은 이 마을 사람이에요.' },
-      { who: 'nar', text: '들것 옆에 신발이 열한 켤레 가지런히 놓였다. 깨어난 사람들이 환자를 기다리고 있었다.', cam: { at: 'shoes', zoom: 7 } },
+      { who: 'nar', text: '들것 옆에 신발이 열한 켤레 가지런히 놓였다. 깨어난 사람들이 환자를 기다리고 있었다.', cam: { at: 'shoes', zoom: 7 }, art: 'count-shoes' },
       { who: 'pharm', text: '도시에서 온 분들은 별도 명부에 있어요. 둑길 창고에서 장부와 짐표를 가져와 줄래요?' },
       { who: 'nar', text: '약사가 손수건에 싼 열쇠를 내밀었다. 창고까지 이어진 둑길에 진흙이 말라붙어 있었다.' },
     ],
@@ -332,7 +335,7 @@ export const SCENES = [
     when: 'chapter',
     inPerson: true,
     lines: [
-      { who: 'me', text: '우리 집 열쇠예요. 사진 뒤에 엄마가 쓴 글도 있어요.' },
+      { who: 'me', text: '우리 집 열쇠예요. 사진 뒤에 엄마가 쓴 글도 있어요.', art: 'key-photo' },
       { who: 'gran', text: '그 먼 도시에서 여기까지 누가 업고 왔을까.' },
       { who: 'me', text: '제가 엄마한테 가는 줄 알았어요. 엄마도 오고 있었어요.' },
       { who: 'nar', text: '스무 날 동안 나는 비어 있는 집에 대고 매일 밤 잘 자라고 했었다.' },
@@ -365,7 +368,7 @@ export const SCENES = [
       { who: 'nar', text: '별관 창에 석유등 하나가 비쳤다. 그 옆으로 의자 하나가 비어 있었다.', cam: { at: 'classroom', cut: true, zoom: 9 } },
       { who: 'gran', text: '얘야, 엄마한테 내 얘기는 내가 하마.' },
       { who: 'me', text: '네. 근데 먼저 엄마 손 좀 잡을게요.' },
-      { who: 'nar', text: '엄마 손바닥에는 손전등 손잡이와 같은 너비의 굳은살이 있었다. 내 엄지가 그 자리에 꼭 들어갔다.', cam: { at: 'windowBed', zoom: 6 } },
+      { who: 'nar', text: '엄마 손바닥에는 손전등 손잡이와 같은 너비의 굳은살이 있었다. 내 엄지가 그 자리에 꼭 들어갔다.', cam: { at: 'windowBed', zoom: 6 }, art: 'chair-hands' },
     ],
   },
 
@@ -410,11 +413,11 @@ export const SCENES = [
     lines: [
       { who: 'nar', text: '운동장 끝에서 그림자 하나가 달려왔다. 나는 두 손으로 손잡이를 쥐었다.' },
       { who: 'nar', text: '빛이 교실 쪽으로 건너갔다. 한참 뒤에 무전 단추 누르는 소리가 났다.', cam: { at: 'windowBed', cut: true, zoom: 7 } },
-      { who: 'nar', text: '할머니가 창턱의 무전기를 엄마 손에 대 주었다.' },
+      { who: 'nar', text: '할머니가 창턱의 무전기를 엄마 손에 대 주었다.', art: 'mom-wakes' },
       { who: 'mom', radio: true, text: '…그거 아직도 쓰니? 건전지 뚜껑 잘 빠지는데.' },
       { who: 'me', radio: true, text: '테이프 붙였어요.' },
       { who: 'mom', radio: true, text: '잘했네.' },
-      { who: 'nar', text: '할 말이 수없이 많았다. 처음 나온 건 웃음이었다. 나는 불 켜진 계단을 두 칸씩 올랐다.', cam: { at: 'steps', cut: true, zoom: 9 } },
+      { who: 'nar', text: '할 말이 수없이 많았다. 처음 나온 건 웃음이었다. 나는 불 켜진 계단을 두 칸씩 올랐다.', cam: { at: 'steps', cut: true, zoom: 9 }, art: null },
     ],
   },
   {
@@ -428,7 +431,7 @@ export const SCENES = [
       { who: 'mom', text: '무서웠지?' },
       { who: 'gran', text: '응.' },
       { who: 'mom', text: '나도 무서웠어. 애 손에 불 쥐여 주고 아무것도 안 보였어.' },
-      { who: 'nar', text: '할머니는 외투 주머니에서 납작해진 주먹밥을 꺼냈다. 엄마가 그것을 세 조각으로 갈랐다.' },
+      { who: 'nar', text: '할머니는 외투 주머니에서 납작해진 주먹밥을 꺼냈다. 엄마가 그것을 세 조각으로 갈랐다.', art: 'three-riceball' },
       { who: 'mom', text: '다음엔 전화해. 무서우면 특히.' },
       { who: 'gran', text: '그러마.' },
       { who: 'me', text: '나도 그 전화 받을래요.' },
@@ -442,13 +445,13 @@ export const SCENES = [
     when: 'chapter',
     inPerson: true,
     lines: [
-      { who: 'nar', text: '아침에 나는 할머니 대신 송신 단추를 눌렀다. 엄지 마디로 누르니 아프지 않았다.' },
+      { who: 'nar', text: '아침에 나는 할머니 대신 송신 단추를 눌렀다. 엄지 마디로 누르니 아프지 않았다.', art: 'broadcast-morning' },
       { who: 'me', radio: true, text: '여기는 루멘 할로, 강 건너 옛 학교입니다. 사람을 찾는 분은 듣고 계세요.' },
       { who: 'me', radio: true, text: '이름을 몰라도 돼요. 마지막으로 본 곳과 갖고 있던 물건을 말해 주세요.' },
       { who: 'nar', text: '짧은 잡음 뒤에 첫 대답이 왔다.' },
       { who: 'other', radio: true, text: '파란 운동화예요. 왼쪽 끈만 흰색이고요.' },
       { who: 'me', radio: true, text: '잠깐만요. 적고 있어요. 왼쪽 끈만 흰색.' },
-      { who: 'nar', text: '창가에서 엄마가 새 종이를 내 쪽으로 밀어 주었다.', cam: { at: 'classroom', cut: true, zoom: 10 } },
+      { who: 'nar', text: '창가에서 엄마가 새 종이를 내 쪽으로 밀어 주었다.', cam: { at: 'classroom', cut: true, zoom: 10 }, art: null },
     ],
   },
 ];

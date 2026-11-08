@@ -64,8 +64,16 @@
   }
   </script>
 </head>
-<body>
+<body class="front">
   <canvas id="game" aria-label="게임 화면"></canvas>
+
+  <!-- 처음 화면 그림: 처음 화면과 거기서 연 설정·수첩 뒤에 깐다(body.front, src/main.js setScreen). 세로 화면은 세로 그림. -->
+  <div id="title-art" class="title-art" aria-hidden="true">
+    <picture>
+      <source media="(max-aspect-ratio: 4/5)" srcset="art/title-tall.webp" width="941" height="1672">
+      <img src="art/title-wide.webp" alt="" width="1672" height="941" fetchpriority="high">
+    </picture>
+  </div>
 
   <div id="hud" class="hud hidden">
     <div class="hud-top">
@@ -127,8 +135,14 @@
   <section id="title" class="screen">
     <div class="card title-card">
       <div class="title-main">
+        <h1 class="title-logo">
+          <picture>
+            <source media="(max-aspect-ratio: 4/5)" srcset="art/logo-stack.webp" width="840" height="492">
+            <img src="art/logo-wide.webp" alt="Lumen Hollow — 빛으로 버티는 밤" width="1240" height="337">
+          </picture>
+          <span class="logo-glow" aria-hidden="true"></span>
+        </h1>
         <p class="eyebrow">ISOMETRIC SURVIVAL · PROTOTYPE</p>
-        <h1>Lumen Hollow</h1>
         <p class="tagline">그날 밤, 세상의 불이 꺼졌다. 어둠 속에서 무언가가 다가온다.<br>낮에는 퓨즈를 모으고, 꺼진 구역에 하나씩 다시 불을 밝혀라.</p>
         <div id="title-actions" class="title-actions">
           <button id="chapter-btn" class="btn hidden" type="button" disabled>다음 장</button>
@@ -166,7 +180,7 @@
 
   <section id="closet" class="screen closet hidden" aria-labelledby="closet-title">
     <div class="card closet-panel">
-      <div class="closet-head"><h2 id="closet-title" tabindex="-1">옷장</h2><span id="closet-count" class="closet-count"></span></div>
+      <div class="closet-head"><h2 id="closet-title" class="panel-title" tabindex="-1">옷장</h2><span id="closet-count" class="closet-count"></span></div>
       <p id="closet-store" class="hint warn closet-store" role="status"></p>
       <div id="closet-tabs" class="closet-tabs" role="group" aria-label="부위"></div>
       <div id="closet-grid" class="closet-grid"></div>
@@ -177,7 +191,7 @@
 
   <section id="grid" class="screen hidden" aria-labelledby="grid-title">
     <div class="card grid-card">
-      <div class="settings-head"><h2 id="grid-title" tabindex="-1">배전반</h2><button id="grid-close" class="chip" type="button">닫기</button></div>
+      <div class="settings-head"><h2 id="grid-title" class="panel-title" tabindex="-1">배전반</h2><button id="grid-close" class="chip" type="button">닫기</button></div>
       <p id="grid-cap" class="hint strong"></p>
       <div class="grid-body">
         <div class="grid-map-wrap" aria-hidden="true"><div id="grid-map" class="grid-map"></div></div>
@@ -216,7 +230,7 @@
   <section id="settings" class="screen hidden" aria-labelledby="settings-title">
     <div class="card settings-card">
       <div class="settings-head">
-        <h2 id="settings-title" tabindex="-1">설정</h2>
+        <h2 id="settings-title" class="panel-title" tabindex="-1">설정</h2>
         <button id="settings-close" class="chip" type="button">닫기</button>
       </div>
       <p id="settings-store" class="hint warn settings-store" role="status"></p>
@@ -281,7 +295,7 @@
   <section id="journal" class="screen hidden" aria-labelledby="journal-title">
     <div class="card journal-card">
       <div class="settings-head">
-        <h2 id="journal-title" tabindex="-1">수첩</h2>
+        <h2 id="journal-title" class="panel-title" tabindex="-1">수첩</h2>
         <button id="journal-close" class="chip" type="button">닫기</button>
       </div>
       <p id="journal-progress" class="hint"></p>
@@ -297,6 +311,7 @@
   </section>
 
   <section id="story" class="story-layer hidden" aria-label="이야기 장면">
+    <div id="story-art" class="story-art" aria-hidden="true"><img alt="" decoding="async"></div>
     <div class="letterbox top"></div>
     <div class="letterbox bottom"></div>
     <div id="story-fade" class="story-fade"></div>
