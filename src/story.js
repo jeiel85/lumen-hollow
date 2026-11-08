@@ -91,7 +91,8 @@ export class Story {
     this.lightLevel = 0;
 
     const b = new Builder();
-    for (const clue of CLUES) if (chapterOf(clue) === 1) this._place(b, clue);
+    // 1장 기록은 기본 마을에만 둔다(자리가 기본 마을 배치에 맞춰 골라져 있다). 다른 마을(#59)은 1장을 마친 뒤에만 고를 수 있다.
+    if (world.village === 0) for (const clue of CLUES) if (chapterOf(clue) === 1) this._place(b, clue);
     this._lake(b);
     const mesh = new THREE.Mesh(b.build(), world.staticMat);
     mesh.castShadow = true;

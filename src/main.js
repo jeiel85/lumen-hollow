@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { World, CAR_SPAWN } from './world.js';
+import { World, CAR_SPAWN, DEFAULT_VILLAGE, MAX_VILLAGE, isVillage } from './world.js';
+import { load as loadKey, save as saveKey, remove as removeKey } from './storage.js';
 import { Environment } from './env.js';
 import { Post } from './post.js';
 import { Player, PLAYER_R } from './player.js';
@@ -24,7 +25,7 @@ import { Dialogue } from './dialogue.js';
 import { SCENES, FINALE, CHAPTERS } from './script.js';
 import { Chapters } from './chapters.js';
 import { Minimap } from './minimap.js';
-import { captureRun, writeRun, readRun, clearRun, restoreWorld, describeRun, RUN_KEY } from './runsave.js';
+import { captureRun, writeRun, readRun, clearRun, restoreWorld, describeRun, savedVillage, RUN_KEY } from './runsave.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -79,7 +80,21 @@ const CAM_DIST = 150;
 const SCREEN_RIGHT = new THREE.Vector3(1, 0, -1).normalize();
 const SCREEN_DOWN = new THREE.Vector3(1, 0, 1).normalize();
 
-const world = new World(scene, { mobile });
+// 마을 번호(#59). 새 판 화면에서 지금과 다른 마을을 고르면 번호와 할 일을 남기고 다시 열어 마을을 새로 짓는다
+// (마을 메시·충돌체·이야기 소품·미니맵을 판 사이에 다시 짓는 대신). 남긴 것이 없으면 저장된 판의 마을, 그것도 없으면 기본 마을.
+const BOOT_KEY = 'lumen.boot';
+const boot = (() => {
+  let raw = null;
+  try {
+    raw = JSON.parse(loadKey(BOOT_KEY));
+  } catch {
+    raw = null;
+  }
+  removeKey(BOOT_KEY);
+  if (raw && raw.v === 1 && isVillage(raw.village) && ['start', 'chapter', 'resume'].includes(raw.then)) return { village: raw.village, then: raw.then };
+  return { village: savedVillage(), then: null };
+})();
+const world = new World(scene, { mobile, village: boot.village });
 const env = new Environment(scene, { mobile });
 const post = new Post(renderer, { samples: QUALITY[settings.quality].samples });
 const player = new Player(scene, { mobile });
@@ -358,7 +373,8 @@ function beginRun({ chapter = false } = {}) {
   closePlace();
   caches.clear();
   hud.setOnline(false);
-  if (!chapter && online.enabled && hud.hasOnlineUi) bg(loadCaches(game.run));
+  // 공유 보급품은 기본 마을에만 있다(슬롯 자리가 기본 마을 배치에 묶여 있다, #59).
+  if (!chapter && online.enabled && hud.hasOnlineUi && world.village === DEFAULT_VILLAGE) bg(loadCaches(game.run));
   hud.setDriving(false);
   setScreen(null);
   hud.clearToasts();
@@ -407,9 +423,11 @@ function newGame() {
   const r = readRun(world);
   // 더 새 버전이 쓴 저장도 새 판이 덮어쓰므로 함께 알린다.
   const lose = r.status === 'ok' ? `진행 중인 판(${describeRun(r.run, world.totalZones)})이 지워져요.`
-    : r.status === 'newer' ? '더 새 버전에서 저장한 판이 지워져요.' : '';
+    : r.status === 'newer' ? '더 새 버전에서 저장한 판이 지워져요.'
+      : r.status === 'village' ? `${r.village ? `마을 ${r.village}` : '기본 마을'}에서 하던 판이 지워져요.` : '';
   newRunUi?.sync();
   renderDiffNote();
+  villageUi.sync();
   $('title-actions').classList.add('hidden');
   $('new-confirm').classList.remove('hidden');
   $('run-info').textContent = lose;
@@ -473,6 +491,11 @@ function saveRun() {
 function resumeGame() {
   if (game.contextLost || !game.ready) return;
   const r = readRun(world);
+  // 다른 마을에서 하던 판: 그 마을로 다시 열어 이어 간다(#59).
+  if (r.status === 'village') {
+    if (!reopenIn(r.village, 'resume')) renderRun();
+    return;
+  }
   if (r.status !== 'ok') {
     renderRun();
     return;
@@ -532,14 +555,17 @@ function renderRun() {
   const info = $('run-info');
   if (!btn || !info) return; // 배포 직후 캐시된 옛 index.html과 섞인 경우
   const r = readRun(world);
-  const ok = r.status === 'ok';
+  const away = r.status === 'village'; // 다른 마을에서 하던 판: 이어하기가 그 마을로 다시 연다
+  const ok = r.status === 'ok' || away;
   $('title-actions')?.classList.remove('hidden');
   $('new-confirm')?.classList.add('hidden');
   btn.classList.toggle('hidden', !ok);
+  btn.textContent = away ? `이어하기 · ${r.village ? `마을 ${r.village}` : '기본 마을'}` : '이어하기';
   $('start-btn').classList.toggle('ghost', ok);
   if (game.ready) $('start-btn').textContent = ok ? '새로 시작' : '시작하기';
-  if (ok) info.textContent = describeRun(r.run, world.totalZones);
+  if (r.status === 'ok') info.textContent = describeRun(r.run, world.totalZones);
   else if (r.status === 'layout') info.textContent = '게임이 업데이트되어 마을이 바뀌었어요. 지난 판은 이어 갈 수 없어요.';
+  else if (away) info.textContent = `${r.village ? `마을 ${r.village}` : '기본 마을'}에서 하던 판이 있어요. 이어하기를 누르면 그 마을로 다시 열어요.`;
   else if (r.status === 'newer') info.textContent = '더 새 버전에서 저장한 판이 있어요. 새로고침하면 이어 갈 수 있어요.';
   else info.textContent = '';
 }
@@ -588,7 +614,61 @@ function pauseGame(on) {
 // 일시정지 화면의 난이도 한 줄. 2~4장은 설정에서 바로 바꿀 수 있다.
 function renderPauseDiff() {
   const el = $('pause-diff');
-  if (el) el.textContent = `난이도 ${diffNow().label}${game.chapter ? ' · 설정에서 바꿀 수 있어요' : ''}`;
+  const village = !game.chapter && world.village !== DEFAULT_VILLAGE ? ` · 마을 ${world.village}` : '';
+  if (el) el.textContent = `난이도 ${diffNow().label}${game.chapter ? ' · 설정에서 바꿀 수 있어요' : village}`;
+}
+
+// 마을을 바꿔 다시 연다. then: 다시 연 뒤 할 일('start' 새 판, 'chapter' 2~4장, 'resume' 이어하기). 저장소가 막혀 남기지 못하면 false.
+function reopenIn(village, then) {
+  if (!saveKey(BOOT_KEY, JSON.stringify({ v: 1, village, then }))) return false;
+  document.body.classList.add('reopening');
+  location.reload();
+  return true;
+}
+
+// 새 판 화면의 마을 고르기(#59): 1장을 마친 뒤에만 보인다. 기본 마을 또는 번호(1~999999)로 정한 다른 마을.
+const villageUi = {
+  get open() {
+    return story.isSeen('finale');
+  },
+  rows: () => [$('new-village-row'), $('new-village-pick')],
+  sync() {
+    const [row, pick] = this.rows();
+    if (!row || !pick) return;
+    row.classList.toggle('hidden', !this.open);
+    const other = world.village !== DEFAULT_VILLAGE;
+    for (const r of document.querySelectorAll('input[name="new-village"]')) r.checked = r.value === (other ? 'other' : 'home');
+    $('new-village-num').value = String(other ? world.village : randomVillage());
+    this.show();
+  },
+  show() {
+    const other = this.open && document.querySelector('input[name="new-village"]:checked')?.value === 'other';
+    $('new-village-pick')?.classList.toggle('hidden', !other);
+    const note = $('new-village-note');
+    if (note) note.textContent = other ? '다른 마을에는 1장 기록과 다른 생존자의 보급품이 없어요. 번호를 알려 주면 같은 마을에서 할 수 있어요.' : '';
+  },
+  // 고른 마을 번호. 다른 마을인데 번호가 틀렸으면 null.
+  value() {
+    if (!this.open || document.querySelector('input[name="new-village"]:checked')?.value !== 'other') return DEFAULT_VILLAGE;
+    const v = Number($('new-village-num').value);
+    return isVillage(v) && v !== DEFAULT_VILLAGE ? v : null;
+  },
+};
+const randomVillage = () => 1 + Math.floor(Math.random() * MAX_VILLAGE);
+
+// 새 판 화면의 '시작': 지금 마을이면 바로, 다른 마을이면 그 마을로 다시 열어 시작한다.
+function confirmNewGame() {
+  const v = villageUi.value();
+  if (v === null) {
+    $('new-village-note').textContent = `마을 번호는 1부터 ${MAX_VILLAGE}까지예요.`;
+    $('new-village-num').focus();
+    return;
+  }
+  if (v === world.village) {
+    startGame();
+    return;
+  }
+  if (!reopenIn(v, 'start')) $('new-village-note').textContent = '이 브라우저는 저장소를 막아 두어 다른 마을을 열 수 없어요.';
 }
 
 // 끝 화면의 단추: 1장 승리(산책·다음 장), 1장·2~4장 패배(다시 하기), 이야기 끝(수첩·처음 화면)
@@ -1225,6 +1305,11 @@ function startChapter() {
     renderChapter();
     return;
   }
+  // 2~4장은 기본 마을에서 이어진다(나루터·호수가 기본 마을 배치에 맞춰져 있다). 다른 마을이면 기본 마을로 다시 열고 시작한다.
+  if (world.village !== DEFAULT_VILLAGE) {
+    reopenIn(DEFAULT_VILLAGE, 'chapter');
+    return;
+  }
   if (game.driving) leaveCar();
   car.lamp = false;
   world.setTruckLamp(car.pos.x, car.pos.z, false);
@@ -1687,7 +1772,9 @@ function togglePlace() {
     return;
   }
   if (!game.onlineLive) {
-    if (online.available && hud.hasOnlineUi) {
+    if (online.available && hud.hasOnlineUi && world.village !== DEFAULT_VILLAGE) {
+      hud.toast('다른 마을에서는 보급품을 주고받을 수 없다. 기본 마을에서만 다른 생존자와 이어진다.');
+    } else if (online.available && hud.hasOnlineUi) {
       if (!online.enabled) hud.toast('온라인 보급품이 꺼져 있다. 처음 화면의 설정에서 켤 수 있다.');
       else if (game.onlinePaused) hud.toast('온라인 보급품이 잠시 꺼져 있다.');
       else hud.toast('다른 생존자와 연결되지 않아 지금은 남길 수 없다.');
@@ -2456,7 +2543,19 @@ function frame(now) {
 
 $('start-btn').addEventListener('click', newGame);
 $('resume-run-btn')?.addEventListener('click', resumeGame);
-$('new-yes')?.addEventListener('click', startGame);
+$('new-yes')?.addEventListener('click', confirmNewGame);
+for (const r of document.querySelectorAll('input[name="new-village"]')) r.addEventListener('change', () => villageUi.show());
+$('new-village-roll')?.addEventListener('click', () => {
+  $('new-village-num').value = String(randomVillage());
+});
+// 번호 칸에 치는 글자는 게임 조작(소리 끄기 M 등)으로 넘기지 않고, 숫자만 남긴다.
+$('new-village-num')?.addEventListener('keydown', (e) => {
+  e.stopPropagation();
+  if (e.key === 'Enter') confirmNewGame();
+});
+$('new-village-num')?.addEventListener('input', (e) => {
+  e.target.value = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+});
 $('new-no')?.addEventListener('click', cancelNewGame);
 $('closet-btn')?.addEventListener('click', openCloset);
 $('closet-close')?.addEventListener('click', closeCloset);
@@ -2647,5 +2746,7 @@ warmUp().then(() => {
   setContextLost(game.contextLost ?? false);
   // 사전 컴파일이 메인 스레드를 오래 막는 느린 기기에서 요청 시간 제한이 헛걸리지 않게, 준비가 끝난 뒤 소식을 받는다.
   renderOnline();
-  if (params.get('start') === '1') startGame();
+  if (params.get('start') === '1' || boot.then === 'start') startGame();
+  else if (boot.then === 'chapter') startChapter();
+  else if (boot.then === 'resume') resumeGame();
 });

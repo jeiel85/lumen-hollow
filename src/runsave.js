@@ -1,5 +1,5 @@
 import { load, save, remove } from './storage.js';
-import { BOUND } from './world.js';
+import { BOUND, DEFAULT_VILLAGE, isVillage } from './world.js';
 import { phaseName } from './env.js';
 import { RUN_TAKE_LIMIT } from './online.js';
 import { DIFFICULTY, DEFAULT_LEVEL, isLevel } from './difficulty.js';
@@ -54,6 +54,8 @@ export function captureRun({ world, player, car, env, game, shades }) {
   return {
     v: RUN_VERSION,
     savedAt: Date.now(),
+    // 마을 번호(#59). 기본 마을이면 빠진다. 처음 화면을 열 때 이 번호로 마을을 짓는다(savedVillage).
+    ...(world.village !== DEFAULT_VILLAGE ? { village: world.village } : {}),
     layout: layoutPrint(world),
     loot,
     zones: Object.values(world.zones).filter((z) => z.powered).map((z) => ({ id: z.id, on: z.on, tripped: z.tripped, load: r3(z.load) })),
@@ -103,6 +105,9 @@ export function readRun(world) {
     raw = null;
   }
   if (obj(raw) && Number.isInteger(raw.v) && raw.v > RUN_VERSION) return { status: 'newer' };
+  // 다른 마을의 판: 지우지 않는다(그 마을로 다시 열면 이어 갈 수 있다).
+  const village = obj(raw) && isVillage(raw.village) ? raw.village : DEFAULT_VILLAGE;
+  if (obj(raw) && raw.v === RUN_VERSION && village !== world.village) return { status: 'village', village };
   if (obj(raw) && raw.v === RUN_VERSION && typeof raw.layout === 'string' && raw.layout !== layoutPrint(world)) return { status: 'layout' };
   const run = obj(raw) && raw.v === RUN_VERSION ? validate(raw, world) : null;
   if (!run) {
@@ -145,6 +150,7 @@ function validate(raw, world) {
 
   return {
     savedAt: raw.savedAt,
+    village: world.village,
     loot,
     zones: outZones,
     env: { day: env.day, hour: env.hour % 24, rainyNight: env.rainyNight, rain: env.rain },
@@ -197,9 +203,20 @@ export function restoreWorld(world, run) {
   }
 }
 
+// 저장된 판의 마을 번호. 마을을 짓기 전(처음 화면을 열 때)에 읽으므로 형식만 본다. 판이 없거나 읽을 수 없으면 기본 마을.
+export function savedVillage() {
+  try {
+    const raw = JSON.parse(load(RUN_KEY));
+    return obj(raw) && raw.v === RUN_VERSION && isVillage(raw.village) ? raw.village : DEFAULT_VILLAGE;
+  } catch {
+    return DEFAULT_VILLAGE;
+  }
+}
+
 // 처음 화면에 보여 줄 한 줄 요약
 export function describeRun(run, totalZones) {
   const nights = run.run.nights ? ` · 버틴 밤 ${run.run.nights}번` : '';
   const level = run.run.diff !== DEFAULT_LEVEL ? ` · ${DIFFICULTY[run.run.diff].label}` : '';
-  return `${run.env.day}일째 ${phaseName(run.env.hour)} · 밝힌 구역 ${run.zones.length}/${totalZones}${nights}${level}`;
+  const village = run.village ? ` · 마을 ${run.village}` : '';
+  return `${run.env.day}일째 ${phaseName(run.env.hour)} · 밝힌 구역 ${run.zones.length}/${totalZones}${nights}${level}${village}`;
 }
