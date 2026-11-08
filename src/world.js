@@ -47,7 +47,7 @@ const ZONE_MAP = ['AABCC', 'AABCC', 'DDHEE', 'FFGII', 'FFGII'];
 export const ZONE_GRID = ['ABC', 'DHE', 'FGI'];
 
 export const ZONE_NAMES = {
-  A: '서북 농장', B: '약국 거리', C: '동북 주택가', D: '서쪽 공원', E: '다이너 거리',
+  A: '서북 농장', B: '약국 거리', C: '동북 주택가', D: '서쪽 공원', E: '골목식당 거리',
   F: '헛간 들판', G: '남쪽 광장', H: '은신처', I: '동남 주택가',
 };
 
@@ -71,9 +71,9 @@ export function makeBeaconMaterial(color) {
   });
 }
 
-// 한글 간판. [글귀, 바탕, 글자색]. 약국·다이너는 이야기에 나오는 가게라 따로 고정한다.
+// 한글 간판. [글귀, 바탕, 글자색]. 약국·골목식당은 이야기에 나오는 가게라 따로 고정한다.
 const SIGNS = [
-  ['약국', '#2f7d5a', '#ffffff'], ['다이너', '#b34d5a', '#fff3e6'],
+  ['약국', '#2f7d5a', '#ffffff'], ['골목식당', '#b34d5a', '#fff3e6'],
   ['슈퍼', '#c8372d', '#ffffff'], ['철물점', '#2d5f9a', '#ffffff'], ['세탁소', '#ffffff', '#2d5f9a'],
   ['다방', '#6a3b2a', '#ffe7b8'], ['미용실', '#ffffff', '#c8372d'], ['분식', '#f2c230', '#2a1c10'],
   ['문구사', '#3f8a5a', '#ffffff'], ['정육점', '#ffffff', '#b8241f'], ['식당', '#c8372d', '#fff3c4'],
@@ -101,6 +101,8 @@ function makeSignAtlas() {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     const size = text.length > 3 ? 36 : 44;
+    // 한글 글꼴은 주요 운영체제에 다 있다(윈도 맑은 고딕, 애플 SD 산돌고딕, 안드로이드 Noto Sans CJK). 없는 기기(한글 글꼴 없는 리눅스)는
+    // 빈 상자가 될 수 있어, 간판 글귀만 담은 부분 글꼴을 함께 둘지는 Backlog(#25).
     g.font = `800 ${size}px "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", "Noto Sans CJK KR", sans-serif`;
     g.fillText(text, x + cw / 2, y + ch / 2 + 2, cw - 24);
   });
@@ -132,38 +134,176 @@ export function makePoolTexture() {
   return t;
 }
 
-// 원(반지름 r) vs 정적 충돌체 목록(t: 0 축 정렬 상자, t: 1 원). p를 직접 밀어낸다. 마을과 2~4장 무대가 함께 쓴다.
-export function pushOut(colliders, p, r) {
-  for (const c of colliders) {
-    if (c.t === 0) {
-      if (p.x < c.x0 - r || p.x > c.x1 + r || p.z < c.z0 - r || p.z > c.z1 + r) continue;
-      const nx = Math.min(Math.max(p.x, c.x0), c.x1);
-      const nz = Math.min(Math.max(p.z, c.z0), c.z1);
-      const dx = p.x - nx;
-      const dz = p.z - nz;
-      const d2 = dx * dx + dz * dz;
-      if (d2 >= r * r) continue;
-      if (d2 > 1e-8) {
-        const d = Math.sqrt(d2);
-        p.x = nx + (dx / d) * r;
-        p.z = nz + (dz / d) * r;
-      } else {
-        const l = p.x - c.x0, rr = c.x1 - p.x, u = p.z - c.z0, dd = c.z1 - p.z;
-        const m = Math.min(l, rr, u, dd);
-        if (m === l) p.x = c.x0 - r;
-        else if (m === rr) p.x = c.x1 + r;
-        else if (m === u) p.z = c.z0 - r;
-        else p.z = c.z1 + r;
+// 시야를 가리는 충돌체: 건물·차처럼 두께가 있는 상자만(울타리·전봇대·나무 줄기는 손전등 빛이 넘어간다).
+export function sightBoxes(colliders) {
+  return colliders.filter((c) => c.t === 0 && Math.min(c.x1 - c.x0, c.z1 - c.z0) >= 0.6);
+}
+
+// 선분 a→b가 상자 가운데 하나라도 지나는가(손전등·전조등이 벽 너머를 비추지 못하게, #14). 슬랩 방식.
+export function segmentBlocked(boxes, ax, az, bx, bz) {
+  const dx = bx - ax;
+  const dz = bz - az;
+  for (const c of boxes) {
+    if (Math.max(ax, bx) < c.x0 || Math.min(ax, bx) > c.x1 || Math.max(az, bz) < c.z0 || Math.min(az, bz) > c.z1) continue;
+    let t0 = 0;
+    let t1 = 1;
+    let hit = true;
+    for (const [o, d, lo, hi] of [[ax, dx, c.x0, c.x1], [az, dz, c.z0, c.z1]]) {
+      if (Math.abs(d) < 1e-9) {
+        if (o < lo || o > hi) { hit = false; break; }
+        continue;
       }
-    } else {
-      const dx = p.x - c.x;
-      const dz = p.z - c.z;
-      const rr = c.r + r;
-      const d2 = dx * dx + dz * dz;
-      if (d2 >= rr * rr || d2 < 1e-8) continue;
+      let u = (lo - o) / d;
+      let v = (hi - o) / d;
+      if (u > v) [u, v] = [v, u];
+      t0 = Math.max(t0, u);
+      t1 = Math.min(t1, v);
+      if (t0 > t1) { hit = false; break; }
+    }
+    if (hit) return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------- 충돌체 격자
+// 정적 충돌체(t: 0 축 정렬 상자, t: 1 원)를 한 변 GRID_CELL m 칸에 나눠 담아, 질의 근처 칸에 걸친 것만 훑는다
+// (마을은 충돌체가 약 930개라 매번 전부 훑으면 트럭·플레이어 충돌이 그만큼 돈다).
+// 충돌체는 만든 뒤 움직이지 않고 목록 끝에 더해지기만 한다(이야기 소품이 마을 생성 뒤에 더해진다).
+// 그래서 목록 길이나 마지막 충돌체가 달라졌을 때만 다시 만든다. 목록 배열(마을·2~4장 무대)마다 따로 둔다.
+// 충돌체를 제자리에서 옮기거나 바꿔 끼우면 격자가 따라가지 못한다(그럴 땐 목록을 새로 만든다).
+const GRID_CELL = 4;
+const GRID_MIN = 48; // 이보다 적으면 격자 없이 전부 훑는다(2~4장 무대처럼 작은 목록)
+const grids = new WeakMap();
+
+function gridOf(colliders) {
+  const n = colliders.length;
+  let g = grids.get(colliders);
+  if (g && g.n === n && g.last === colliders[n - 1]) return g;
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+  const box = new Float64Array(n * 4); // 충돌체마다 경계 상자(x0, z0, x1, z1)
+  for (let i = 0; i < n; i++) {
+    const c = colliders[i];
+    const b = c.t === 0 ? [c.x0, c.z0, c.x1, c.z1] : [c.x - c.r, c.z - c.r, c.x + c.r, c.z + c.r];
+    box.set(b, i * 4);
+    x0 = Math.min(x0, b[0]);
+    z0 = Math.min(z0, b[1]);
+    x1 = Math.max(x1, b[2]);
+    z1 = Math.max(z1, b[3]);
+  }
+  const cols = Math.max(1, Math.floor((x1 - x0) / GRID_CELL) + 1);
+  const rows = Math.max(1, Math.floor((z1 - z0) / GRID_CELL) + 1);
+  const cellX = (x) => Math.min(cols - 1, Math.max(0, Math.floor((x - x0) / GRID_CELL)));
+  const cellZ = (z) => Math.min(rows - 1, Math.max(0, Math.floor((z - z0) / GRID_CELL)));
+  // 칸마다 충돌체 번호(오름차순)를 이어 붙인 배열(start[k]..start[k+1])
+  const start = new Int32Array(cols * rows + 1);
+  const each = (i, fn) => {
+    const ca = cellX(box[i * 4]), cb = cellX(box[i * 4 + 2]);
+    const ra = cellZ(box[i * 4 + 1]), rb = cellZ(box[i * 4 + 3]);
+    for (let r = ra; r <= rb; r++) for (let c = ca; c <= cb; c++) fn(r * cols + c);
+  };
+  for (let i = 0; i < n; i++) each(i, (k) => start[k + 1]++);
+  for (let k = 0; k < cols * rows; k++) start[k + 1] += start[k];
+  const items = new Int32Array(start[cols * rows]);
+  const fill = start.slice(0, cols * rows);
+  for (let i = 0; i < n; i++) each(i, (k) => { items[fill[k]++] = i; });
+  g = { n, last: colliders[n - 1], x0, z0, x1, z1, cols, rows, cellX, cellZ, start, items, seen: new Uint32Array(n), stamp: 0 };
+  grids.set(colliders, g);
+  return g;
+}
+
+// 사각형 [x0, x1]×[z0, z1]에 걸친 칸에 든 충돌체 번호를 목록 순서(오름차순)로 out에 담아 돌려준다.
+// 칸 단위로 고르므로 실제로는 닿지 않는 것도 섞여 있다(정확한 판정은 부르는 쪽이 한다).
+export function queryColliders(colliders, x0, z0, x1, z1, out = []) {
+  out.length = 0;
+  const n = colliders.length;
+  if (n < GRID_MIN) {
+    for (let i = 0; i < n; i++) out.push(i);
+    return out;
+  }
+  const g = gridOf(colliders);
+  if (x1 < g.x0 || x0 > g.x1 || z1 < g.z0 || z0 > g.z1) return out;
+  const ca = g.cellX(x0), cb = g.cellX(x1), ra = g.cellZ(z0), rb = g.cellZ(z1);
+  if (++g.stamp === 0xffffffff) {
+    g.seen.fill(0);
+    g.stamp = 1;
+  }
+  const { start, items, seen, stamp } = g;
+  for (let r = ra; r <= rb; r++) {
+    for (let c = ca; c <= cb; c++) {
+      const k = r * g.cols + c;
+      for (let j = start[k]; j < start[k + 1]; j++) {
+        const i = items[j];
+        if (seen[i] === stamp) continue;
+        seen[i] = stamp;
+        out.push(i);
+      }
+    }
+  }
+  // 칸마다는 이미 오름차순이라 한 칸이면 그대로, 여러 칸이면 삽입 정렬(보통 수십 개 안쪽)
+  if (ca !== cb || ra !== rb) {
+    for (let a = 1; a < out.length; a++) {
+      const v = out[a];
+      let b = a - 1;
+      while (b >= 0 && out[b] > v) {
+        out[b + 1] = out[b];
+        b--;
+      }
+      out[b + 1] = v;
+    }
+  }
+  return out;
+}
+
+// 원 p(반지름 r)를 충돌체 c 하나에서 밀어낸다.
+function pushOne(c, p, r) {
+  if (c.t === 0) {
+    if (p.x < c.x0 - r || p.x > c.x1 + r || p.z < c.z0 - r || p.z > c.z1 + r) return;
+    const nx = Math.min(Math.max(p.x, c.x0), c.x1);
+    const nz = Math.min(Math.max(p.z, c.z0), c.z1);
+    const dx = p.x - nx;
+    const dz = p.z - nz;
+    const d2 = dx * dx + dz * dz;
+    if (d2 >= r * r) return;
+    if (d2 > 1e-8) {
       const d = Math.sqrt(d2);
-      p.x = c.x + (dx / d) * rr;
-      p.z = c.z + (dz / d) * rr;
+      p.x = nx + (dx / d) * r;
+      p.z = nz + (dz / d) * r;
+    } else {
+      const l = p.x - c.x0, rr = c.x1 - p.x, u = p.z - c.z0, dd = c.z1 - p.z;
+      const m = Math.min(l, rr, u, dd);
+      if (m === l) p.x = c.x0 - r;
+      else if (m === rr) p.x = c.x1 + r;
+      else if (m === u) p.z = c.z0 - r;
+      else p.z = c.z1 + r;
+    }
+  } else {
+    const dx = p.x - c.x;
+    const dz = p.z - c.z;
+    const rr = c.r + r;
+    const d2 = dx * dx + dz * dz;
+    if (d2 >= rr * rr || d2 < 1e-8) return;
+    const d = Math.sqrt(d2);
+    p.x = c.x + (dx / d) * rr;
+    p.z = c.z + (dz / d) * rr;
+  }
+}
+
+const PUSH_MARGIN = 0.5;
+const _near = [];
+
+// 원(반지름 r) vs 정적 충돌체 목록. p를 직접 밀어낸다. 마을과 2~4장 무대가 함께 쓴다.
+// 목록 전체를 차례로 밀어내는 것과 결과가 같다: 격자로 고른 후보를 목록 순서대로 밀다가, 원이 질의 범위
+// (처음 자리 ± r + PUSH_MARGIN) 밖으로 밀려나면 남은 충돌체를 목록에서 차례로 마저 훑는다.
+export function pushOut(colliders, p, r) {
+  const m = r + PUSH_MARGIN;
+  const qx0 = p.x - m, qx1 = p.x + m, qz0 = p.z - m, qz1 = p.z + m;
+  const near = queryColliders(colliders, qx0, qz0, qx1, qz1, _near);
+  for (let k = 0; k < near.length; k++) {
+    const i = near[k];
+    pushOne(colliders[i], p, r);
+    if (p.x - r < qx0 || p.x + r > qx1 || p.z - r < qz0 || p.z + r > qz1) {
+      for (let j = i + 1; j < colliders.length; j++) pushOne(colliders[j], p, r);
+      return;
     }
   }
 }
@@ -173,6 +313,8 @@ export class World {
     this.root = new THREE.Group();
     scene.add(this.root);
     this.sb = new Builder();
+    // 전선 굵기: 휴대폰(낮은 DPR·작은 화면)에서는 0.05m가 1px보다 가늘어 끊기거나 반짝여 보여 조금 굵게(#25)
+    this.wireW = mobile ? 0.08 : 0.05;
     this.colliders = [];
     this.lamps = [];
     this.signs = [];
@@ -426,7 +568,13 @@ export class World {
     this.colliders.push(f.aabb(0, 0, w + 0.24, d + 0.24));
     if (o.loot !== false) this._addLoot(f.px(doorX, d / 2 + 2.0), f.pz(doorX, d / 2 + 2.0), ctx);
     // 은신처(loot: false)는 주인공의 집이라 빼고, 나머지 집 현관 위 창가를 기억해 둔다.
-    if (o.loot !== false) this.homes.push({ x: f.px(doorX, d / 2 + 0.3), y: y0 + 2.2, z: f.pz(doorX, d / 2 + 0.3), zone });
+    // nx, nz: 현관 쪽 벽이 바라보는 방향(깨어난 집의 창에 불을 켤 때 쓴다)
+    if (o.loot !== false) {
+      this.homes.push({
+        x: f.px(doorX, d / 2 + 0.3), y: y0 + 2.2, z: f.pz(doorX, d / 2 + 0.3), zone,
+        nx: f.px(0, 1) - f.px(0, 0), nz: f.pz(0, 1) - f.pz(0, 0),
+      });
+    }
     return { f, w, d, doorX, top };
   }
 
@@ -579,7 +727,7 @@ export class World {
       ];
       this._neon(zone, parts, new THREE.Color(0.15, 1.0, 0.45), { x: f.px(lx + 0.8, lz), y: ly - 0.4, z: f.pz(lx + 0.8, lz) }, 22);
     } else if (variant === 'diner') {
-      const s = this._shop(cx, cz + 4.6, 0, ctx, { w: 15, d: 7.4, floors: 1, wall: 0xe8dcc4, awning: 0xb34d5a, signColor: 0xc96a76, doorX: 2.5, signText: '다이너' });
+      const s = this._shop(cx, cz + 4.6, 0, ctx, { w: 15, d: 7.4, floors: 1, wall: 0xe8dcc4, awning: 0xb34d5a, signColor: 0xc96a76, doorX: 2.5, signText: '골목식당' });
       const { f, w, d, top } = s;
       const pink = new THREE.Color(1.0, 0.28, 0.55);
       this._neon(zone, [{ x: f.px(0, d / 2 + 0.16), y: top - 0.3, z: f.pz(0, d / 2 + 0.16), sx: w - 0.4, sy: 0.08, sz: 0.06, ry: f.a }], pink, { x: f.px(-3, d / 2 + 1.2), y: top - 0.6, z: f.pz(-3, d / 2 + 1.2) }, 10);
@@ -746,6 +894,49 @@ export class World {
     this._circleCollider(binX, binZ, 0.35);
     this._addLoot(cx + 3.6, cz + 0.6, ctx);
     if (rng.chance(0.6)) this._addLoot(binX - 0.8, binZ, ctx);
+    this._parkFurniture(cx, cz, q, ctx);
+  }
+
+  // 공원의 정자와 운동기구(#25 읍내 공원). 마을 난수(rng)도 공용 장식 난수(this.deco)도 쓰지 않고 블록마다 따로 씨를 둔다 —
+  // 뒤따르는 장식·충돌체 자리와 보급품 슬롯·기록 자리가 바뀌지 않게. 연못 반대쪽부터 나무·벤치·뒤질 곳과 겹치지 않는 자리에 둔다.
+  _parkFurniture(cx, cz, pond, ctx) {
+    const r = new Rng(7000 + ctx.row * 5 + ctx.col);
+    // 연못이 없는 세 사분면의 후보 점들(길에서 2.6m, 담에서 2.4m 떨어진 곳). 연못 반대쪽 사분면을 먼저 본다.
+    const quads = [[-pond[0], -pond[1]], ...(r.chance(0.5) ? [[pond[0], -pond[1]], [-pond[0], pond[1]]] : [[-pond[0], pond[1]], [pond[0], -pond[1]]])];
+    const spots = [];
+    for (const [sx, sz] of quads) for (const [a, c] of [[5.2, 5.2], [4.0, 6.6], [6.6, 4.0], [4.0, 4.0], [6.6, 6.6]]) spots.push([cx + sx * a, cz + sz * c]);
+    const free = (x, z, need) => this.colliders.every((c) => (c.t === 1
+      ? Math.hypot(c.x - x, c.z - z) > need + c.r
+      : x < c.x0 - need || x > c.x1 + need || z < c.z0 - need || z > c.z1 + need))
+      && this.loot.every((l) => Math.hypot(l.x - x, l.z - z) > need + 0.8);
+    const b = this.sb;
+    const at = spots.findIndex(([x, z]) => free(x, z, 3.1)); // 지붕 반폭 2.2 + 나무 갓 약 1.2 — 줄기 충돌체(0.35) 밖으로 이만큼
+    if (at >= 0) {
+      // 정자: 낮은 마루, 기둥 넷, 기와지붕(사각뿔)
+      const [x, z] = spots.splice(at, 1)[0];
+      const f = new Frame(x, z, r.range(-0.2, 0.2));
+      f.add(b, geo.box(), 0, LOT_Y + 0.06, 0, 2.8, 0.1, 2.8, 0x8a6a4a);
+      for (const [px, pz] of [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2]]) {
+        f.add(b, geo.cyl(6, 0.5), px, LOT_Y + 1.15, pz, 0.2, 2.1, 0.2, 0x7a4a2e);
+        this._circleCollider(f.px(px, pz), f.pz(px, pz), 0.16);
+      }
+      f.add(b, geo.box(), 0, LOT_Y + 2.25, 0, 3.0, 0.14, 3.0, 0x6a3f28);
+      f.add(b, geo.cone(4), 0, LOT_Y + 2.85, 0, 4.4, 1.1, 4.4, 0x3d4448, Math.PI / 4);
+    }
+    const at2 = spots.findIndex(([x, z]) => free(x, z, 1.8));
+    if (at2 >= 0) {
+      // 운동기구: 철봉과 허리 돌리기 원판
+      const [x, z] = spots[at2];
+      const f = new Frame(x, z, r.range(0, Math.PI));
+      for (const s of [-0.8, 0.8]) {
+        f.add(b, geo.cyl(6, 0.5), s, LOT_Y + 1.0, 0, 0.12, 2.0, 0.12, 0x4f7f9a);
+        this._circleCollider(f.px(s, 0), f.pz(s, 0), 0.12);
+      }
+      f.add(b, geo.cyl(6, 0.5), 0, LOT_Y + 1.95, 0, 0.07, 1.7, 0.07, 0xc8c2b4, 0, 0, Math.PI / 2);
+      f.add(b, geo.cyl(10, 1), 0, LOT_Y + 0.12, 1.3, 0.8, 0.08, 0.8, 0xd8a33a);
+      f.add(b, geo.cyl(6, 0.5), 0, LOT_Y + 0.6, 1.3, 0.1, 1.0, 0.1, 0x4f7f9a);
+      this._circleCollider(f.px(0, 1.3), f.pz(0, 1.3), 0.4);
+    }
   }
 
   _farm(ctx, withBarn) {
@@ -1003,7 +1194,7 @@ export class World {
       const ry = Math.atan2(dx, dz);
       const rx = Math.atan2(-dy, h);
       const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, mz = (z0 + z1) / 2;
-      this.sb.add(geo.box(), mx, my, mz, 0.05, 0.05, len + 0.02, C.wire, ry, rx);
+      this.sb.add(geo.box(), mx, my, mz, this.wireW, this.wireW, len + 0.02, C.wire, ry, rx);
       if (spark) {
         const zid = spark((i + 0.5) / n);
         if (zid) (this.wireSparks[zid] ??= new Builder()).add(geo.box(), mx, my, mz, 0.11, 0.11, len + 0.02, 0xffffff, ry, rx);
@@ -1245,14 +1436,17 @@ export class World {
     return best;
   }
 
-  // 아직 아무도 찾지 않았고 알려 주지도 않은 퓨즈 가운데 (x, z)에서 가장 가까운 것
-  hiddenFuseNear(x, z) {
+  // 촛불 단서를 둘 숨은 퓨즈: 단서가 가장 적게 놓인 구역을 먼저 고르고, 그 안에서 (x, z)에 가장 가까운 것.
+  // 한곳에서만 버텨도 단서가 그 주변에 몰리지 않고 마을에 고르게 퍼진다(#28).
+  hiddenFuseSpread(x, z) {
+    const hints = {};
+    for (const l of this.loot) if (l.hinted) hints[this.zoneAt(l.x, l.z)] = (hints[this.zoneAt(l.x, l.z)] ?? 0) + 1;
     let best = null;
-    let bd = Infinity;
+    let bs = Infinity;
     for (const l of this.loot) {
       if (l.item !== 'fuse' || l.searched || l.hinted) continue;
-      const d = (l.x - x) ** 2 + (l.z - z) ** 2;
-      if (d < bd) { bd = d; best = l; }
+      const score = (hints[this.zoneAt(l.x, l.z)] ?? 0) * 1e6 + (l.x - x) ** 2 + (l.z - z) ** 2;
+      if (score < bs) { bs = score; best = l; }
     }
     return best;
   }
@@ -1486,6 +1680,12 @@ export class World {
     return Math.abs(x) <= BOUND && Math.abs(z) <= BOUND;
   }
 
+  // a에서 b가 건물에 가려 보이지 않는가(손전등이 벽 너머를 태우지 않게)
+  blocksSight(ax, az, bx, bz) {
+    this._sight ??= sightBoxes(this.colliders);
+    return segmentBlocked(this._sight, ax, az, bx, bz);
+  }
+
   // 켜진 가로등(또는 트럭 작업등) 불빛 안인지. 안이면 빛의 중심·거리·안전 반경을 돌려준다.
   // 깜박임(glow)이 아니라 켜진 정도(level)로 판단해, 과부하로 깜박이는 동안 경계가 흔들리지 않게 한다.
   lightAt(x, z) {
@@ -1541,9 +1741,17 @@ export class World {
     T.glow = tg;
     const tn = this.lamps.length;
     const ts = T.level > 0 ? T.r * 2.3 : 0;
-    this.pools.setMatrixAt(tn, _mat4.makeScale(ts, 1, ts).setPosition(T.x, 0.2, T.z));
+    // 웅덩이 행렬은 트럭 작업등 칸만 움직인다. 바뀐 때만 그 한 칸만 올린다(#21).
+    const pk = this._poolKey ??= { s: -1, x: 0, z: 0 };
+    if (ts !== pk.s || (ts > 0 && (T.x !== pk.x || T.z !== pk.z))) {
+      Object.assign(pk, { s: ts, x: T.x, z: T.z });
+      this.pools.setMatrixAt(tn, _mat4.makeScale(ts, 1, ts).setPosition(T.x, 0.2, T.z));
+      const im = this.pools.instanceMatrix;
+      im.clearUpdateRanges();
+      im.addUpdateRange(tn * 16, 16);
+      im.needsUpdate = true;
+    }
     this.pools.setColorAt(tn, _col.setRGB(1.0, 0.82, 0.6).multiplyScalar(tg * 0.42));
-    this.pools.instanceMatrix.needsUpdate = true;
 
     for (let i = 0; i < this.lamps.length; i++) {
       const g = this.zones[this.lamps[i].zone].glow * night;

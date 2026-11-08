@@ -42,6 +42,7 @@
       "./src/geometry.js": "./src/geometry.js?v=__BUILD__",
       "./src/hud.js": "./src/hud.js?v=__BUILD__",
       "./src/input.js": "./src/input.js?v=__BUILD__",
+      "./src/minimap.js": "./src/minimap.js?v=__BUILD__",
       "./src/online.js": "./src/online.js?v=__BUILD__",
       "./src/player.js": "./src/player.js?v=__BUILD__",
       "./src/post.js": "./src/post.js?v=__BUILD__",
@@ -78,6 +79,12 @@
       </div>
     </div>
     <div id="fps" class="fps mono hidden" aria-hidden="true"></div>
+    <canvas id="minimap" class="minimap" role="button" tabindex="0" aria-label="지도 펼치기 (V)" aria-expanded="false" aria-controls="map" title="지도 (V)"></canvas>
+    <div id="map" class="map-panel hidden" role="dialog" aria-label="지도">
+      <div class="map-head"><span id="map-title" class="map-title">마을 지도</span><button id="map-close" class="chip" type="button">닫기<span class="key wide-only">V</span></button></div>
+      <canvas id="map-canvas" class="map-canvas" aria-hidden="true"></canvas>
+      <ul id="map-legend" class="map-legend"></ul>
+    </div>
     <p id="objective" class="objective hidden" aria-live="polite"></p>
     <div id="npc-tags" class="npc-tags" aria-hidden="true"></div>
     <div class="hud-bottom">
@@ -88,7 +95,7 @@
         <div id="load-wrap" class="bar load hidden"><span id="load-label" class="label">가로등 부하</span><div class="track"><div id="load-fill" class="fill"></div></div></div>
         <div class="inv"><span class="item">퓨즈 <b id="inv-fuse">1</b></span><span class="item">붕대 <b id="inv-band">0</b></span><span class="item">연료통 <b id="inv-can">0</b></span></div>
       </div>
-      <div id="key-hints" class="keys">WASD 이동 · 마우스 조준 · F/클릭 손전등 · E 길게 상호작용 · Q 붕대 · Tab 배전반 · 휠 줌 · Esc 일시정지</div>
+      <div id="key-hints" class="keys">WASD 이동 · 마우스 조준 · F/클릭 손전등 · E 길게 상호작용 · Q 붕대 · Tab 배전반 · V 지도 · 휠 줌 · Esc 일시정지</div>
     </div>
     <div id="prompt" class="prompt hidden"><span id="prompt-text"></span><div class="prompt-bar"><div id="prompt-fill"></div></div></div>
     <div id="toasts" class="toasts" aria-live="polite"></div>
@@ -139,14 +146,10 @@
           <button id="settings-btn" class="chip" type="button">설정</button>
           <button id="install-btn" class="chip hidden" type="button">앱으로 설치</button>
         </div>
+        <p id="update-note" class="update-note hidden" role="status">새 버전이 준비됐어요. <button id="update-reload" class="chip" type="button">다시 열기</button></p>
         <p id="best" class="best"></p>
         <div id="online" class="online hidden">
           <p id="online-summary" class="online-summary"></p>
-          <div class="online-row">
-            <button id="online-toggle" class="chip" type="button" aria-pressed="true">온라인 보급품 켜짐</button>
-            <button id="online-forget" class="chip" type="button">내 온라인 기록 지우기</button>
-          </div>
-          <p class="online-note">다른 생존자가 남긴 보급품을 주고받아요. 무작위 ID와 보급품 위치만 서버에 저장하고, 이름·글·IP 원문은 저장하지 않아요.</p>
         </div>
       </div>
       <ul class="howto">
@@ -161,12 +164,13 @@
     </div>
   </section>
 
-  <section id="closet" class="screen closet hidden" aria-label="옷장">
+  <section id="closet" class="screen closet hidden" aria-labelledby="closet-title">
     <div class="card closet-panel">
-      <div class="closet-head"><h2>옷장</h2><span id="closet-count" class="closet-count"></span></div>
+      <div class="closet-head"><h2 id="closet-title" tabindex="-1">옷장</h2><span id="closet-count" class="closet-count"></span></div>
+      <p id="closet-store" class="hint warn closet-store" role="status"></p>
       <div id="closet-tabs" class="closet-tabs" role="group" aria-label="부위"></div>
       <div id="closet-grid" class="closet-grid"></div>
-      <p class="closet-note">잠긴 옷가지는 마을 어딘가에 빛나는 꾸러미로 떨어져 있다. 한 번 주우면 영원히 내 것이 된다.</p>
+      <p id="closet-note" class="closet-note">잠긴 옷가지는 마을 어딘가에 빛나는 꾸러미로 떨어져 있다. 한 번 주우면 영원히 내 것이 된다.</p>
       <button id="closet-close" class="btn" type="button">이대로 입기</button>
     </div>
   </section>
@@ -179,7 +183,8 @@
         <div class="grid-map-wrap" aria-hidden="true"><div id="grid-map" class="grid-map"></div></div>
         <div id="grid-list" class="grid-list" role="group" aria-label="구역 스위치"></div>
       </div>
-      <p class="hint">켜 둔 구역은 밤에 가로등이 그늘이를 막아 준다. 그늘이가 가로등 가장자리에 오래 몰리면 과부하로 차단기가 내려가니, 깜박이기 시작하면 손전등으로 흩어 놓자.</p>
+      <p class="hint">켜 둔 구역은 밤에 가로등이 그늘이를 막아 준다. 그늘이가 가로등 가장자리에 오래 몰리면 과부하로 차단기가 내려가니, 깜박이기 시작하면 손전등으로 흩어 놓자. 깜박이는 동안에도 차단기가 내려가기 전까지는 불빛 안이 안전하다.</p>
+      <p id="grid-live" class="hint warn hidden">밤에는 배전반을 여는 동안에도 시간이 흐르고 그늘이가 다가온다.</p>
       <p id="grid-msg" class="hint warn" role="status" aria-live="polite"></p>
     </div>
   </section>
@@ -191,6 +196,7 @@
       <button id="pause-journal-btn" class="btn ghost" type="button">수첩</button>
       <button id="pause-settings-btn" class="btn ghost" type="button">설정</button>
       <button id="quit-btn" class="btn ghost" type="button">처음 화면으로</button>
+      <details class="pause-log hidden"><summary>최근 안내</summary><ul id="pause-log"></ul></details>
     </div>
   </section>
 
@@ -198,6 +204,7 @@
     <div class="card small">
       <h2 id="end-title"></h2>
       <p id="end-text" class="tagline"></p>
+      <p id="end-best" class="hint strong"></p>
       <button id="next-chapter-btn" class="btn hidden" type="button">다음 장으로</button>
       <button id="end-journal-btn" class="btn hidden" type="button">수첩 펼치기</button>
       <button id="continue-btn" class="btn hidden" type="button">불 켜진 마을 산책하기</button>
@@ -212,6 +219,7 @@
         <h2 id="settings-title" tabindex="-1">설정</h2>
         <button id="settings-close" class="chip" type="button">닫기</button>
       </div>
+      <p id="settings-store" class="hint warn settings-store" role="status"></p>
       <div class="settings-grid">
         <div class="group" role="group" aria-labelledby="g-sound">
           <h3 id="g-sound">소리</h3>
@@ -241,16 +249,27 @@
         <div class="group" role="group" aria-labelledby="g-app">
           <h3 id="g-app">앱 설치</h3>
           <p id="app-status" class="hint"></p>
+          <p id="offline-status" class="hint" role="status" aria-live="polite"></p>
           <div class="row-btns"><button id="app-install" class="chip hidden" type="button">설치하기</button></div>
+        </div>
+        <div id="online-panel" class="group hidden" role="group" aria-labelledby="g-online">
+          <h3 id="g-online">온라인 보급품</h3>
+          <div class="row-btns">
+            <button id="online-toggle" class="chip" type="button" aria-pressed="true">온라인 보급품 켜짐</button>
+            <button id="online-forget" class="chip danger" type="button">내 온라인 기록 지우기</button>
+          </div>
+          <p class="hint online-note">다른 생존자가 남긴 보급품을 주고받아요. 무작위 ID와 보급품 위치만 서버에 저장하고, 이름·글·IP 원문은 저장하지 않아요. 켜 두면 이야기 장면을 끝까지 봤는지·건너뛰었는지와 장에 들어가고 마쳤는지도 누구인지 없이 날짜별 횟수로만 보내요.</p>
+          <p id="online-msg" class="hint" role="status" aria-live="polite"></p>
         </div>
         <div id="records-panel" class="group" role="group" aria-labelledby="g-records">
           <h3 id="g-records">기록</h3>
           <p id="records-best" class="hint strong"></p>
+          <p id="records-progress" class="hint"></p>
           <p id="records-store" class="hint"></p>
           <div class="row-btns">
             <button id="records-export" class="chip" type="button">내보내기</button>
             <button id="records-import" class="chip" type="button">가져오기</button>
-            <button id="records-clear" class="chip danger" type="button">지우기</button>
+            <button id="records-clear" class="chip danger" type="button">최고 기록 지우기</button>
           </div>
           <input id="records-file" type="file" accept=".json,application/json" hidden>
           <p id="records-msg" class="hint" role="status" aria-live="polite"></p>
@@ -308,6 +327,7 @@
     <div class="card small">
       <h2 id="error-title">실행할 수 없어요</h2>
       <p id="error-text" class="tagline"></p>
+      <button id="error-continue" class="btn hidden" type="button">계속하기</button>
       <button id="error-reload" class="btn ghost" type="button" onclick="location.reload()">새로고침</button>
     </div>
   </section>

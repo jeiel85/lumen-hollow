@@ -45,6 +45,18 @@ export class Dialogue {
   }
 
   _key(e) {
+    // 읽기 화면·장면이 열려 있는 동안 Tab은 그 안에서만 돈다(뒤 화면으로 빠지지 않게, #20).
+    if (e.code === 'Tab' && (this.docOpen || this.scene)) {
+      const root = this.docOpen ? this.el.doc : this.el.root;
+      const f = [...root.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])')]
+        .filter((el) => !el.disabled && !el.classList.contains('hidden') && el.offsetParent !== null);
+      e.preventDefault();
+      e.stopPropagation();
+      if (!f.length) return;
+      const i = f.indexOf(document.activeElement);
+      f[e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : (i + 1) % f.length].focus({ preventScroll: true });
+      return;
+    }
     if (this.docOpen) {
       if (ADVANCE_KEYS.has(e.code) || e.code === 'Escape') {
         e.preventDefault();
@@ -71,8 +83,26 @@ export class Dialogue {
   // ---------------------------------------------------------------- 무전 장면
 
   // onCam(cam): 카메라 지시를 main에 넘긴다. onEnd(): 장면이 끝났을 때(건너뛴 경우 포함).
+  // 새 판·처음 화면으로 갈 때: 재생 중인 장면과 열린 읽기 화면을 콜백 없이 닫는다.
+  // 지금은 화면 구조상 그 순서로 누를 수 없지만, 경로가 생겨도 장면 상태가 다음 판으로 새지 않게(#20).
+  reset() {
+    if (!this.ok) return;
+    this.scene = null;
+    this.phase = 'idle';
+    this.moved = false;
+    this.docOpen = null;
+    this.docFlip = null;
+    this.el.root.classList.remove('on', 'leaving');
+    this.el.root.classList.add('hidden');
+    this.el.box.classList.add('hidden');
+    this.el.next.classList.remove('on');
+    this._setFade(false);
+    this.el.doc.classList.add('hidden');
+  }
+
   play(scene, { onCam, onEnd }) {
     this.scene = scene;
+    this.skipped = false;
     this.cbs = { onCam, onEnd };
     this.i = -1;
     this.phase = 'idle';
@@ -84,6 +114,8 @@ export class Dialogue {
     r.classList.add('on');
     this.el.box.classList.add('hidden');
     this._setFade(false);
+    // 키보드 포커스를 장면 안(건너뛰기 단추)으로 옮긴다. 넘기기는 Space·Enter·E가 그대로 한다.
+    this.el.skip.focus({ preventScroll: true });
     this._line(0);
   }
 
@@ -144,6 +176,7 @@ export class Dialogue {
   // 남은 줄을 건너뛴다. 대사는 수첩의 무전 기록에서 다시 볼 수 있다.
   skip() {
     if (!this.scene || this.phase === 'end') return;
+    this.skipped = true; // 이야기 진행 집계용(끝까지 봤는지·건너뛰었는지)
     // 암전 중에 건너뛰면 그 줄의 카메라 지시(등대 점등 등)를 먼저 마저 한다.
     if (this.phase === 'out') this.cbs.onCam(this.scene.lines[this.i].cam);
     this._finish();

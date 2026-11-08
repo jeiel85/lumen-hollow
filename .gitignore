@@ -5,3 +5,4 @@ node_modules/
 Thumbs.db
 server/.dev.vars
 server/.wrangler/
+tests/e2e/shots/

@@ -494,7 +494,7 @@ export const CLUES = [
   {
     id: 'diner',
     title: '식당 메뉴판 뒷면',
-    where: '다이너 앞 메뉴판',
+    where: '골목식당 앞 메뉴판',
     kind: 'chalk',
     body: [
       '자정. 등대가 꺼졌다. 손님들이 박수 쳤다.',

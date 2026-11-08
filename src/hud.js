@@ -33,11 +33,11 @@ export class Hud {
   _applyKeys() {
     if (!this.el.keys) return;
     if (this._chapter) {
-      this.el.keys.textContent = 'WASD 이동 · 마우스 조준 · F/클릭 손전등 · E 길게 상호작용 · Q 붕대 · 휠 줌 · Esc 일시정지';
+      this.el.keys.textContent = 'WASD 이동 · 마우스 조준 · F/클릭 손전등 · E 길게 상호작용 · Q 붕대 · V 지도 · 휠 줌 · Esc 일시정지';
       return;
     }
     this.el.keys.textContent = this._driving
-      ? 'W 가속 · S 브레이크·후진 · A/D 핸들 · F 작업등 · E 길게 내리기 · Tab 배전반 · Esc 일시정지'
+      ? 'W 가속 · S 브레이크·후진 · A/D 핸들 · F 작업등 · E 길게 내리기 · Tab 배전반 · V 지도 · Esc 일시정지'
       : this._walkKeys + (this._online ? ' · G 보급품 남기기' : '');
   }
 
@@ -188,18 +188,44 @@ export class Hud {
     this.el.prompt.classList.toggle('busy', progress > 0);
   }
 
+  // 안내는 게임 시간(tickToasts)으로 사라진다: 일시정지·탭 전환·장면 동안에는 그대로 남는다(#14).
+  // 지나간 안내는 log에 8개까지 남겨 일시정지 화면에서 다시 볼 수 있다.
   toast(text, kind = '') {
     const t = document.createElement('div');
     t.className = `toast ${kind}`;
     t.textContent = text;
     this.el.toasts.appendChild(t);
     while (this.el.toasts.children.length > 4) this.el.toasts.firstChild.remove();
-    setTimeout(() => t.classList.add('out'), 3200);
-    setTimeout(() => t.remove(), 3800);
+    (this._toasts ??= []).push({ el: t, left: 3.2 });
+    this.log = [{ text, kind }, ...(this.log ?? [])].slice(0, 8);
+  }
+
+  tickToasts(dt) {
+    if (!this._toasts?.length) return;
+    for (const it of this._toasts) {
+      it.left -= dt;
+      if (it.left <= 0) it.el.classList.add('out');
+      if (it.left <= -0.6) it.el.remove();
+    }
+    this._toasts = this._toasts.filter((it) => it.el.isConnected);
   }
 
   clearToasts() {
     this.el.toasts.replaceChildren();
+    this._toasts = [];
+  }
+
+  // 일시정지 화면의 '최근 안내'
+  renderLog(list) {
+    if (!list) return;
+    const rows = this.log ?? [];
+    list.replaceChildren(...rows.map(({ text, kind }) => {
+      const li = document.createElement('li');
+      li.textContent = text;
+      if (kind) li.className = kind;
+      return li;
+    }));
+    list.closest('details')?.classList.toggle('hidden', rows.length === 0);
   }
 
   // 화면 밖 목표를 가리키는 화살표. sx, sy는 화면 픽셀 좌표.
@@ -210,6 +236,40 @@ export class Hud {
   // 아직 안 읽은 이야기 기록을 가리키는 푸른 화살표. 배포 직후 옛 index.html과 섞이면 요소가 없을 수 있다.
   storyPointer(sx, sy, dist, visible) {
     if (this.el.storyPointer) this._pointer(this.el.storyPointer, this.el.storyPointerDist, 'sdist', sx, sy, dist, visible);
+  }
+
+  // 화면 밖에서 다가오는 그늘이(#14 '어둠 속 그늘이가 거의 안 보인다'): 가장자리에 붉은 표시. list: [{ sx, sy, k }],
+  // sx, sy는 화면 좌표(밖일 수 있다), k는 가까울수록 1에 가까운 세기.
+  threats(list) {
+    const host = this.el.hud;
+    if (!host) return;
+    this._threatEls ??= [];
+    while (this._threatEls.length < list.length) {
+      const e = document.createElement('div');
+      e.className = 'threat';
+      e.setAttribute('aria-hidden', 'true');
+      host.appendChild(e);
+      this._threatEls.push(e);
+    }
+    const w = innerWidth;
+    const h = innerHeight;
+    const cx = w / 2;
+    const cy = h / 2;
+    const m = 22;
+    for (let i = 0; i < this._threatEls.length; i++) {
+      const e = this._threatEls[i];
+      const t = list[i];
+      if (!t) {
+        if (!e.hidden) e.hidden = true;
+        continue;
+      }
+      const dx = t.sx - cx;
+      const dy = t.sy - cy;
+      const sc = Math.min((cx - m) / Math.abs(dx || 1e-3), (cy - m) / Math.abs(dy || 1e-3));
+      e.hidden = false;
+      e.style.transform = `translate(${cx + dx * sc}px, ${cy + dy * sc}px) rotate(${Math.atan2(dy, dx)}rad)`;
+      e.style.opacity = (0.35 + 0.65 * t.k).toFixed(2);
+    }
   }
 
   _pointer(p, distEl, key, sx, sy, dist, visible) {

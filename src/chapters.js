@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Builder, Frame, geo } from './geometry.js';
-import { LAMP_RADIUS, makePoolTexture, pushOut } from './world.js';
+import { LAMP_RADIUS, makePoolTexture, pushOut, segmentBlocked, sightBoxes } from './world.js';
 import { load, save, remove } from './storage.js';
 import { LAKE, ISLAND, clueById } from './story.js';
 import { CHAPTERS, OBJECTIVES } from './script.js';
@@ -21,18 +21,21 @@ const REACH = 1.8;
 const U = Math.SQRT1_2;
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
 
-function loadFlags() {
+// 저장된 표시를 읽는다. 더 새 버전(v > 1)이 쓴 저장이면 newer: 읽지 않고, 덮어쓰지도 않는다
+// (서비스 워커가 옛 코드를 띄운 탭에서 새 진행을 잃지 않게. lumen.run과 같은 규칙).
+export function loadChapterFlags() {
   let raw = null;
   try {
     raw = JSON.parse(load(KEY));
   } catch {
     raw = null; // 손상된 기록은 처음부터
   }
-  const out = new Set();
+  const flags = new Set();
+  const newer = !!raw && typeof raw === 'object' && Number.isInteger(raw.v) && raw.v > VERSION;
   if (raw && typeof raw === 'object' && raw.v === VERSION && Array.isArray(raw.flags)) {
-    for (const f of raw.flags) if (FLAGS.has(f)) out.add(f);
+    for (const f of raw.flags) if (FLAGS.has(f)) flags.add(f);
   }
-  return out;
+  return { flags, newer };
 }
 
 // ---------------------------------------------------------------- 무대
@@ -92,6 +95,11 @@ class Stage {
 
   walkable(x, z, m = 0) {
     return this.areas.some((a) => this._in(a, x, z, m));
+  }
+
+  blocksSight(ax, az, bx, bz) {
+    this._sight ??= sightBoxes(this.colliders);
+    return segmentBlocked(this._sight, ax, az, bx, bz);
   }
 
   // 몸(반지름 r)이 영역들의 합집합 안에 있는가. 영역마다 따로 r만큼 줄여 보면, 두 영역이 2r보다 덜 겹치는
@@ -221,7 +229,7 @@ export class Chapters {
     this.story = story;
     this.root = new THREE.Group();
     scene.add(this.root);
-    this.flags = loadFlags();
+    ({ flags: this.flags, newer: this.locked } = loadChapterFlags());
     this.ch = 0; // 지금 하고 있는 장(2~4). 장 밖이면 0
     this.step = null;
     this.night = false; // 4장 마지막 밤이 시작됐는지(이번 실행 동안만)
@@ -256,6 +264,7 @@ export class Chapters {
   // ---------------------------------------------------------------- 진행 상태
 
   _save() {
+    if (this.locked) return; // 더 새 버전이 쓴 저장은 남겨 둔다(이번 실행 동안만 기억)
     save(KEY, JSON.stringify({ v: VERSION, flags: [...this.flags] }));
   }
 
@@ -270,8 +279,10 @@ export class Chapters {
   }
 
   // 수첩의 '이야기 처음부터'와 '2장부터 다시'
+  // 수첩의 "이야기 처음부터"처럼 사용자가 직접 지울 때는 더 새 버전 저장이어도 지운다.
   wipe() {
     this.flags.clear();
+    this.locked = false;
     remove(KEY);
   }
 
@@ -342,8 +353,10 @@ export class Chapters {
   }
 
   // 게임 시간이 흐르는 빠르기. 2장만 해가 지고, 3·4장은 이야기가 시각을 정한다.
+  // 2장도 나룻배에 오르기 전(마을 선착장)에는 멈춘다: 첫 밤은 섬에서 맞는다(#33, 마을에 머물다 해가 지면
+  // 갈 수 없는 섬의 돌계단으로 가라는 안내가 떴다).
   get timeScale() {
-    return this.ch === 2 ? 1 : 0;
+    return this.ch === 2 && this.step !== 'ferry' ? 1 : 0;
   }
 
   // 저절로 깨어나는 그늘이: 2장 밤, 4장 마지막 밤(목표 그림자를 쫓는 동안)
@@ -530,7 +543,8 @@ export class Chapters {
   }
 
   // 화면 밖 푸른 화살표가 가리킬 곳
-  target(x, z) {
+  // 지금 차례에 가야 할 곳들(화면 밖 화살표는 가장 가까운 하나, 지도는 전부)
+  targetList() {
     let list = [];
     const st = this.step;
     const unread = (ids) => this.spots.filter((s) => ids.includes(s.clue) && !this.story.isFound(s.clue));
@@ -548,9 +562,13 @@ export class Chapters {
     else if (st === 'rest') list = [this.spot('water')];
     else if (st === 'class') list = [this.spot('class')];
     else if (st === 'broadcast') list = [this.spot('podium')];
+    return list.filter(Boolean);
+  }
+
+  target(x, z) {
     let best = null;
     let bd = Infinity;
-    for (const s of list) {
+    for (const s of this.targetList()) {
       if (!s) continue;
       const d = Math.hypot(s.x - x, s.z - z);
       if (d < bd) {

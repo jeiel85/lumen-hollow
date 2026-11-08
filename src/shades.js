@@ -102,21 +102,29 @@ export class Shades {
   }
 
   // 플레이어에게서 world.spawnRange(기본 15~23m) 떨어진, 빛 밖의 갈 수 있는 땅에서 깨어난다.
-  _spawn(px, pz, world) {
+  // around: 깨어날 방향(라디안, 그 쪽 ±0.7). 없으면 아무 방향. 건물 안에서는 깨어나지 않는다(#1).
+  _spawn(px, pz, world, around = null) {
     const s = this.list.find((e) => !e.active);
-    if (!s) return;
+    if (!s) return false;
     const [d0, d1] = world.spawnRange ?? [15, 23];
-    for (let tries = 0; tries < 10; tries++) {
-      const a = Math.random() * Math.PI * 2;
+    const probe = { x: 0, z: 0 };
+    for (let tries = 0; tries < 12; tries++) {
+      const a = around === null ? Math.random() * Math.PI * 2 : around + (Math.random() - 0.5) * 1.4;
       const d = d0 + Math.random() * (d1 - d0);
       const x = px + Math.cos(a) * d;
       const z = pz + Math.sin(a) * d;
       if (!world.inBounds(x, z)) continue;
       if (world.lightAt(x, z)) continue;
+      probe.x = x;
+      probe.z = z;
+      world.collide(probe, 0.3);
+      if (Math.abs(probe.x - x) + Math.abs(probe.z - z) > 0.01) continue; // 벽·건물 안
       Object.assign(s, { active: true, state: 'rise', x, z, vx: 0, vz: 0, fade: 0, burn: 0, cool: 0, tag: null, tough: 1, path: null });
       s.g.visible = true;
-      return;
+      this._last = s;
+      return true;
     }
+    return false;
   }
 
   // ctx: { player, world, night, nights, spawning, car, driving, cap }. cap은 저절로 깨어나는 그늘이 수의 상한(빠지면 밤마다 늘어난다).
@@ -131,8 +139,17 @@ export class Shades {
     const target = spawning ? cap ?? Math.min(5 + nights * 2, 14) : 0;
     this.spawnTimer -= dt;
     if (spawning && this.spawnTimer <= 0 && this.activeCount < target) {
-      this._spawn(px, pz, world);
-      this.spawnTimer = 1.2 + Math.random() * 1.8;
+      // 깊은 밤(세 번째 밤부터)에는 손전등이 비추는 반대쪽에서 깨어나거나 두 방향에서 한꺼번에 몰려온다.
+      // 한 방향만 잘 겨누면 밤이 깊어져도 압박이 없던 문제(#14·#21). 1장 판에만(장의 목표 그림자는 cap으로 따로 정한다).
+      const deep = cap === undefined ? Math.min(3, Math.max(0, nights - 1)) : 0; // 다섯 번째 밤에서 더 오르지 않는다(완벽 조준 봇이 어둠에서 분당 0~3대)
+      const behind = Math.atan2(-Math.cos(player.facing), -Math.sin(player.facing));
+      const flank = deep > 0 && Math.random() < Math.min(0.4, 0.08 * deep);
+      const tough = 1 + Math.min(0.3, 0.06 * deep); // 깊은 밤의 그늘이는 조금 더 오래 비춰야 흩어진다
+      if (this._spawn(px, pz, world, flank ? behind : null)) this._last.tough = tough;
+      if (deep > 0 && this.activeCount < target && Math.random() < Math.min(0.4, 0.08 * deep)) {
+        if (this._spawn(px, pz, world, behind + (Math.random() < 0.5 ? -1 : 1) * Math.PI * 0.5)) this._last.tough = tough;
+      }
+      this.spawnTimer = (1.2 + Math.random() * 1.8) / (1 + 0.12 * deep);
     }
     const base = Math.min(2.4 + nights * 0.2, 3.4);
 
@@ -177,7 +194,12 @@ export class Shades {
         s.vx += (ux * speed - s.vx) * k;
         s.vz += (uz * speed - s.vz) * k;
 
-        const beam = Math.max(player.beamStrength(s.x, s.z), car ? car.beamStrength(s.x, s.z) : 0);
+        // 건물 너머는 손전등·전조등이 닿지 않는다(#14)
+        let pb = player.beamStrength(s.x, s.z);
+        if (pb > 0 && world.blocksSight?.(px, pz, s.x, s.z)) pb = 0;
+        let cb = car ? car.beamStrength(s.x, s.z) : 0;
+        if (cb > 0 && world.blocksSight?.(car.pos.x, car.pos.z, s.x, s.z)) cb = 0;
+        const beam = Math.max(pb, cb);
         if (beam > 0) {
           s.burn += dt * (0.55 + beam * 0.75);
           s.vx -= (dx / d) * 9 * dt * beam;
@@ -191,6 +213,8 @@ export class Shades {
         s.x += s.vx * dt;
         s.z += s.vz * dt;
         if (car) car.pushOut(s, 0.3);
+        // 벽·건물을 지나가지 않는다(2~4장 무대에서는 걸을 수 있는 곳 밖으로도 못 나간다, #14)
+        world.collide(s, 0.3);
 
         // 켜진 빛(가로등·트럭 작업등) 안으로는 못 들어온다. 경계로 밀려나며 조금씩 타고, 버티는 동안 그 빛에 부하를 건다.
         // 빛이 겹친 곳(길 건너 가로등, 가로등 옆에 세운 트럭)에서는 한 빛 밖으로 밀어낸 자리가 다른 빛 안일 수 있어
