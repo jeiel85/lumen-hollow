@@ -116,6 +116,8 @@ h2 { margin: 0 0 4px; font-weight: 400; font-size: 26px; }
 .title-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .run-info { margin: 10px 0 0; font-size: 12.5px; color: var(--dim); }
 .run-info:empty { display: none; }
+/* 웹판(1장 데모)에서 1장을 마친 뒤 장 단추 자리에 뜨는 '2~4장은 앱에서' 안내(#50) */
+.app-only { margin: 12px auto 0; max-width: 34em; font-size: 12.5px; line-height: 1.55; color: var(--warm); }
 /* 좁은 세로 화면(360~390px)에서 칩 4개가 한 줄에 안 들어가면 글자가 한 자씩 접히지 않고 칩째 다음 줄로 넘긴다. */
 .title-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; }
 .title-links .chip { font-size: 13px; padding: 7px 16px; white-space: nowrap; }
@@ -577,7 +579,7 @@ body.front .title-art { opacity: 1; visibility: visible; transition: opacity 0.8
 }
 .title-main .eyebrow { margin: 10px 0 0; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); }
 .title-main .tagline { color: rgba(244, 239, 228, 0.78); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85); }
-.title-main .run-info, .title-main .best, .online-summary { text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85); }
+.title-main .run-info, .title-main .app-only, .title-main .best, .online-summary { text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85); }
 .title-card .howto { margin-top: 26px; padding: 14px 16px; border-radius: 12px; background: rgba(6, 11, 12, 0.66); border: 1px solid var(--line); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 
 /* 버튼: 낡은 제어판의 조명 누름단추(art/btn-lit.webp·btn-dark.webp, 높이 96px, 양 끝 반원 48px)를 3조각으로 늘린다.

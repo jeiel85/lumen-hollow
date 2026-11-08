@@ -17,6 +17,13 @@ const GPU = process.platform === 'win32'
   : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'];
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// 2~4장에 들어가는 시험은 앱처럼 연다. 웹판은 1장 데모라(#50) 로컬 개발에서 ?app을 붙여야 2~4장이 열린다(src/main.js FULL_GAME).
+export function fullGame(url) {
+  const u = new URL(url);
+  u.searchParams.set('app', '1');
+  return u.href;
+}
+
 export async function launch(url, w = 1280, h = 720, { outDir } = {}) {
   const port = 9500 + Math.floor(Math.random() * 400);
   const profile = mkdtempSync(join(tmpdir(), 'cdp-'));

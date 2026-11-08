@@ -1,9 +1,10 @@
 // 온라인 클라이언트(#17·#20·#32): 목록 응답의 rules를 안내 문구에 쓰고, 이야기 진행 집계를 온라인을 켠 동안에만 모아
 // POST /v1/story(플레이어 헤더 없이)와 탭이 가려질 때 sendBeacon(text/plain)으로 보낸다. 서버 응답은 흉내 낸다.
 //   node tests/e2e/online.mjs [url]
-import { launch } from './cdp.mjs';
+import { launch, fullGame } from './cdp.mjs';
 
-const [,, url = 'http://127.0.0.1:8000/?debug', w = '1280', h = '720'] = process.argv;
+const [,, rawUrl = 'http://127.0.0.1:8000/?debug', w = '1280', h = '720'] = process.argv;
+const url = fullGame(rawUrl); // 2~4장도 시험하므로 앱처럼 연다(#50)
 const B = await launch(url, +w, +h);
 const ok = [];
 const check = (n, c, i) => { ok.push(!!c); console.log(`${c ? 'OK ' : 'NG '} ${n}${i !== undefined ? ` — ${JSON.stringify(i)}` : ''}`); };

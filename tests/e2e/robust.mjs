@@ -1,9 +1,10 @@
 // 견고성 화면 확인(#14·#20·#1·#33): 2장 배 타기 전 시간, 게임 시간으로 사라지는 안내와 최근 안내, 끝 화면 기록 비교,
 // 오류 화면 동안 판 멈춤, 장면 정리·포커스 가두기, 두 탭, 걸려 있던 꺼내기 맞추기, 저사양 화질 자동 낮춤.
 //   node tests/e2e/robust.mjs [url]
-import { launch } from './cdp.mjs';
+import { launch, fullGame } from './cdp.mjs';
 
-const [,, url = 'http://127.0.0.1:8000/?debug', w = '1280', h = '720'] = process.argv;
+const [,, rawUrl = 'http://127.0.0.1:8000/?debug', w = '1280', h = '720'] = process.argv;
+const url = fullGame(rawUrl); // 2~4장도 시험하므로 앱처럼 연다(#50)
 const B = await launch(url, +w, +h);
 const ok = [];
 const check = (n, c, i) => { ok.push(!!c); console.log(`${c ? 'OK ' : 'NG '} ${n}${i !== undefined ? ` — ${JSON.stringify(i)}` : ''}`); };

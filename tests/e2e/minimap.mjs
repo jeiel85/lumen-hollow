@@ -1,8 +1,9 @@
 // 미니맵: 구석 지도가 보이고, 누르기·V로 전체 지도를 펼치고 Esc·V로 닫는다. 1장 마을과 2·3장 무대를 그린다.
 //   node tests/e2e/minimap.mjs [url] [폭 높이]   (폭 700 미만이면 휴대폰으로 흉내 낸다)
-import { launch } from './cdp.mjs';
+import { launch, fullGame } from './cdp.mjs';
 
-const [,, url = 'http://127.0.0.1:8000/?debug', w = '1280', h = '720'] = process.argv;
+const [,, rawUrl = 'http://127.0.0.1:8000/?debug', w = '1280', h = '720'] = process.argv;
+const url = fullGame(rawUrl); // 2~4장도 시험하므로 앱처럼 연다(#50)
 const B = await launch(url, +w, +h);
 const tag = +w < 700 ? (+w < +h ? 'phone' : 'land') : 'desk';
 const ok = [];

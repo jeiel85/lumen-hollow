@@ -2,9 +2,10 @@
 // 2장 시작 빈터 → 선착장 판자 → 나룻배 옆에서 '나룻배에 오르기'가 뜨는지, 3장 둑 → 나루 판자 끝까지 가는지.
 //   node tests/e2e/walk.mjs [url]
 // 걸을 수 있는 영역 이음매 자체는 tests/node/chapters.test.mjs가 여러 프레임 간격으로 본다.
-import { launch } from './cdp.mjs';
+import { launch, fullGame } from './cdp.mjs';
 
-const [,, url = 'http://127.0.0.1:8000/?debug'] = process.argv;
+const [,, rawUrl = 'http://127.0.0.1:8000/?debug'] = process.argv;
+const url = fullGame(rawUrl); // 2~4장도 시험하므로 앱처럼 연다(#50)
 const B = await launch(url, 960, 540);
 const ok = [];
 const check = (n, c, i) => { ok.push(!!c); console.log(`${c ? 'OK ' : 'NG '} ${n}${i !== undefined ? ` — ${JSON.stringify(i)}` : ''}`); };
