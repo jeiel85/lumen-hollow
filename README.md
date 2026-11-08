@@ -141,6 +141,8 @@ python -m http.server 8000
 | `?debug` | 콘솔에 `window.lumen` 개발용 핸들을 노출(`lumen.step(초)`로 고정 간격 시뮬레이션) |
 | `?sw` | 로컬 개발에서도 서비스 워커를 등록(오프라인·설치 시험용). 끌 때는 `?sw` 없이 다시 열면 해제된다 |
 
+시험은 [tests/README.md](tests/README.md): Node 시험(`node --test "tests/node/*.test.mjs"`, PR마다 자동)과 헤드리스 Chrome 브라우저 시험(`tests/e2e/`).
+
 ## 현재 상태와 다음 단계
 
 반응을 보기 위한 프로토타입입니다. 데스크톱(RTX 5060, Chrome)에서 60fps를 확인했고, 저사양·실제 모바일 기기 성능은 아직 측정 전입니다. 견고성 개선 후보는 이슈 `Hardening candidates`에서 관리합니다.
