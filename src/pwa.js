@@ -1,4 +1,8 @@
 // PWA: 서비스 워커 등록(오프라인 실행), 앱 설치 안내, 전체 화면 전환.
+// 안드로이드 앱(Capacitor) 안에서는 게임 파일이 앱에 들어 있어 셋 다 필요 없다(#49): 서비스 워커를 등록하지 않고
+// 설치 안내·'앱 설치' 묶음·전체 화면 줄을 숨긴다(전체 화면은 capacitor.config.json의 SystemBars.hidden).
+import { isNativeApp } from './native.js';
+
 const $ = (id) => document.getElementById(id);
 
 // 배포 워크플로가 import map의 ?v=__BUILD__를 커밋 SHA로 바꾼다. 바뀌지 않았다면 로컬 개발 중이다.
@@ -159,6 +163,13 @@ function watchForUpdates(reg) {
 // 설정 화면의 "앱 설치" 묶음, 타이틀의 설치 버튼, 전체 화면 버튼을 잇는다.
 // onAskInstall: 설치 버튼이 직접 설치 창을 띄울 수 없을 때(iOS 등) 안내가 있는 설정 화면을 연다.
 export function initPwa({ onAskInstall, onInstalled }) {
+  const native = isNativeApp();
+  if (native) {
+    $('install-btn')?.classList.add('hidden');
+    $('g-app')?.closest('.group')?.classList.add('hidden');
+    $('fullscreen-row')?.classList.add('hidden');
+    return { render() {} };
+  }
   registerServiceWorker().catch((err) => console.warn('[pwa] 서비스 워커 등록 실패. 오프라인 실행만 안 됩니다.', err));
 
   // 설치 제안 이벤트는 모듈이 다 받아지기 전에 올 수 있어 index.html이 먼저 붙잡아 둔다.

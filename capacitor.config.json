@@ -1,0 +1,14 @@
+{
+  "appId": "com.jeiel85.lumenhollow",
+  "appName": "Lumen Hollow",
+  "webDir": "dist-app",
+  "android": {
+    "backgroundColor": "#0b1416"
+  },
+  "plugins": {
+    "SystemBars": {
+      "hidden": true,
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}

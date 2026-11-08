@@ -53,7 +53,7 @@ npm run dev
 
 이미 로컬 D1이 있으면(`npm run db:local`을 예전에 했으면) 새 표·색인은 `npm run db:migrate:local`로 더한다.
 
-게임은 저장소 루트에서 정적 서버로 연다. localhost에서만 `?api=`로 서버 주소를 바꿀 수 있다. 운영 서버는 배포 주소(`https://jeiel85.github.io`)만 허용하므로, 로컬 게임은 `?api=`로 로컬 서버를 가리켜야 온라인 기능이 동작한다. 로컬 서버의 허용 출처는 `.dev.vars`의 `ALLOWED_ORIGINS`다.
+게임은 저장소 루트에서 정적 서버로 연다. localhost에서만 `?api=`로 서버 주소를 바꿀 수 있다. 운영 서버는 배포 주소(`https://jeiel85.github.io`)와 안드로이드 앱 출처(`https://localhost`, 포트 없음)만 허용하므로, 로컬 게임은 `?api=`로 로컬 서버를 가리켜야 온라인 기능이 동작한다. 로컬 서버의 허용 출처는 `.dev.vars`의 `ALLOWED_ORIGINS`다.
 
 ```text
 http://localhost:8000/?api=http://127.0.0.1:8787

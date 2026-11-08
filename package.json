@@ -1,0 +1,21 @@
+{
+  "name": "lumen-hollow",
+  "private": true,
+  "description": "Lumen Hollow 안드로이드 앱(Capacitor) 빌드. 웹판은 빌드 없이 저장소 그대로 배포한다.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build:app": "node scripts/build-app.mjs",
+    "sync": "node scripts/build-app.mjs && cap sync android",
+    "apk": "node scripts/build-app.mjs && cap sync android && cd android && gradlew.bat assembleRelease",
+    "aab": "node scripts/build-app.mjs && cap sync android && cd android && gradlew.bat bundleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3"
+  }
+}
