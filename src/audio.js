@@ -1,9 +1,12 @@
 import { load, save } from './storage.js';
+import { Music } from './music.js';
 
 // 운전을 멈춘 뒤 엔진·타이어 소리 노드를 정리하기까지의 시간(초). 소리는 시간 상수 0.3초로 줄어 이때 -40dB 아래다.
 const ENGINE_TAIL = 1.5;
 // 오디오가 끊겼을 때(전화·백그라운드) 다시 켜 보는 사용자 입력. iOS는 사용자 입력 처리 안에서 부른 resume()만 받는다.
 const RESUME_EVENTS = ['pointerdown', 'pointerup', 'touchend', 'keydown', 'click'];
+// 음악 신호와 그동안 배경 음악을 줄이는 시간(초). 신호의 화음이 배경 음악과 부딪치지 않게 한다.
+const CUES = { power: 3, dawn: 4, dusk: 4.5, win: 3, beacon: 4 };
 // 바탕 소리(빗소리·밤 저음·접근 속삭임·전기 웅웅거림). scale: setMix 값 1일 때의 게인, tau: 게인을 따라가는 시간 상수(초),
 // amb: 환경음 묶음(설정의 환경음 음량을 따름). 접근 속삭임과 웅웅거림은 위험 신호라 환경음 음량과 상관없이 master로 보낸다.
 const BEDS = {
@@ -17,7 +20,7 @@ const BED_SILENT = 0.002;
 // 꺼진 뒤 노드를 정리하기까지: 시간 상수의 5배(-43dB)
 const BED_TAIL = 5;
 
-// WebAudio로 즉석 합성하는 소리. 외부 음원 파일 없이 빗소리·밤 저음·발소리·효과음·짧은 음악 신호를 만든다.
+// WebAudio로 즉석 합성하는 소리. 외부 음원 파일 없이 빗소리·밤 저음·발소리·효과음·음악 신호와 배경 음악(music.js)을 만든다.
 export class Sound {
   constructor() {
     this.ctx = null;
@@ -28,6 +31,7 @@ export class Sound {
     this.beds = {}; // 들리는 동안만 있는 바탕 소리 노드(BEDS의 이름 → 노드 묶음)
     this.started = false; // AudioContext가 한 번이라도 돌기 시작했는지
     this.resumeFailed = false;
+    this.music = new Music(this);
   }
 
   _masterLevel() {
@@ -41,6 +45,16 @@ export class Sound {
     const t = this.ctx.currentTime;
     this.master.gain.setTargetAtTime(this._masterLevel(), t, 0.05);
     this.amb.gain.setTargetAtTime(this.ambience, t, 0.05);
+  }
+
+  // 설정의 음악 음량(0~1). 0이면 배경 음악을 새로 예약하지 않는다.
+  setMusicVolume(v) {
+    this.music.level = v;
+  }
+
+  // 매 프레임 부른다(처음 화면 포함). mood: music.js MOODS의 이름 또는 null, danger: 0~1(접근 속삭임 세기).
+  setMusic(mood, danger = 0) {
+    this.music.update(mood, danger);
   }
 
   // 브라우저 자동재생 정책 때문에 첫 사용자 입력에서 호출해야 한다.
@@ -373,6 +387,7 @@ export class Sound {
   play(name) {
     if (!this._live()) return;
     const t = this.ctx.currentTime;
+    if (CUES[name]) this.music.duck(CUES[name]);
     switch (name) {
       case 'pickup':
         this._tone(880, t, 0.18, { gain: 0.12 });
