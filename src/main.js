@@ -11,7 +11,7 @@ import { Sound } from './audio.js';
 import { QUALITY, ZOOM, loadSettings, saveSettings, bindSettings } from './settings.js';
 import { loadBest, recordRun, hasRecords, describeBest, initRecordsPanel } from './records.js';
 import { initPwa } from './pwa.js';
-import { initNative } from './native.js';
+import { initNative, isNativeApp } from './native.js';
 import { Wardrobe, OutfitDrops, Closet, itemLabel, objParticle } from './wardrobe.js';
 import { Switchboard } from './grid.js';
 import { Wisps } from './wisps.js';
@@ -19,13 +19,17 @@ import { Caches } from './caches.js';
 import { Online, NOTES, KIND_NAMES, RUN_TAKE_LIMIT, BATTERY_PACK, BATTERY_PACK_MIN, PLACE_RADIUS, CACHE_REACH } from './online.js';
 import { Story, DOCS, sceneById, chapterOf } from './story.js';
 import { Dialogue } from './dialogue.js';
-import { SCENES, FINALE } from './script.js';
+import { SCENES, FINALE, CHAPTERS } from './script.js';
 import { Chapters } from './chapters.js';
 import { Minimap } from './minimap.js';
 import { captureRun, writeRun, readRun, clearRun, restoreWorld, describeRun, RUN_KEY } from './runsave.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
+// 웹판은 1장 데모다(#50, 2026-11-08 사용자 결정). 2~4장은 안드로이드 앱에서만 들어간다(결제로 여는 부분, #51).
+// 로컬 개발(localhost·127.0.0.1)에서만 ?app으로 앱처럼 2~4장을 연다 — 2~4장 브라우저 시험용, 배포 주소에서는 무시.
+const LOCAL_DEV = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+const FULL_GAME = isNativeApp() || (LOCAL_DEV && params.has('app'));
 const mobile = matchMedia('(pointer: coarse)').matches;
 const settings = loadSettings({ mobile });
 
@@ -523,6 +527,10 @@ function pauseGame(on) {
 
 // 끝 화면의 단추: 1장 승리(산책·다음 장), 1장·2~4장 패배(다시 하기), 이야기 끝(수첩·처음 화면)
 function endButtons({ walk = false, retry = true, next = false, journal = false } = {}) {
+  // 웹판(1장 데모)에서는 '다음 장' 대신 앱에서 이어진다는 안내를 보인다.
+  const appOnly = next && !FULL_GAME;
+  if (appOnly) next = false;
+  $('end-app-only')?.classList.toggle('hidden', !appOnly);
   $('continue-btn').classList.toggle('hidden', !walk);
   $('restart-btn').classList.toggle('hidden', !retry);
   $('next-chapter-btn')?.classList.toggle('hidden', !next);
@@ -1116,7 +1124,7 @@ function onCarEvent(ev) {
 
 // 처음 화면·1장 승리 화면의 '다음 장', 실패 뒤 '다시 하기', 장이 넘어갈 때. 지금 차례의 자리에서 시작한다.
 function startChapter() {
-  if (game.contextLost || !game.ready || !dialogue.ok || !chapters.nextInfo()) {
+  if (!FULL_GAME || game.contextLost || !game.ready || !dialogue.ok || !chapters.nextInfo()) {
     renderChapter();
     return;
   }
@@ -1291,7 +1299,14 @@ function renderChapter() {
   if (!btn) return;
   const info = dialogue.ok ? chapters.nextInfo() : null;
   const replay = dialogue.ok && chapters.done;
-  btn.classList.toggle('hidden', !info && !replay);
+  // 웹판: 1장 엔딩을 봤으면 장 단추 대신 '2~4장은 앱에서' 안내(#50).
+  const appOnly = !FULL_GAME && !!(info || replay);
+  const note = $('app-only');
+  if (note) {
+    note.classList.toggle('hidden', !appOnly);
+    if (appOnly) note.textContent = `이야기는 2~4장(${CHAPTERS.slice(1, 4).map((c) => c.title).join('·')})에서 이어지고, 안드로이드 앱(플레이 스토어 준비 중)에서 할 수 있어요. 웹에서 한 기록은 설정 → 기록 → 내보내기로 앱에 옮길 수 있어요.`;
+  }
+  btn.classList.toggle('hidden', (!info && !replay) || appOnly);
   btn.disabled = game.contextLost || !game.ready;
   replayArmed = null;
   if (info) btn.textContent = `${info.fresh ? '다음 장' : '이어 가기'} · ${info.ch}장 ${info.title}`;
@@ -2369,7 +2384,7 @@ addEventListener('pagehide', () => {
 if (params.has('debug')) {
   window.lumen = {
     THREE, scene, camera, renderer, world, env, post, player, shades, car, wisps, game, input, hud, sound, startGame,
-    saveRun, resumeGame, readRun: () => readRun(world), backToTitle, pauseGame,
+    saveRun, resumeGame, readRun: () => readRun(world), backToTitle, pauseGame, endGame,
     wardrobe, drops, closet, openCloset, closeCloset, board, openGrid, closeGrid, online, caches,
     story, dialogue, storyQueue, playScene, openDoc, queueStory, chapters, startChapter, minimap, autoQ, takeCache, get ground() { return ground; },
     // sec초를 dt초 간격으로 진행한다. 실제 화면처럼 걷기·충돌을 보려면 dt를 1/60로 준다(최대 0.05, frame의 상한).

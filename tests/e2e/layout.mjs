@@ -2,9 +2,10 @@
 // 남기기 창·데스크톱 조작 안내)이 서로 겹치지 않는다. 1장(연료·부하 막대까지 펼침), 왼손 모드, 남기기 창, 2장 목표를 본다.
 //   node tests/e2e/layout.mjs [url] [폭 높이]   예) 640 300, 568 280 (폭 700 미만이면 휴대폰으로 흉내 낸다)
 //   데스크톱(마우스) 좁은·낮은 창: 760 420, 1024 700, 900 480
-import { launch } from './cdp.mjs';
+import { launch, fullGame } from './cdp.mjs';
 
-const [,, url = 'http://127.0.0.1:8000/?debug', w = '640', h = '300'] = process.argv;
+const [,, rawUrl = 'http://127.0.0.1:8000/?debug', w = '640', h = '300'] = process.argv;
+const url = fullGame(rawUrl); // 2~4장도 시험하므로 앱처럼 연다(#50)
 const B = await launch(url, +w, +h);
 const tag = `${w}x${h}`;
 const mobile = +w < 700; // cdp.mjs가 이 폭 아래를 휴대폰(터치)으로 흉내 낸다

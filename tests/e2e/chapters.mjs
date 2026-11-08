@@ -1,8 +1,9 @@
 // 1장 엔딩 뒤 2~4장을 처음부터 끝까지 자동으로 진행하며 확인한다.
 //   node tests/e2e/chapters.mjs [url] [w h]   (url 기본값 http://127.0.0.1:8000/?debug — 저장소 폴더를 정적 서버로 띄운다)
-import { launch } from './cdp.mjs';
+import { launch, fullGame } from './cdp.mjs';
 
-const [,, url = 'http://127.0.0.1:8000/?debug', w = '1280', h = '720'] = process.argv;
+const [,, rawUrl = 'http://127.0.0.1:8000/?debug', w = '1280', h = '720'] = process.argv;
+const url = fullGame(rawUrl); // 2~4장도 시험하므로 앱처럼 연다(#50)
 const B = await launch(url, +w, +h);
 const out = { checks: [], logs: B.logs };
 const check = (name, ok, info) => {

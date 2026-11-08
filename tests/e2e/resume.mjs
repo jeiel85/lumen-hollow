@@ -1,8 +1,9 @@
 // 2~4장 이어하기·실패·낮의 목표 그림자·수첩 범위 점검.
 //   node tests/e2e/resume.mjs [url] [w h] [prefix]
-import { launch } from './cdp.mjs';
+import { launch, fullGame } from './cdp.mjs';
 
-const [,, url = 'http://127.0.0.1:8000/?debug', w = '1280', h = '720', prefix = 'resume'] = process.argv;
+const [,, rawUrl = 'http://127.0.0.1:8000/?debug', w = '1280', h = '720', prefix = 'resume'] = process.argv;
+const url = fullGame(rawUrl); // 2~4장도 시험하므로 앱처럼 연다(#50)
 const B = await launch(url, +w, +h);
 const res = [];
 const check = (name, ok, info) => {

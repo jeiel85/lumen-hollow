@@ -1,8 +1,9 @@
 // 1장 회귀: 배전함 여덟 곳을 고쳐 엔딩까지, 승리 화면의 '다음 장'으로 2장 진입.
 //   node tests/e2e/chapter1.mjs [url]
-import { launch } from './cdp.mjs';
+import { launch, fullGame } from './cdp.mjs';
 
-const [,, url = 'http://127.0.0.1:8000/?debug'] = process.argv;
+const [,, rawUrl = 'http://127.0.0.1:8000/?debug'] = process.argv;
+const url = fullGame(rawUrl); // 2~4장도 시험하므로 앱처럼 연다(#50)
 const B = await launch(url, 1280, 720);
 for (let i = 0; i < 60; i++) {
   if (await B.ev('return !!(window.lumen && lumen.game.ready)')) break;
