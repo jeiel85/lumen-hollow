@@ -1,21 +1,63 @@
-MIT License
+Lumen Hollow
+Copyright (c) 2026 박용은 (jeiel85). All rights reserved.
 
-Copyright (c) 2026 박용은 (jeiel85)
+이 저장소의 코드, 그림, 게임 속 글, 소리, 세계관(게임 이름 "Lumen Hollow", 그늘이 같은
+등장 요소와 그 설정)의 저작권은 저작권자에게 있습니다. 저작권자의 서면 허락 없이 복제,
+수정, 배포, 공중 송신, 판매하거나 다른 앱·사이트·스토어에 다시 올릴 수 없습니다.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+허락하는 것
+1. GitHub 이용약관이 정한 범위에서 이 공개 저장소를 보고 GitHub 안에서 포크하는 것.
+2. 공식 배포판(웹판, 스토어 앱)을 하는 모습을 담은 스크린샷·영상·방송·리뷰를 올리는 것.
+   수익 창출을 포함합니다. "Lumen Hollow"라는 이름을 밝혀 주세요.
+3. 게임이 제공하는 기능(기록 파일 내보내기·가져오기 등)을 그 목적대로 쓰는 것.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+이전 버전
+이 파일이 MIT 라이선스였던 커밋(v0.1.0 ~ v0.14.x)에 들어 있던 부분은 그 커밋의
+LICENSE(코드: MIT)와 LICENSE-CONTENT.md(콘텐츠: CC BY 4.0)를 따르며, 그때 준 허락은
+바뀌지 않습니다. 이 파일이 지금 내용으로 바뀐 커밋부터 더하거나 고친 부분은 위의
+모든 권리 보유 조건을 따릅니다. 자세한 안내는 LICENSE-CONTENT.md에 있습니다.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+제3자 구성 요소
+vendor/three/ 의 three.js는 그 저작자의 MIT 라이선스(vendor/three/LICENSE)를 따릅니다.
+그 밖의 제3자 구성 요소는 각 폴더나 배포판에 함께 둔 라이선스를 따릅니다.
+
+허락 문의: https://github.com/jeiel85/lumen-hollow/issues
+
+이 소프트웨어와 콘텐츠는 "있는 그대로" 제공되며, 명시적이든 묵시적이든 어떤 보증도
+하지 않습니다. 저작권자는 이를 사용해 생긴 어떤 손해에도 책임지지 않습니다.
+
+------------------------------------------------------------------------------
+
+English
+
+Copyright (c) 2026 박용은 (jeiel85). All rights reserved.
+
+The code, images, in-game text, sound, and world of this repository (including the
+name "Lumen Hollow", the Shades (그늘이) and other named elements and their setting)
+are owned by the copyright holder. You may not copy, modify, distribute, publicly
+transmit, sell, or re-upload them to other apps, sites, or stores without prior
+written permission.
+
+Permitted:
+1. Viewing this public repository and forking it on GitHub, to the extent the
+   GitHub Terms of Service allow.
+2. Posting screenshots, videos, streams, and reviews of yourself playing an official
+   release (web or store app), including monetized ones. Please credit "Lumen Hollow".
+3. Using in-game features (such as exporting and importing save files) for their
+   intended purpose.
+
+Earlier versions: material in commits where this file was the MIT License
+(v0.1.0 to v0.14.x) remains available under the terms included in that commit
+(code: MIT, content: CC BY 4.0); those grants are not revoked. Anything added or
+changed from the commit that replaced this file with the current text onward is
+subject to the all-rights-reserved terms above.
+
+Third-party components: three.js in vendor/three/ is licensed under the MIT License
+by its authors (vendor/three/LICENSE). Other third-party components follow the
+licenses shipped alongside them.
+
+Permission requests: https://github.com/jeiel85/lumen-hollow/issues
+
+THE SOFTWARE AND CONTENT ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES
+OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE OR CONTENT.
