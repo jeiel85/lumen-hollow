@@ -125,6 +125,12 @@ h2 { margin: 0 0 4px; font-weight: 400; font-size: 26px; }
 .pause-diff { margin: 0 0 4px; text-align: center; }
 .pause-diff:empty { display: none; }
 #records-best { white-space: pre-line; }
+html[lang="en"] .ko-only { display: none; }
+/* 영어판: 상태 창 이름표가 길어('Flashlight OFF') 한 줄에 들어가게 칸을 넓히고 줄바꿈을 막는다 */
+/* 한글은 어절이 길어 아무 데서나 끊게 두었지만(body overflow-wrap: anywhere), 영어는 단어 가운데에서 끊기면 읽기 어렵다 */
+html[lang="en"] body { overflow-wrap: break-word; }
+html[lang="en"] .bar { grid-template-columns: 96px 1fr; }
+html[lang="en"] .bar .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 2~4장 결제 화면(#51) */
 .paywall-card { width: min(440px, 100%); }
 .paywall-lead { margin: 4px 0 10px; color: var(--ink); }

@@ -1,5 +1,6 @@
 import { load, save, storageAvailable } from './storage.js';
 import { DEFAULT_LEVEL, isLevel } from './difficulty.js';
+import { tr } from './i18n.js';
 
 // 플레이어 설정: 저장·검증과 설정 화면의 입력 요소 연결.
 const KEY = 'lumen.settings';
@@ -28,6 +29,8 @@ function defaults({ mobile }) {
     lefty: false,
     // 난이도 단계(#56): 다음에 새로 시작하는 1장 판과 2~4장에 쓴다. 새 판 화면에서 고른 값이 여기 남는다.
     difficulty: DEFAULT_LEVEL,
+    // 화면 글의 언어(#60): 'auto'는 기기 언어(한국어면 한국어, 아니면 영어). 바꾸면 페이지를 다시 연다(src/i18n.js).
+    lang: 'auto',
   };
 }
 
@@ -54,6 +57,7 @@ export function loadSettings(opts) {
   if (typeof raw.quality === 'string' && Object.prototype.hasOwnProperty.call(QUALITY, raw.quality)) s.quality = raw.quality;
   for (const k of ['tilt', 'shake', 'fps', 'lefty']) bool(k);
   if (isLevel(raw.difficulty)) s.difficulty = raw.difficulty;
+  if (['auto', 'ko', 'en'].includes(raw.lang)) s.lang = raw.lang;
   return s;
 }
 
@@ -63,7 +67,7 @@ export function saveSettings(s) {
 }
 
 // 기록 묶음의 안내(records.js)와 같은 말투로, 설정이 남지 않는다는 것을 설정 화면 위에 보인다.
-const BLOCKED = '이 브라우저는 저장소를 막아 두어 설정이 이번 세션에만 적용돼요(사생활 보호 모드 등).';
+const BLOCKED = tr('이 브라우저는 저장소를 막아 두어 설정이 이번 세션에만 적용돼요(사생활 보호 모드 등).');
 
 const pct = (v) => `${Math.round(v * 100)}%`;
 const FORMAT = {

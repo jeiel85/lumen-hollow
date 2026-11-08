@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { tr } from './i18n.js';
 
 // 게임 속 1시간 = HOUR_SECONDS 초. 낮(6~18.5시) 약 94초, 밤 약 86초.
 export const HOUR_SECONDS = 7.5;
@@ -30,12 +31,12 @@ export function nightAmount(h) {
 }
 
 export function phaseName(h) {
-  if (h >= 5 && h < 7) return '새벽';
-  if (h >= 7 && h < 11) return '아침';
-  if (h >= 11 && h < 15) return '한낮';
-  if (h >= 15 && h < 18) return '오후';
-  if (h >= 18 && h < 19.5) return '해질녘';
-  return '밤';
+  if (h >= 5 && h < 7) return tr('새벽');
+  if (h >= 7 && h < 11) return tr('아침');
+  if (h >= 11 && h < 15) return tr('한낮');
+  if (h >= 15 && h < 18) return tr('오후');
+  if (h >= 18 && h < 19.5) return tr('해질녘');
+  return tr('밤');
 }
 
 class Rain {

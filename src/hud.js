@@ -1,4 +1,5 @@
 import { phaseName } from './env.js';
+import { tr } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -33,12 +34,12 @@ export class Hud {
   _applyKeys() {
     if (!this.el.keys) return;
     if (this._chapter) {
-      this.el.keys.textContent = 'WASD 이동 · 마우스 조준 · F/클릭 손전등 · E 길게 상호작용 · Q 붕대 · V 지도 · 휠 줌 · Esc 일시정지';
+      this.el.keys.textContent = tr('WASD 이동 · 마우스 조준 · F/클릭 손전등 · E 길게 상호작용 · Q 붕대 · V 지도 · 휠 줌 · Esc 일시정지');
       return;
     }
     this.el.keys.textContent = this._driving
-      ? 'W 가속 · S 브레이크·후진 · A/D 핸들 · F 작업등 · E 길게 내리기 · Tab 배전반 · V 지도 · Esc 일시정지'
-      : this._walkKeys + (this._online ? ' · G 보급품 남기기' : '');
+      ? tr('W 가속 · S 브레이크·후진 · A/D 핸들 · F 작업등 · E 길게 내리기 · Tab 배전반 · V 지도 · Esc 일시정지')
+      : this._walkKeys + (this._online ? tr(' · G 보급품 남기기') : '');
   }
 
   // 다른 생존자와 연결된 판에서만 '보급품 남기기'를 보인다.
@@ -78,7 +79,7 @@ export class Hud {
   }
 
   setObjective(text) {
-    if (this.el.objective) this._set('objective', this.el.objective, text ? `목표 · ${text}` : '');
+    if (this.el.objective) this._set('objective', this.el.objective, text ? tr('목표 · {0}', [text]) : '');
   }
 
   // 가까운 인물 위의 이름표. list: [{ text, x, y }] 화면 픽셀 좌표
@@ -108,9 +109,9 @@ export class Hud {
   setMuted(muted) {
     const btn = this.el.mute;
     const label = btn.querySelector('.chip-text') ?? btn;
-    label.textContent = muted ? '소리 꺼짐' : '소리 켜짐';
+    label.textContent = muted ? tr('소리 꺼짐') : tr('소리 켜짐');
     btn.classList.toggle('off', muted);
-    btn.setAttribute('aria-label', muted ? '소리 켜기' : '소리 끄기');
+    btn.setAttribute('aria-label', muted ? tr('소리 켜기') : tr('소리 끄기'));
   }
 
   showFps(on) {
@@ -131,10 +132,10 @@ export class Hud {
   update({ day, dayLabel, hour, zonesOn, zonesTotal, hp, battery, fuses, bandages, flashOn, cans, driving, fuel, powerUsed, powerCap, tripped, load, event = null }) {
     const hh = Math.floor(hour);
     const mm = Math.floor((hour - hh) * 6) * 10;
-    this._set('day', this.el.day, dayLabel ?? `${day}일차`);
+    this._set('day', this.el.day, dayLabel ?? tr('{0}일차', [day]));
     this._set('time', this.el.time, `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`);
     const phase = phaseName(hour);
-    const isNight = phase === '밤' || phase === '해질녘';
+    const isNight = hour >= 18 || hour < 5; // phaseName의 '해질녘'·'밤'과 같은 시간대
     this._set('phase', this.el.phase, event && isNight ? `${phase} · ${event}` : phase);
     this._set('icon', this.el.icon, isNight ? '☾' : '☀');
     this._set('zones', this.el.zones, `${zonesOn} / ${zonesTotal}`);
@@ -161,7 +162,7 @@ export class Hud {
     if (this.el.loadWrap) {
       this.el.loadWrap.classList.toggle('hidden', !load);
       if (load) {
-        this._set('loadLabel', this.el.loadLabel, load.tripped ? '차단됨' : '가로등 부하');
+        this._set('loadLabel', this.el.loadLabel, load.tripped ? tr('차단됨') : tr('가로등 부하'));
         this.el.loadWrap.title = load.name;
         this.el.load.style.transform = `scaleX(${load.tripped ? 1 : Math.min(1, load.load)})`;
         this.el.loadWrap.classList.toggle('tripped', load.tripped);
@@ -174,8 +175,8 @@ export class Hud {
   setDriving(on) {
     this._driving = on;
     this._applyKeys();
-    if (this.el.useBtn) this.el.useBtn.textContent = on ? '내리기' : '상호작용';
-    if (this.el.flashBtn) this.el.flashBtn.textContent = on ? '작업등' : '손전등';
+    if (this.el.useBtn) this.el.useBtn.textContent = on ? tr('내리기') : tr('상호작용');
+    if (this.el.flashBtn) this.el.flashBtn.textContent = on ? tr('작업등') : tr('손전등');
   }
 
   prompt(text, progress) {

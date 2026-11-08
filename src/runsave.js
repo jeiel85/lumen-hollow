@@ -4,6 +4,7 @@ import { phaseName } from './env.js';
 import { RUN_TAKE_LIMIT } from './online.js';
 import { DIFFICULTY, DEFAULT_LEVEL, isLevel } from './difficulty.js';
 import { isEvent } from './nights.js';
+import { tr } from './i18n.js';
 
 // 진행 중인 판 저장(이어하기). 모바일에서 백그라운드로 간 탭이 종료돼도 처음 화면의 '이어하기'로 돌아온다.
 // 형식과 그 이유는 DECISIONS.md "판 중간 저장" 항목. 형식을 바꾸면 RUN_VERSION을 올리고 이전 형식도 읽게 한다.
@@ -215,8 +216,8 @@ export function savedVillage() {
 
 // 처음 화면에 보여 줄 한 줄 요약
 export function describeRun(run, totalZones) {
-  const nights = run.run.nights ? ` · 버틴 밤 ${run.run.nights}번` : '';
+  const nights = run.run.nights ? tr(' · 버틴 밤 {0}번', [run.run.nights]) : '';
   const level = run.run.diff !== DEFAULT_LEVEL ? ` · ${DIFFICULTY[run.run.diff].label}` : '';
-  const village = run.village ? ` · 마을 ${run.village}` : '';
-  return `${run.env.day}일째 ${phaseName(run.env.hour)} · 밝힌 구역 ${run.zones.length}/${totalZones}${nights}${level}${village}`;
+  const village = run.village ? tr(' · 마을 {0}', [run.village]) : '';
+  return tr('{0}일째 {1} · 밝힌 구역 {2}/{3}{4}{5}{6}', [run.env.day, phaseName(run.env.hour), run.zones.length, totalZones, nights, level, village]);
 }

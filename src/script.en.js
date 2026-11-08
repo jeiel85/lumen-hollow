@@ -1,0 +1,538 @@
+// 영어 대본: src/script.js와 나란한 영어판. 말하는 사람·장·목표·장면·기록을 script.js의 id·키로 짝짓는다.
+// 장면의 lines와 기록의 body는 원문과 같은 차례·같은 개수여야 하고, 기록의 note·hand·flip도 원문에 있는 것만 둔다.
+// 글만 담는다. who·art·cam·when·kind·match 같은 연출·진행 값은 script.js 하나가 정한다.
+// 화면에 나오는 글이므로 script.js와 같이 콘텐츠이며, 조건은 LICENSE-CONTENT.md를 따른다.
+
+export const EN = {
+  speakers: {
+    me: 'Me', gran: 'Grandma', other: 'Strange Voice', nar: '',
+    owner: 'Diner Owner', pharm: 'Pharmacist', kid: 'Child', doha: 'Doha', jeong: 'Oh Jeong-seok', patient: 'Stranger', mom: 'Mom',
+  },
+
+  chapters: {
+    1: 'A Place to Return',
+    2: 'Handover',
+    3: 'The Empty Stretcher',
+    4: 'Roll Call',
+  },
+
+  objectives: {
+    ferry: 'Take the boat to see Grandma',
+    search: 'Get ready to call the next watchkeeper — the handover log in the watch room and the locker on the dock',
+    call: 'Call the next watchkeeper from the dock',
+    leave: 'Take the ferry boat back to town',
+    go: 'Ask after your family at the relief station across the river',
+    store: 'At the levee storehouse, match the numbers on the register and the luggage tag',
+    back: 'Return the register and the luggage tag to the pharmacist at the relief station',
+    annex: 'Go to the east classroom in the annex',
+    lamps: 'Light the spare lamps so both patients make it through the night',
+    wait: 'Wait for nightfall on the classroom steps',
+    night: 'Shine your light on the shadow coming across the schoolyard',
+    rest: 'Take a sip of water, then shine again',
+    class: 'Go back to the classroom',
+    broadcast: 'Start the morning broadcast from the broadcast booth',
+  },
+
+  finale: {
+    title: 'A Place to Return',
+    text: 'I wrote down the first report. Sneakers, only the left lace white.',
+  },
+
+  scenes: {
+    // ---------------------------------------------------------------- 1장 · A Place to Return
+    arrival: {
+      title: 'The Light Left Behind',
+      lines: [
+        'That night, Mom pressed a flashlight into my hand.',
+        'While the light wavered, Mom called my name.',
+        'The battery cover popped open. Mom pressed my fingers down over it, tight.',
+        'When I took her hand again, Mom didn\'t answer.',
+        'The emergency broadcasts went on for three days. On the fourth, they stopped.',
+        '…kssht… Anyone who can hear this, come to Lumen Hollow.',
+        'We have to bring the light back. Anyone who can hear me…',
+        'I gave the people at the city gym our address and asked them to look after Mom. Then I set out.',
+        'I walked for twenty days and reached the valley I lived in as a kid.',
+        'Only the shelter\'s generator was still running. There was one fuse left in the emergency box.',
+        'Grandma, it\'s me. I made it to the shelter.',
+        'My pup… you\'re alive.',
+        'When the sun goes down, stay near the light. The shades move at night.',
+        'Put a fuse in a fuse box and you can bring that district back.',
+        'Mom fell asleep in the city. She won\'t wake up, no matter how much I call her.',
+        '…I see. Then we take the light back, starting here.',
+        'Read the log by the front door, too. Someone who held out before you wrote it.',
+      ],
+    },
+    dusk: {
+      title: 'The Edge of the Light',
+      lines: [
+        'The sun\'s going down. Get near a streetlight or the shelter\'s light.',
+        'If a shade comes, shine your flashlight on it. Hold it there until it scatters.',
+        'If they crowd the edge of a light for too long, the breaker can trip.',
+        'A district that goes dark comes back on at dawn. Find another light.',
+      ],
+    },
+    dawn: {
+      title: 'A Morning Without Answers',
+      lines: [
+        'Grandma, I\'m still alive.',
+        'Good. Hearing your voice, I can finally breathe.',
+        'The things that came at me last night… they moved like people.',
+        'You saw right. I\'ll tell you what I know, one thing at a time.',
+        'Whatever happens, don\'t put that flashlight away.',
+      ],
+    },
+    light1: {
+      title: 'The First Repair',
+      lines: [
+        'You fixed the first fuse box. I can see the lines glinting from here.',
+        'Can you see the whole town from the lighthouse?',
+        'I can. But I can\'t see inside every house.',
+        'What actually happened?',
+        'The council threw a party to put out the lighthouse. Trade one light for a hundred, they said.',
+        'The notice from that day should still be on the board in the square. What I wrote on it, too.',
+      ],
+    },
+    shadows: {
+      title: 'Where the Shadows Left',
+      lines: [
+        'That\'s the second fuse box. It\'s time I told you.',
+        'When the First Light went out, the dark under the lake spread along the power lines.',
+        'From the town to the city, the lights went out almost all at once.',
+        'Wherever it went completely dark, people\'s shadows came loose from them.',
+        'I was right beside Mom… so why was I all right?',
+        'Maybe your flashlight held your shadow in place. I can\'t be sure.',
+        'Look at the diner\'s menu board and the pharmacy\'s record. People who saw that night left them.',
+      ],
+    },
+    return: {
+      title: 'A Place to Return',
+      lines: [
+        'That\'s the third fuse box. I won\'t hide it from you anymore.',
+        'The shades are the shadows that came loose from the sleepers.',
+        'Then what I\'ve been driving off with my flashlight…',
+        'You weren\'t taking them away. Give them enough light, and they go back to their owners.',
+        'When a small light heads home, watch it all the way. That\'s when someone opens their eyes.',
+        'And the ones that came at me?',
+        'They\'re looking for somewhere to cling. Even so, let them close and you\'ll get hurt.',
+        'Then I\'ll keep shining. Until they make it back.',
+        'Good. Look for Doha\'s diary, too. That child saw something was wrong before anyone else.',
+      ],
+    },
+    founders: {
+      title: 'The Promise Left Behind',
+      lines: [
+        'The fourth fuse box. You\'ve fixed half of them.',
+        'Has this happened in this valley before?',
+        'In the winter of 1926, the twelve families who lived here went through the same night.',
+        'They used light to bring back their neighbors\' shadows, and raised the First Light on the island in the lake.',
+        'After that, people took turns keeping the lines and the light.',
+        'Read what\'s left on the plaque in the square. From the water tower, you can see the island.',
+      ],
+    },
+    lookout: {
+      title: 'The Light Across the Water',
+      lines: [
+        'I climbed the rusted ladder and grabbed the railing.',
+        'Past the forest, in the middle of the lake, stood a dark lighthouse.',
+        'See the little lamp at the top? That\'s me. I\'m here.',
+        'Can\'t you come out by boat?',
+        'Every night the dark rises out of the water. I can\'t leave the lamp.',
+        'And someone has to be here to push the switch up when the power reaches the First Light.',
+        'A small boat was tied up at the pier by the water.',
+        'When the way opens, come in that boat. For now, you can\'t get there.',
+      ],
+    },
+    promise: {
+      title: 'With My Own Hand',
+      lines: [
+        'That\'s the fifth fuse box. I can\'t put this off any longer.',
+        'I stood against the council\'s decision to put out the light. And then I pulled the switch down myself.',
+        'You did?',
+        'I was afraid the old warning was true. I was afraid it was false, too.',
+        'I couldn\'t stop it in the end. Part of why your mother is asleep is on me.',
+        'You knew that, and you still told me to come here?',
+        'I couldn\'t bring the lines back on my own. Not that I had any right to ask you.',
+        'I\'m angry. But I can\'t just stop and leave Mom.',
+        '…All right. My wrong is mine to carry. You use your hands to turn the lights on.',
+        'There\'s a letter I never sent, in the mailbox at my house. Would you read it?',
+      ],
+    },
+    line: {
+      title: 'The Severed Line',
+      lines: [
+        'The sixth fuse box. Time I told you about the old line.',
+        'The order came down to cut the line for the lights-out ceremony. Out in the field, it went differently.',
+        'The worker didn\'t cut the wire. A connector was left open instead.',
+        'It\'s set up so that, as you restore the fuse boxes, the connector closes again.',
+        'So someone left a way back on purpose.',
+        'In case the light ever had to come back on, I suppose. Look at the work order out at the barn.',
+        'There isn\'t enough power yet to light every neighborhood you\'ve restored.',
+        'Fix the last fuse box and full power comes back. All nine districts will connect.',
+      ],
+    },
+    last: {
+      title: 'One Left',
+      lines: [
+        'That\'s the seventh fuse box. Just one left.',
+        'If I fix the last one, can you light the lighthouse?',
+        'When the power reaches me, I\'ll push the switch up. With my own hand, this time.',
+        'Will Mom wake up too?',
+        'I don\'t know where her shadow is. If it\'s far, it\'ll take a long while.',
+        'I can\'t promise she\'ll wake. But let\'s open the way for her.',
+        'Okay. I\'ll find the last fuse.',
+      ],
+    },
+    finale: {
+      title: 'A Place to Return',
+      lines: [
+        'I slotted in the last fuse. A hum ran down the lines into the forest.',
+        'The power\'s here. …Child, this time I\'m the one pushing it up.',
+        'Over the radio came the sound of the switch going up.',
+        'In the middle of the lake, the First Light came back on.',
+        'Do you see it? You sent the light all the way here.',
+        'As the beam swept the lake, the dark at the edge of the forest drew back.',
+        'Light spread from window to window across town. I could see small lights looking for a place to return to.',
+        'Grandma, there\'s someone at that window now, isn\'t there?',
+        'Yes. Now they can look out of that house, too, and see who\'s out there.',
+        '…kssht… This is the shelter across the river. Our power just came back. Anyone hear me?',
+        'I hear you! This is Lumen Hollow. We\'re alive here too.',
+        'Did you hear that? The light is traveling the same road the dark took.',
+        'I\'m going to keep calling until Mom answers.',
+        'Do that. When it\'s light out, take the boat and come to me.',
+        'And then we\'ll go find your mother together.',
+      ],
+    },
+
+    // ---------------------------------------------------------------- 2장 · Handover
+    ferry: {
+      title: 'At the Crossing',
+      lines: [
+        'When I was little, the current scared me, so I only ever looked at the bottom of the boat. This time I rowed with my eyes on the railing across the water.',
+        'Point the bow a little to the left. That\'s it. From there, the water will bring you in.',
+        'Can you see me?',
+        'From the way you row, it\'s you, all right.',
+      ],
+    },
+    landing: {
+      title: 'Face to Face',
+      lines: [
+        'Grandma pulled me up by the hand. Her thumb was wrapped in three layers of bandage.',
+        'What happened to your hand?',
+        'Pressing the radio rubbed it raw. Have you eaten?',
+        'Tell me about Mom first.',
+        'Grandma put the lids back on the two bowls she\'d set out.',
+      ],
+    },
+    relief: {
+      title: 'The Stand-In',
+      lines: [
+        'This is Lighthouse Island. Looking for one person to keep the First Light. We\'ll work out the shifts together.',
+        'I run the diner. Left the soup pot with a neighbor. I\'ll come.',
+        'You, with that seasickness of yours? Coming out here?',
+        'That\'s why I haven\'t eaten either.',
+        'A little later, a work boat from town pulled in. The voice I\'d been hearing on the radio was suddenly right next to me.',
+        'The owner\'s color didn\'t come back until he sat down on the stone steps.',
+        'My door wouldn\'t open, would it? The latch bent on the inside. I got my customers out the back.',
+        'Watch the light make one full turn, then sign your name in the handover log.',
+        'Grandma didn\'t pick up her coat until he\'d finished the last stroke.',
+      ],
+    },
+    bowls: {
+      title: 'Two Bowls',
+      lines: [
+        'That rice from earlier… can I eat it now?',
+        'Grandma pressed the cold rice into balls the size of a fist. One went into my hand, the other into her coat pocket.',
+        'This is the shelter across the river. We\'ve moved patients here from the city. Anyone looking for family, please come.',
+        'From Mom\'s neighborhood too?',
+        'Some of them have lost their names. When you come, we\'ll go through their belongings together first.',
+        'We stacked the empty bowls and pushed off in the ferry boat. From the town landing, we walked along the riverbank.',
+      ],
+    },
+
+    // ---------------------------------------------------------------- 3장 · The Empty Stretcher
+    count: {
+      title: 'The Twelfth Space',
+      lines: [
+        'I\'m Han Seo-yun. Twelve people were brought to the pharmacy at first. I brought all twelve of them here.',
+        'Are they all awake?',
+        'Eleven are. The last one is still sleeping. But that one\'s from around here.',
+        'Eleven pairs of shoes were lined up neatly beside the stretcher. The ones who had woken were waiting for the patient.',
+        'The people from the city are on a separate register. Could you bring the register and the luggage tags from the levee storehouse?',
+        'The pharmacist held out a key wrapped in a handkerchief. Mud had dried hard along the levee path out to the storehouse.',
+      ],
+    },
+    key: {
+      title: 'Mom\'s Key',
+      lines: [
+        'This is our house key. And there\'s writing on the back of the photo, in Mom\'s hand.',
+        'Who carried her here on their back, all the way from that far-off city?',
+        'I thought I was the one going to Mom. She was coming too.',
+        'For twenty days, every night, I\'d said good night to an empty house.',
+        'You did well. And now you know where to say it.',
+      ],
+    },
+    knock: {
+      title: 'The Child Outside the Door',
+      lines: [
+        'I\'m looking for the man on watch at the shelter. Oh, Dad. It\'s me, Doha. Is my bag there, by any chance?',
+        'Doha, where did you and your dad find each other?',
+        'At the diner. That night I knocked on the shelter door, but it wouldn\'t open. There was a light behind the diner.',
+        'I found her the next day. The little rascal was asleep under the lamp by the diner\'s back door.',
+        'I turned on my flashlight. But I was sleepy, so I was going to look for Dad in the morning.',
+        'At the end of every sentence, the child let go of her dad\'s radio button too soon. Those short silences didn\'t scare me anymore.',
+      ],
+    },
+    chair: {
+      title: 'The Guardian\'s Chair',
+      lines: [
+        'An oil lamp glowed in the annex window. Beside it, a chair stood empty.',
+        'Child, what I have to tell your mother, I\'ll tell her myself.',
+        'Okay. But first I\'m going to hold Mom\'s hand.',
+        'On Mom\'s palm was a callus the same width as the flashlight\'s grip. My thumb fit right into it.',
+      ],
+    },
+
+    // ---------------------------------------------------------------- 4장 · Roll Call
+    roll: {
+      title: 'Two People',
+      lines: [
+        'Mom lay by the window. By the door lay the last patient from the pharmacy.',
+        'We moved this patient here from the main building. No word from the family yet.',
+        'I\'ll sit with your mother. You take the flashlight.',
+        'Mom did that too, that night. Left just me inside the light.',
+        'Then tonight, let\'s keep them both inside the light.',
+      ],
+    },
+    firsthome: {
+      title: 'By the Door',
+      lines: [
+        'The light that broke loose at the end of my beam went in over the window by the door. Someone by the door coughed.',
+        'Where\'re my shoes?',
+        'Right here. Slowly, now. There are eleven people who\'ve been waiting for you.',
+        'My hand on the radio went slack. From the window, not a sound.',
+        'I thought it was Mom.',
+        'Want to sit down a minute? I\'ll take the light.',
+        'Just a sip of water, please. I can still shine.',
+      ],
+    },
+    secondhome: {
+      title: 'By the Window',
+      lines: [
+        'A shadow came running from the far end of the schoolyard. I gripped the handle with both hands.',
+        'The light crossed toward the classroom. A long while later came the click of a radio button.',
+        'Grandma took the radio from the windowsill and held it to Mom\'s hand.',
+        '…You\'re still using that? The battery cover always pops off.',
+        'I taped it.',
+        'Good job.',
+        'There was so much to say. What came out first was a laugh. I took the lit steps two at a time.',
+      ],
+    },
+    truth: {
+      title: 'Three People',
+      lines: [
+        'I\'m the one who put out the First Light. I had time to call you, and I didn\'t.',
+        'You were scared, weren\'t you?',
+        'Yes.',
+        'I was scared too. I put a light in my kid\'s hand, and then I couldn\'t see anything.',
+        'Grandma took the flattened rice ball from her coat pocket. Mom broke it into three pieces.',
+        'Next time, call me. Especially when you\'re scared.',
+        'I will.',
+        'I want to get that call too.',
+        'We sat perched on the edge of the same chair and ate the cold rice. Nobody got up first.',
+      ],
+    },
+    broadcast: {
+      title: 'The First Morning Broadcast',
+      lines: [
+        'In the morning, I pressed the transmit button in Grandma\'s place. I used the knuckle of my thumb, and it didn\'t hurt.',
+        'This is Lumen Hollow, at the old school across the river. If you\'re looking for someone, please listen.',
+        'You don\'t need a name. Tell us where you saw them last, and what they had with them.',
+        'After a short burst of static, the first answer came.',
+        'Blue sneakers. Only the left lace is white.',
+        'Hold on. I\'m writing it down. Only the left lace white.',
+        'By the window, Mom slid a fresh sheet of paper over to me.',
+      ],
+    },
+  },
+
+  clues: {
+    // ---------------------------------------------------------------- 1장
+    log: {
+      title: 'Shelter Log',
+      where: 'Notice stand beside the shelter\'s front door',
+      body: [
+        '[Emergency Shelter · On watch: Oh Jeong-seok]',
+        'Lights-out ceremony at 23:30. Residents went to the square. I\'m on watch.',
+        '23:59. The lighthouse went dark. I heard clapping.',
+        '00:00. Town blackout. Emergency generator on. Radio says the city\'s out too.',
+        '00:02. Screams from the square. People\'s shadows on the ground',
+        'Day 2. Broadcast: Stay near light. Do not leave sleepers in the dark.',
+        'Day 4. Broadcasts stopped. Posted rules on the door.',
+        'Be inside before sundown. Keep the light going. Do not check outside the door at night.',
+        'Day 6. My daughter\'s voice outside the door. I was too scared to open it.',
+        'At daybreak I go to find her. The generator and the fuse in the emergency box stay here.',
+      ],
+      note: 'It didn\'t say whether he found his daughter.',
+    },
+    notice: {
+      title: 'Notice: Lighthouse Lights-Out Ceremony',
+      where: 'South Square notice board',
+      body: [
+        'All residents are invited to the lighthouse lights-out ceremony.',
+        'We\'re giving one old lighthouse a rest, and with the savings, lighting a hundred streetlights!',
+        'Midnight on the night of the new moon. Join us in the square for hot tea.',
+        '— Lumen Hollow Town Council',
+      ],
+      hand: 'That light is not only for the boats. Do not put it out. — Yun',
+      note: 'Below Grandma\'s handwriting was a crease where someone had folded the notice and opened it again.',
+    },
+    diner: {
+      title: 'Back of the Diner Menu Board',
+      where: 'Menu board outside the Alley Diner',
+      body: [
+        'Midnight. The lighthouse went out. The customers clapped.',
+        'The lights in here went out. The shadows on the wall got up first.',
+        'When the shadows went out the door, their owners slumped over the tables.',
+        'They\'re breathing. They won\'t wake when I call.',
+        'When I flick the lighter, my shadow stays stuck to my feet.',
+        'Not much fuel lef',
+      ],
+      note: 'The door was locked from the inside. The fogged glass told me nothing about what was in there.',
+    },
+    chart: {
+      title: 'Pharmacy Night Record',
+      where: 'Record board outside Hanbit Pharmacy',
+      body: [
+        '[Hanbit Pharmacy · Han Seo-yun]',
+        'Day 3. Twelve patients, carried in on people\'s backs. Breathing and pulse maintained. Unconscious.',
+        'No patient shadows observed, even under lighting.',
+        'After prolonged light on one shadow outside, a small light moved toward a house.',
+        'Afterward, a caregiver reported a patient waking. Whether related requires further confirmation.',
+        'A person from the city reports seeing the same symptoms.',
+        'One lantern left. Tonight',
+      ],
+      note: 'It was quiet behind the shutter. I set the board back in its place.',
+    },
+    diary: {
+      title: 'Doha\'s Diary',
+      where: 'Yellow school bag, Northeast Houses',
+      body: [
+        'October 24. Sunny. The lighthouse grandma said night pools like water.',
+        'Everyone laughed. I wondered where the water would go if it overflowed.',
+        'October 28. Cloudy. They turned off the lighthouse for a little while, as a test.',
+        'My shadow waved its hand one beat late. Mom didn\'t see.',
+        'October 30. Rain. I\'m bringing my flashlight to the lights-out ceremony tomorrow.',
+        'If a shadow gets lost, I\'ll call to it. Over here, I\'ll say.',
+      ],
+      note: 'There was a battery rolling around in the bag. I wonder where Doha is.',
+    },
+    plaque: {
+      title: 'Plaque on the Square Statue',
+      where: 'Statue, South Square',
+      body: [
+        'In the winter of 1926, the twelve families of this valley kept each other\'s lights burning.',
+        'So that neighbors who had lost their shadows could return, they raised the First Light on the island in the lake.',
+        'Keeping the light is not the work of one person.',
+        'Do not put out the First Light. The valley\'s night will wake.',
+      ],
+      note: 'I walked past these words every day as a kid. Only now did I read them to the end.',
+    },
+    tower: {
+      title: 'Water Tower',
+      where: 'Water tower ladder, Pharmacy Street',
+    },
+    letter: {
+      title: 'The Unsent Letter',
+      where: 'Mailbox, Southeast Houses',
+      body: [
+        'To my pup,',
+        'Tomorrow night they put out the lighthouse. The council wants it done by my own hand.',
+        'I tried to stop them, but everyone said it was an old fear. Half of me believed them.',
+        'If it\'s true, I\'m afraid. If it isn\'t, I\'m afraid all the years I kept it were for nothing.',
+        'Today I almost called your mother, then didn\'t. I didn\'t want to just worry her.',
+        'Come down with your mom this winter. I\'ll leave the light on in your old room.',
+        '— Grandma',
+      ],
+      note: 'The porch light was off. The end of the letter had been left unfolded.',
+    },
+    order: {
+      title: 'Power Station Work Order #1031',
+      where: 'Power station toolbox, Barn Fields',
+      body: [
+        'Task: Disconnect the lighthouse line. Council Resolution No. 12.',
+        'Route: Barn transformer box → forest path utility poles → pier → Lighthouse Island.',
+        'When: Immediately after lights-out. Separate the line from the regional grid.',
+        'Worker\'s note: Instead of cutting, I\'m leaving a restore-linked connector open.',
+        'Set so the connector rejoins as each fuse box is restored.',
+        'While output is limited, only some streetlights in use. Full supply to all districts once the last fuse box is restored.',
+        'Once all nine districts are supplied, the lamp can be lit at the lighthouse.',
+        'Someone has kept mending the 1926 line all these years. This time, I\'m leaving it whole.',
+      ],
+      note: 'On a line I thought was cut, someone had left a way back.',
+    },
+
+    // ---------------------------------------------------------------- 2장
+    islandbook: {
+      title: 'Handover Log',
+      where: 'Watch room wall, Lighthouse Island',
+      body: [
+        'The lamp turns when power comes in. The watchkeeper must confirm by eye, from the shore, that the light is turning.',
+        'Do not leave your post until you have seen the next person\'s face.',
+        'Before Yun: Park. Before Park: Han.',
+      ],
+      note: 'On the last page, Grandma\'s name alone, written twenty-three times.',
+    },
+    spare: {
+      title: 'Paper Strip on the Spare Radio',
+      where: 'Dock locker, Lighthouse Island',
+      body: [
+        'Spare radio. The button is stiff. Press with your thumb knuckle, not your fingernail.',
+        'Returned by Oh Jeong-seok. My kid keeps thinking the radio\'s a toy, so I tie the strap up high.',
+      ],
+    },
+
+    // ---------------------------------------------------------------- 3장
+    manifest: {
+      title: 'Transfer Register',
+      where: 'Levee storehouse wall',
+      body: [
+        'Departed downtown gym. Persons collected from their homes are registered under the address where first found.',
+        'Record full name if known. If not, record where found and belongings.',
+        'No. 17. Apartment stair landing. Wearing one sock only. Right hand set stiff, as if it had been gripping something.',
+        'Destination changed. Main building full. To the annex of the old school across the river.',
+      ],
+    },
+    tag: {
+      title: 'Belongings Envelope, No. 17',
+      where: 'Levee storehouse shelf',
+      body: ['One front door key. Two rubber bands. One small photo.'],
+      flip: {
+        label: 'Turn the photo over',
+        body: ['In the photo, I was reaching up over the statue\'s head. On the back was Mom\'s handwriting.'],
+        hand: 'Mrs. Yun will see this and say the kid\'s going to fall again.',
+      },
+    },
+    transfer: {
+      title: 'The Pharmacist\'s Handover Note',
+      where: 'The pharmacist, at the relief station',
+      body: [
+        'Annex, east classroom, No. 17.',
+        'When family arrives, don\'t start by asking for a name. Let them hold the patient\'s hand.',
+        'For a visitor\'s chair, take mine.',
+      ],
+      hand: '— Seo-yun',
+    },
+
+    // ---------------------------------------------------------------- 4장
+    roster: {
+      title: 'Watch Room Roll Board',
+      where: 'Watch room by the schoolyard',
+      body: [
+        'Sleeping tonight: two. Sitting with them: two.',
+        'Window: Yun\'s daughter — her mother came.',
+        'Door: name unknown — on watch: Oh Jeong-seok.',
+        'No empty seats. Everyone has someone beside them.',
+      ],
+    },
+  },
+};

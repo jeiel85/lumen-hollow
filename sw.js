@@ -15,9 +15,9 @@
 const BUILD = '__BUILD__';
 const CACHE = `lumen-${BUILD}`;
 const MODULES = [
-  'src/main.js', 'src/audio.js', 'src/caches.js', 'src/chapters.js', 'src/dialogue.js', 'src/difficulty.js', 'src/env.js', 'src/geometry.js', 'src/grid.js', 'src/hud.js',
+  'src/main.js', 'src/audio.js', 'src/caches.js', 'src/chapters.js', 'src/dialogue.js', 'src/difficulty.js', 'src/env.js', 'src/geometry.js', 'src/grid.js', 'src/hud.js', 'src/i18n.js', 'src/i18n.en.js',
   'src/input.js', 'src/minimap.js', 'src/music.js', 'src/native.js', 'src/nights.js', 'src/online.js', 'src/player.js', 'src/post.js', 'src/pwa.js', 'src/records.js', 'src/rng.js',
-  'src/runsave.js', 'src/script.js', 'src/settings.js', 'src/shades.js', 'src/slots.js', 'src/storage.js', 'src/store.js', 'src/story.js',
+  'src/runsave.js', 'src/script.js', 'src/script.en.js', 'src/settings.js', 'src/shades.js', 'src/slots.js', 'src/storage.js', 'src/store.js', 'src/story.js',
   'src/vehicle.js', 'src/wardrobe.js', 'src/wisps.js', 'src/world.js',
 ];
 const VERSIONED = ['style.css', ...MODULES].map((p) => `${p}?v=${BUILD}`);
@@ -28,7 +28,7 @@ const UNVERSIONED = [
   'favicon.svg', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png',
   'icons/apple-touch-icon.png',
   // 처음 화면·메뉴 그림(index.html·style.css가 가리킨다). 버전 쿼리 없이 같은 주소라 옛 탭도 새 캐시에서 찾는다.
-  'art/title-wide.webp', 'art/title-tall.webp', 'art/logo-wide.webp', 'art/logo-stack.webp', 'art/panel.webp',
+  'art/title-wide.webp', 'art/title-tall.webp', 'art/logo-wide.webp', 'art/logo-stack.webp', 'art/logo-wide-en.webp', 'art/logo-stack-en.webp', 'art/panel.webp',
   'art/btn-lit.webp', 'art/btn-dark.webp', 'art/icon-closet.webp', 'art/icon-journal.webp', 'art/icon-settings.webp',
   'art/icon-install.webp', 'art/icon-grid.webp',
   // 이야기 장면의 컷신 그림(src/script.js 줄의 art). 오프라인에서도 장면이 그림과 함께 나오게 미리 받는다.

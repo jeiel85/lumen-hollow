@@ -1,5 +1,5 @@
 // 이야기 대본 《돌아갈 자리》: 무전·대면 장면(SCENES), 남은 기록(CLUES), 장 정보(CHAPTERS)와 목표 문구(OBJECTIVES).
-// 화면에 나오는 글이므로 콘텐츠(CC BY 4.0, LICENSE-CONTENT.md)다. 설정 요약은 docs/story.md.
+// 화면에 나오는 글이므로 콘텐츠다(조건은 LICENSE-CONTENT.md). 설정 요약은 docs/story.md. 영어판은 src/script.en.js(id로 짝짓기).
 // 1장 장면이 언제 나오는지(when)와 무엇을 여는지(unlocks)는 여기서 정하고, 1장 기록이 마을 어디에 놓이는지는 src/story.js,
 // 2~4장 장면을 트는 순서와 기록 자리는 src/chapters.js가 정한다.
 //
@@ -15,6 +15,9 @@
 // when : 1장 — 'start' 첫 판 시작 · 'dusk' 첫 해질녘 · 'dawn' 첫 새벽 · { zones: n } 은신처를 포함해 고친 구역이 n개가 될 때
 //        · 'win' 마지막 구역 · 'clue' 기록을 읽을 때(급수탑). 'chapter' — 2~4장, src/chapters.js가 차례에 맞춰 튼다.
 // ch   : 몇 장의 장면·기록인지(빠지면 1장). 수첩은 다다른 장까지만 보여 준다.
+
+import { isKo } from './i18n.js';
+import { EN } from './script.en.js';
 
 export const SPEAKERS = {
   me: '나', gran: '할머니', other: '낯선 목소리', nar: '',
@@ -678,3 +681,29 @@ export const CLUES = [
     ],
   },
 ];
+
+// ---------------------------------------------------------------- 영어판(#60)
+// 화면 언어가 영어면 같은 id의 영어 대본(src/script.en.js)으로 글만 바꾼다. 장면 순서·말하는 사람·그림·카메라는 그대로다.
+// 줄 수가 다르면 그 장면은 바꾸지 않는다(tests/node/i18n.test.mjs가 짝을 지킨다).
+function localize(en) {
+  Object.assign(SPEAKERS, en.speakers);
+  for (const c of CHAPTERS) c.title = en.chapters[c.n] ?? c.title;
+  Object.assign(OBJECTIVES, en.objectives);
+  Object.assign(FINALE, en.finale);
+  for (const s of SCENES) {
+    const e = en.scenes[s.id];
+    if (!e || e.lines.length !== s.lines.length) continue;
+    s.title = e.title;
+    s.lines.forEach((l, i) => {
+      l.text = e.lines[i];
+    });
+  }
+  for (const c of CLUES) {
+    const e = en.clues[c.id];
+    if (!e) continue;
+    for (const k of ['title', 'where', 'note', 'hand']) if (typeof e[k] === 'string') c[k] = e[k];
+    if (Array.isArray(e.body) && e.body.length === c.body.length) c.body = e.body.slice();
+    if (c.flip && e.flip) c.flip = { ...c.flip, ...e.flip };
+  }
+}
+if (!isKo) localize(EN);

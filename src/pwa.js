@@ -2,6 +2,7 @@
 // 안드로이드 앱(Capacitor) 안에서는 게임 파일이 앱에 들어 있어 셋 다 필요 없다(#49): 서비스 워커를 등록하지 않고
 // 설치 안내·'앱 설치' 묶음·전체 화면 줄을 숨긴다(전체 화면은 capacitor.config.json의 SystemBars.hidden).
 import { isNativeApp } from './native.js';
+import { tr } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -27,12 +28,12 @@ const changed = () => { for (const fn of listeners) fn(); };
 // sw.js의 InstallError 코드 → 사람이 읽을 이유
 function reasonText(code, detail) {
   switch (code) {
-    case 'mismatch': return '새 버전이 아직 서버에 다 퍼지지 않았어요';
-    case 'page': return `페이지를 받지 못했어요(응답 ${detail})`;
-    case 'missing': return `게임 파일 하나를 받지 못했어요(${detail})`;
-    case 'network': return '받는 도중 연결이 끊겼어요';
-    case 'quota': return '기기 저장 공간이 부족해요';
-    default: return detail ? `알 수 없는 문제예요(${detail})` : '설치가 중간에 멈췄어요';
+    case 'mismatch': return tr('새 버전이 아직 서버에 다 퍼지지 않았어요');
+    case 'page': return tr('페이지를 받지 못했어요(응답 {0})', [detail]);
+    case 'missing': return tr('게임 파일 하나를 받지 못했어요({0})', [detail]);
+    case 'network': return tr('받는 도중 연결이 끊겼어요');
+    case 'quota': return tr('기기 저장 공간이 부족해요');
+    default: return detail ? tr('알 수 없는 문제예요({0})', [detail]) : tr('설치가 중간에 멈췄어요');
   }
 }
 
@@ -40,14 +41,14 @@ export function offlineStatus() {
   switch (sw.state) {
     case 'ready':
       return sw.updateFailed
-        ? `오프라인 실행: 준비됐어요(지난 버전으로). 새 버전은 한 시간쯤 뒤나 다음에 열 때 다시 받아요 — ${sw.updateFailed}.`
-        : '오프라인 실행: 준비됐어요. 한 번 받아 둔 게임이라 인터넷 없이도 열려요.';
-    case 'installing': return '오프라인 실행: 게임 파일을 받아 두는 중이에요.';
-    case 'failed': return `오프라인 실행: 아직 안 됐어요 — ${sw.reason}. 다음에 열 때 다시 시도해요.`;
-    case 'blocked': return `오프라인 실행: 이 브라우저가 허락하지 않았어요(${sw.reason}). 사생활 보호 모드에서는 쓸 수 없을 수 있어요.`;
-    case 'unsupported': return '오프라인 실행: 이 브라우저에서는 쓸 수 없어요. 인터넷이 있을 때만 열려요.';
-    case 'dev': return '오프라인 실행: 개발 모드라 꺼 두었어요(?sw를 붙이면 켜져요).';
-    default: return '오프라인 실행: 확인하는 중이에요.';
+        ? tr('오프라인 실행: 준비됐어요(지난 버전으로). 새 버전은 한 시간쯤 뒤나 다음에 열 때 다시 받아요 — {0}.', [sw.updateFailed])
+        : tr('오프라인 실행: 준비됐어요. 한 번 받아 둔 게임이라 인터넷 없이도 열려요.');
+    case 'installing': return tr('오프라인 실행: 게임 파일을 받아 두는 중이에요.');
+    case 'failed': return tr('오프라인 실행: 아직 안 됐어요 — {0}. 다음에 열 때 다시 시도해요.', [sw.reason]);
+    case 'blocked': return tr('오프라인 실행: 이 브라우저가 허락하지 않았어요({0}). 사생활 보호 모드에서는 쓸 수 없을 수 있어요.', [sw.reason]);
+    case 'unsupported': return tr('오프라인 실행: 이 브라우저에서는 쓸 수 없어요. 인터넷이 있을 때만 열려요.');
+    case 'dev': return tr('오프라인 실행: 개발 모드라 꺼 두었어요(?sw를 붙이면 켜져요).');
+    default: return tr('오프라인 실행: 확인하는 중이에요.');
   }
 }
 
@@ -132,7 +133,7 @@ async function registerServiceWorker() {
   try {
     reg = await navigator.serviceWorker.register('sw.js', { scope: './' });
   } catch (err) {
-    setState('blocked', err?.name || '등록 실패');
+    setState('blocked', err?.name || tr('등록 실패'));
     throw err;
   }
   sw.reg = reg;
@@ -186,20 +187,20 @@ export function initPwa({ onAskInstall, onInstalled }) {
     const offline = !!navigator.serviceWorker?.controller;
     titleBtn?.classList.toggle('hidden', app || !(deferred || isIOS));
     installBtn?.classList.toggle('hidden', app || !deferred);
-    if (offlineEl) offlineEl.textContent = updateReady() ? '새 버전이 준비됐어요. 처음 화면의 "다시 열기"를 누르거나 다음에 열 때 바뀌어요.' : offlineStatus();
+    if (offlineEl) offlineEl.textContent = updateReady() ? tr('새 버전이 준비됐어요. 처음 화면의 "다시 열기"를 누르거나 다음에 열 때 바뀌어요.') : offlineStatus();
     updateEl?.classList.toggle('hidden', !updateReady());
     if (!status) return;
     if (app) {
       status.textContent = offline
-        ? '앱으로 실행 중이에요. 한 번 받아 둔 뒤라 인터넷 없이도 열려요.'
-        : '앱으로 실행 중이에요.';
+        ? tr('앱으로 실행 중이에요. 한 번 받아 둔 뒤라 인터넷 없이도 열려요.')
+        : tr('앱으로 실행 중이에요.');
     } else if (deferred) {
-      status.textContent = '설치하면 홈 화면·바탕화면에서 주소창 없이 전체 화면으로 열리고, 한 번 받은 뒤에는 인터넷 없이도 할 수 있어요.';
+      status.textContent = tr('설치하면 홈 화면·바탕화면에서 주소창 없이 전체 화면으로 열리고, 한 번 받은 뒤에는 인터넷 없이도 할 수 있어요.');
     } else if (isIOS) {
-      status.textContent = '공유 버튼(네모에 위쪽 화살표)을 누르고 "홈 화면에 추가"를 고르세요. 홈 화면 앱은 Safari와 기록을 따로 보관하니, 옮길 때는 아래 기록 내보내기·가져오기를 쓰세요.';
+      status.textContent = tr('공유 버튼(네모에 위쪽 화살표)을 누르고 "홈 화면에 추가"를 고르세요. 홈 화면 앱은 Safari와 기록을 따로 보관하니, 옮길 때는 아래 기록 내보내기·가져오기를 쓰세요.');
     } else {
       // Chrome·Edge도 이미 설치된 앱이면 설치 제안을 주지 않는다. "지원하지 않는다"고 단정하지 않는다.
-      status.textContent = '브라우저가 지금은 설치를 제안하지 않았어요. 이미 설치했다면 바탕화면·앱 목록의 Lumen Hollow로 여세요. 아니라면 브라우저 메뉴에서 "앱 설치"나 "홈 화면에 추가"를 찾아보세요(Chrome·Edge·삼성 인터넷 지원).';
+      status.textContent = tr('브라우저가 지금은 설치를 제안하지 않았어요. 이미 설치했다면 바탕화면·앱 목록의 Lumen Hollow로 여세요. 아니라면 브라우저 메뉴에서 "앱 설치"나 "홈 화면에 추가"를 찾아보세요(Chrome·Edge·삼성 인터넷 지원).');
     }
   }
 
@@ -247,7 +248,7 @@ export function initPwa({ onAskInstall, onInstalled }) {
     if (!fsBtn) return;
     const hide = !fsEnabled || matchMedia('(display-mode: fullscreen)').matches;
     $('fullscreen-row')?.classList.toggle('hidden', hide);
-    fsBtn.textContent = fsElement() ? '끄기' : '켜기';
+    fsBtn.textContent = fsElement() ? tr('끄기') : tr('켜기');
     fsBtn.setAttribute('aria-pressed', fsElement() ? 'true' : 'false');
   };
   fsBtn?.addEventListener('click', async () => {

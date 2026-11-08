@@ -29,6 +29,8 @@ export const localStorage = {
   clear: () => store.clear(),
 };
 globalThis.window ??= globalThis;
+// 화면 글의 언어(src/i18n.js)는 기기 언어를 따른다. 시험은 한국어 원문으로 돌린다(영어는 i18n 시험이 따로 본다).
+Object.defineProperty(globalThis, 'navigator', { value: { language: 'ko-KR', languages: ['ko-KR'] }, configurable: true, writable: true });
 globalThis.localStorage ??= localStorage;
 
 export const load = (rel) => import(pathToFileURL(path.join(repo, rel)).href);

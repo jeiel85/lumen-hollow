@@ -255,7 +255,7 @@ await B.shot('24-journal');
 
 out.errors = B.logs.filter((l) => /error|exception/i.test(l) && !/caches|online|fetch|CORS|ERR_/i.test(l));
 check('콘솔 오류 없음', out.errors.length === 0, out.errors);
-B.close();
+await B.close();
 const bad = out.checks.filter((c) => !c.ok).length;
 console.log(`\n${out.checks.length - bad}/${out.checks.length} 통과`);
 process.exit(bad ? 1 : 0);

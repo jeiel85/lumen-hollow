@@ -37,5 +37,5 @@ check('다음 장 단추로 2장 시작', r.ch === 2 && r.step === 'ferry', r);
 const errs = B.logs.filter((l) => /error|exception/i.test(l) && !/caches|online|fetch|CORS|ERR_/i.test(l));
 check('콘솔 오류 없음', errs.length === 0, errs);
 console.log(`${ok.filter(Boolean).length}/${ok.length}`);
-B.close();
+await B.close();
 process.exit(ok.every(Boolean) ? 0 : 1);

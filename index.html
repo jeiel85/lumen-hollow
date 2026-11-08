@@ -43,6 +43,8 @@
       "./src/grid.js": "./src/grid.js?v=__BUILD__",
       "./src/geometry.js": "./src/geometry.js?v=__BUILD__",
       "./src/hud.js": "./src/hud.js?v=__BUILD__",
+      "./src/i18n.js": "./src/i18n.js?v=__BUILD__",
+      "./src/i18n.en.js": "./src/i18n.en.js?v=__BUILD__",
       "./src/input.js": "./src/input.js?v=__BUILD__",
       "./src/minimap.js": "./src/minimap.js?v=__BUILD__",
       "./src/music.js": "./src/music.js?v=__BUILD__",
@@ -56,6 +58,7 @@
       "./src/rng.js": "./src/rng.js?v=__BUILD__",
       "./src/runsave.js": "./src/runsave.js?v=__BUILD__",
       "./src/script.js": "./src/script.js?v=__BUILD__",
+      "./src/script.en.js": "./src/script.en.js?v=__BUILD__",
       "./src/settings.js": "./src/settings.js?v=__BUILD__",
       "./src/shades.js": "./src/shades.js?v=__BUILD__",
       "./src/slots.js": "./src/slots.js?v=__BUILD__",
@@ -143,8 +146,8 @@
       <div class="title-main">
         <h1 class="title-logo">
           <picture>
-            <source media="(max-aspect-ratio: 4/5)" srcset="art/logo-stack.webp" width="840" height="492">
-            <img src="art/logo-wide.webp" alt="Lumen Hollow — 빛으로 버티는 밤" width="1240" height="337">
+            <source media="(max-aspect-ratio: 4/5)" srcset="art/logo-stack.webp" data-srcset-en="art/logo-stack-en.webp" width="840" height="492">
+            <img src="art/logo-wide.webp" data-src-en="art/logo-wide-en.webp" alt="Lumen Hollow — 빛으로 버티는 밤" width="1240" height="337">
           </picture>
           <span class="logo-glow" aria-hidden="true"></span>
         </h1>
@@ -276,6 +279,13 @@
             </div>
           </div>
           <p id="d-hint" class="hint">2~4장은 바로 바뀌고, 1장 판은 새로 시작할 때부터 바뀌어요.</p>
+          <div class="row"><span id="lang-label">언어 <small class="ko-only">Language</small></span>
+            <div class="seg" role="radiogroup" aria-labelledby="lang-label">
+              <label><input type="radio" name="lang" value="auto" data-setting="lang"><span>기기 설정</span></label>
+              <label><input type="radio" name="lang" value="ko" data-setting="lang"><span data-no-t>한국어</span></label>
+              <label><input type="radio" name="lang" value="en" data-setting="lang"><span>English</span></label>
+            </div>
+          </div>
         </div>
         <div class="group" role="group" aria-labelledby="g-sound">
           <h3 id="g-sound">소리</h3>
