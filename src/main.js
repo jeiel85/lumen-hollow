@@ -995,6 +995,9 @@ function applySetting(key) {
       break;
     case 'difficulty':
       // 1장 판은 시작할 때 정한 단계 그대로, 2~4장은 다음 프레임부터 바뀐다(diffNow).
+      // 같은 값을 보이는 두 곳(새 판 화면·설정)을 맞춘다: 새 판 화면을 열어 둔 채 설정에서 바꿔도 시작할 단계가 보이는 대로다.
+      newRunUi?.sync();
+      settingsUi?.sync();
       renderDiffNote();
       renderBest();
       if (game.state === 'pause' || settingsFrom === 'pause') renderPauseDiff();

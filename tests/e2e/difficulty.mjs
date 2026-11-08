@@ -87,6 +87,21 @@ check('끝 화면은 쉬움 신기록', /신기록\(쉬움\)/.test(r.endBest), r
 check('처음 화면은 고른 단계의 최고 기록', /최고 기록\(쉬움\)/.test(r.titleEasy) && r.titleHard === '', { e: r.titleEasy, h: r.titleHard });
 check('설정의 기록은 단계마다 한 줄, 설정의 난이도는 새 판 화면과 같은 값', /쉬움 — /.test(r.panel) && /보통 — /.test(r.panel) && r.setRadio === 'hard', r);
 
+// 새 판 화면을 열어 둔 채 설정에서 바꾸면 새 판 화면의 선택도 따라온다(#67 리뷰)
+r = await B.ev(`
+  const $ = (id) => document.getElementById(id);
+  lumen.backToTitle();
+  $('start-btn').click();
+  $('settings-btn').click();
+  const easy = document.querySelector('input[name="difficulty"][value="easy"]');
+  easy.checked = true; easy.dispatchEvent(new Event('change'));
+  $('settings-close').click();
+  const shown = document.querySelector('input[name="new-difficulty"]:checked')?.value;
+  const note = $('new-diff-note').textContent;
+  $('new-no').click();
+  return { shown, note, setting: lumen.settings.difficulty };`);
+check('새 판 화면을 연 채 설정에서 바꾸면 새 판 화면도 같은 단계', r.shown === 'easy' && r.setting === 'easy' && /이야기를 따라가고/.test(r.note), r);
+
 // 지울 판이 있으면 '지우고 시작'과 취소에 초점
 r = await B.ev(`
   const $ = (id) => document.getElementById(id);
