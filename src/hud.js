@@ -33,11 +33,11 @@ export class Hud {
   _applyKeys() {
     if (!this.el.keys) return;
     if (this._chapter) {
-      this.el.keys.textContent = 'WASD 이동 · 마우스 조준 · F/클릭 손전등 · E 길게 상호작용 · Q 붕대 · 휠 줌 · Esc 일시정지';
+      this.el.keys.textContent = 'WASD 이동 · 마우스 조준 · F/클릭 손전등 · E 길게 상호작용 · Q 붕대 · V 지도 · 휠 줌 · Esc 일시정지';
       return;
     }
     this.el.keys.textContent = this._driving
-      ? 'W 가속 · S 브레이크·후진 · A/D 핸들 · F 작업등 · E 길게 내리기 · Tab 배전반 · Esc 일시정지'
+      ? 'W 가속 · S 브레이크·후진 · A/D 핸들 · F 작업등 · E 길게 내리기 · Tab 배전반 · V 지도 · Esc 일시정지'
       : this._walkKeys + (this._online ? ' · G 보급품 남기기' : '');
   }
 

@@ -42,6 +42,7 @@
       "./src/geometry.js": "./src/geometry.js?v=__BUILD__",
       "./src/hud.js": "./src/hud.js?v=__BUILD__",
       "./src/input.js": "./src/input.js?v=__BUILD__",
+      "./src/minimap.js": "./src/minimap.js?v=__BUILD__",
       "./src/online.js": "./src/online.js?v=__BUILD__",
       "./src/player.js": "./src/player.js?v=__BUILD__",
       "./src/post.js": "./src/post.js?v=__BUILD__",
@@ -78,6 +79,12 @@
       </div>
     </div>
     <div id="fps" class="fps mono hidden" aria-hidden="true"></div>
+    <canvas id="minimap" class="minimap" role="button" tabindex="0" aria-label="지도 펼치기 (V)" aria-expanded="false" aria-controls="map" title="지도 (V)"></canvas>
+    <div id="map" class="map-panel hidden" role="dialog" aria-label="지도">
+      <div class="map-head"><span id="map-title" class="map-title">마을 지도</span><button id="map-close" class="chip" type="button">닫기<span class="key wide-only">V</span></button></div>
+      <canvas id="map-canvas" class="map-canvas" aria-hidden="true"></canvas>
+      <ul id="map-legend" class="map-legend"></ul>
+    </div>
     <p id="objective" class="objective hidden" aria-live="polite"></p>
     <div id="npc-tags" class="npc-tags" aria-hidden="true"></div>
     <div class="hud-bottom">
@@ -88,7 +95,7 @@
         <div id="load-wrap" class="bar load hidden"><span id="load-label" class="label">가로등 부하</span><div class="track"><div id="load-fill" class="fill"></div></div></div>
         <div class="inv"><span class="item">퓨즈 <b id="inv-fuse">1</b></span><span class="item">붕대 <b id="inv-band">0</b></span><span class="item">연료통 <b id="inv-can">0</b></span></div>
       </div>
-      <div id="key-hints" class="keys">WASD 이동 · 마우스 조준 · F/클릭 손전등 · E 길게 상호작용 · Q 붕대 · Tab 배전반 · 휠 줌 · Esc 일시정지</div>
+      <div id="key-hints" class="keys">WASD 이동 · 마우스 조준 · F/클릭 손전등 · E 길게 상호작용 · Q 붕대 · Tab 배전반 · V 지도 · 휠 줌 · Esc 일시정지</div>
     </div>
     <div id="prompt" class="prompt hidden"><span id="prompt-text"></span><div class="prompt-bar"><div id="prompt-fill"></div></div></div>
     <div id="toasts" class="toasts" aria-live="polite"></div>

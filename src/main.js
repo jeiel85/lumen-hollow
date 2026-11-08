@@ -20,6 +20,7 @@ import { Story, DOCS, sceneById, chapterOf } from './story.js';
 import { Dialogue } from './dialogue.js';
 import { SCENES, FINALE } from './script.js';
 import { Chapters } from './chapters.js';
+import { Minimap } from './minimap.js';
 import { captureRun, writeRun, readRun, clearRun, restoreWorld, describeRun } from './runsave.js';
 
 const $ = (id) => document.getElementById(id);
@@ -81,6 +82,10 @@ const dialogue = new Dialogue({ sound });
 // 2~4장 무대와 진행. 장 안에서는 ground가 그 무대(섬·강 건너 학교)이고, 1장 판에서는 마을(world)이다.
 const chapters = new Chapters(scene, world, story);
 let ground = world;
+// 구석 미니맵과 눌러서 펼치는 전체 지도(시간은 멈추지 않는다)
+const minimap = new Minimap({
+  mini: $('minimap'), panel: $('map'), full: $('map-canvas'), title: $('map-title'), legend: $('map-legend'), close: $('map-close'),
+}, { world, story, chapters, player, car });
 
 const wardrobe = new Wardrobe();
 player.setOutfit(wardrobe.wear);
@@ -1861,6 +1866,8 @@ function frame(now) {
     // 아무것도 하지 않는다
   } else if (esc && game.placing && game.state === 'play' && !settingsFrom) {
     if (!game.placing.busy) closePlace();
+  } else if (esc && minimap.isOpen && game.state === 'play' && !settingsFrom) {
+    minimap.close();
   } else if (esc || pKey) {
     if (settingsFrom) closeSettings();
     else if (journalFrom) closeJournal();
@@ -1873,6 +1880,8 @@ function frame(now) {
     if (game.state === 'play' && !game.chapter) openGrid();
     else if (game.state === 'grid') closeGrid();
   }
+  if (input.consume('KeyV') && game.state === 'play' && !dialogue.busy) minimap.toggle();
+  if (minimap.isOpen && game.state !== 'play' && game.state !== 'story') minimap.close();
   if (input.consume('KeyM')) {
     const muted = toggleMute();
     if (game.state === 'play') hud.toast(muted ? '소리를 껐다.' : '소리를 켰다.');
@@ -1955,6 +1964,7 @@ function frame(now) {
     });
   }
 
+  if (game.state === 'play' || game.state === 'pause' || game.state === 'grid') minimap.update(now, game.chapter);
   if (game.state !== 'title') {
     hud.update({
       day: env.day, dayLabel: game.chapter ? chapters.label : null, hour: env.hour, zonesOn: world.poweredZones, zonesTotal: world.totalZones,
@@ -2074,7 +2084,7 @@ if (params.has('debug')) {
     THREE, scene, camera, renderer, world, env, post, player, shades, car, wisps, game, input, hud, startGame,
     saveRun, resumeGame, readRun: () => readRun(world), backToTitle, pauseGame,
     wardrobe, drops, closet, openCloset, closeCloset, board, openGrid, closeGrid, online, caches,
-    story, dialogue, storyQueue, playScene, openDoc, queueStory, chapters, startChapter, get ground() { return ground; },
+    story, dialogue, storyQueue, playScene, openDoc, queueStory, chapters, startChapter, minimap, get ground() { return ground; },
     // sec초를 dt초 간격으로 진행한다. 실제 화면처럼 걷기·충돌을 보려면 dt를 1/60로 준다(최대 0.05, frame의 상한).
     step(sec, dt = 0.05) {
       const ms = Math.min(50, Math.max(1, dt * 1000));

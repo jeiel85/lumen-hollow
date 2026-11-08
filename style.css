@@ -450,3 +450,30 @@ body.chapter-mode .hud .zones, body.chapter-mode #power-btn, body.chapter-mode .
 @media (prefers-reduced-motion: reduce) {
   .chapter-card, .chapter-card.out { animation: none; transition-duration: 0.2s; }
 }
+
+/* 미니맵: 오른쪽 위 버튼 줄 아래의 둥근 작은 지도. 누르거나 V로 전체 지도를 펼친다(시간은 그대로 흐른다). */
+.minimap { position: absolute; z-index: 1; top: calc(var(--edge-t) + 52px); right: var(--edge-r); width: 150px; height: 150px; border-radius: 50%; pointer-events: auto; cursor: pointer; background: rgba(10, 14, 16, 0.55); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); touch-action: manipulation; }
+.minimap:focus-visible { outline: 2px solid var(--warm); outline-offset: 3px; }
+.map-panel { position: absolute; z-index: 2; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, 88vw, calc(100vh - 150px)); padding: 12px; border-radius: 16px; background: rgba(12, 17, 19, 0.9); border: 1px solid var(--line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); pointer-events: auto; display: grid; gap: 8px; }
+.map-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.map-title { font-size: 14px; color: var(--ink); }
+.map-head .key { margin-left: 6px; }
+.map-canvas { width: 100%; aspect-ratio: 1; border-radius: 12px; background: #1d2620; cursor: zoom-out; display: block; }
+.map-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--dim); }
+.map-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.mk { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.mk.me { background: #fff; border-radius: 0; clip-path: polygon(50% 0, 100% 100%, 50% 72%, 0 100%); }
+.mk.dead { border: 2px solid #ff8a4c; }
+.mk.ok { background: #8fd98a; }
+.mk.lamp { background: #ffcf86; width: 7px; height: 7px; }
+.mk.clue { background: #6fb6ff; }
+.mk.candle { background: #ffd36b; }
+.mk.truck { background: #a8d0d4; border-radius: 2px; width: 7px; height: 12px; }
+@media (pointer: coarse), (max-width: 720px) {
+  .minimap { width: 108px; height: 108px; top: calc(var(--edge-t) + 48px); }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  .minimap { width: 92px; height: 92px; top: calc(var(--edge-t) + 44px); }
+  .map-panel { width: min(420px, calc(100vh - 92px)); padding: 10px; gap: 6px; }
+  .map-legend { display: none; }
+}
