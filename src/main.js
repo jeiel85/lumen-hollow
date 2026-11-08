@@ -13,6 +13,7 @@ import { QUALITY, ZOOM, loadSettings, saveSettings, bindSettings } from './setti
 import { loadBest, recordRun, hasRecords, describeBest, initRecordsPanel } from './records.js';
 import { DIFFICULTY, LEVEL_NOTE, levelOf } from './difficulty.js';
 import { NightLog, EVENTS, KINDS, NOTES as NIGHT_NOTES, pickEvent } from './nights.js';
+import { Store } from './store.js';
 import { initPwa } from './pwa.js';
 import { initNative, isNativeApp } from './native.js';
 import { Wardrobe, OutfitDrops, Closet, itemLabel, objParticle } from './wardrobe.js';
@@ -33,6 +34,13 @@ const params = new URLSearchParams(location.search);
 // 로컬 개발(localhost·127.0.0.1)에서만 ?app으로 앱처럼 2~4장을 연다 — 2~4장 브라우저 시험용, 배포 주소에서는 무시.
 const LOCAL_DEV = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 const FULL_GAME = isNativeApp() || (LOCAL_DEV && params.has('app'));
+// 2~4장 한 번 결제(#51). 앱은 Play 결제, 로컬 개발(?app)은 흉내 가게(?paywall이면 사지 않은 상태에서, =pending·cancel·error로 결과).
+// 앱 빌드에서 LUMEN_PAYWALL=off로 만든 테스터용 빌드는 잠그지 않는다(scripts/build-app.mjs가 메타를 바꾼다).
+const PAYWALL_ON = document.querySelector('meta[name="lumen-paywall"]')?.content !== 'off';
+const store = isNativeApp() ? new Store({ mode: PAYWALL_ON ? 'native' : 'free' }) : FULL_GAME ? new Store({
+  mode: 'fake',
+  fake: { owned: !params.has('paywall'), outcome: { pending: 'pending', cancel: 'canceled', error: 'error' }[params.get('paywall')] ?? 'owned' },
+}) : new Store({ mode: 'none' });
 const mobile = matchMedia('(pointer: coarse)').matches;
 const settings = loadSettings({ mobile });
 
@@ -296,7 +304,7 @@ function renderBest() {
 // ---------------------------------------------------------------- 게임 흐름
 
 // 배포 직후 캐시된 옛 index.html과 섞이면 settings 화면이 없을 수 있다.
-const SCREENS = ['title', 'pause', 'end', 'settings', 'closet', 'journal', 'grid'];
+const SCREENS = ['title', 'pause', 'end', 'settings', 'closet', 'journal', 'grid', 'paywall'];
 // index.html이 body.front로 시작하므로 처음에는 그림이 깔려 있다. 그림이 화면을 다 덮는 동안에는 3D 장면을 그리지 않는다.
 let titleArt = true;
 function setScreen(id) {
@@ -304,7 +312,7 @@ function setScreen(id) {
   if (id !== 'journal') journalFrom = null;
   for (const s of SCREENS) $(s)?.classList.toggle('hidden', s !== id);
   // 처음 화면 그림(#title-art)은 처음 화면과 거기서 연 설정·수첩 뒤에 깐다. 옷장·판에서는 걷어 3D 장면을 보인다.
-  titleArt = id === 'title' || (id === 'settings' && settingsFrom === 'title') || (id === 'journal' && journalFrom === 'title');
+  titleArt = id === 'title' || id === 'paywall' || (id === 'settings' && settingsFrom === 'title') || (id === 'journal' && journalFrom === 'title');
   document.body.classList.toggle('front', titleArt);
 }
 
@@ -742,6 +750,10 @@ function onBack() {
     return true;
   }
   if (dialogue.scene) return true;
+  if (paywallOpen) {
+    closePaywall();
+    return true;
+  }
   if (game.state === 'title' && !settingsFrom && !journalFrom) {
     // '지우고 새로 시작' 확인이 떠 있으면 취소만 한다.
     if ($('new-confirm') && !$('new-confirm').classList.contains('hidden')) {
@@ -764,6 +776,9 @@ function backToTitle() {
   saveRun();
   if (game.chapter) {
     game.chapter = 0;
+    // 장 제목 카드가 걷히기 전에 나와도 처음 화면을 덮지 않게 바로 걷는다.
+    clearTimeout(cardTimer);
+    $('chapter-card')?.classList.add('hidden');
     chapters.end();
     ground = world;
     hud.setChapter(null);
@@ -1305,6 +1320,11 @@ function startChapter() {
     renderChapter();
     return;
   }
+  // 맛보기(2장 '첫 대면'까지)가 끝났는데 사지 않았으면 결제 화면을 연다(#51).
+  if (paywallDue()) {
+    openPaywall();
+    return;
+  }
   // 2~4장은 기본 마을에서 이어진다(나루터·호수가 기본 마을 배치에 맞춰져 있다). 다른 마을이면 기본 마을로 다시 열고 시작한다.
   if (world.village !== DEFAULT_VILLAGE) {
     reopenIn(DEFAULT_VILLAGE, 'chapter');
@@ -1364,6 +1384,12 @@ function showCard(text) {
 }
 
 function chapterStep(dt) {
+  // 맛보기 끝(2장 할머니와의 첫 대면 장면을 본 뒤): 사지 않았으면 처음 화면으로 나와 결제 화면을 연다. 진행은 장면 단위로 남아 있다.
+  if (paywallDue()) {
+    backToTitle();
+    openPaywall({ fromPreview: true });
+    return;
+  }
   player.drain = diffNow().drain;
   const flashKey = input.consume('KeyF') || input.consume('Touch_flash');
   const flashClick = input.consume('MouseLeft');
@@ -1476,6 +1502,89 @@ function finishStory() {
   setScreen('end');
 }
 
+// ---------------------------------------------------------------- 2~4장 한 번 결제(#51)
+// 맛보기는 2장 할머니와의 첫 대면 장면(landing)까지(사용자 결정). 그 뒤는 사야 열린다. 웹판은 2~4장이 앱에만 있어 여기 오지 않는다.
+
+function paywallDue() {
+  if (!FULL_GAME || !store.available || store.owned) return false;
+  return story.isSeen('landing');
+}
+
+let paywallOpen = false;
+function openPaywall({ fromPreview = false } = {}) {
+  if (!$('paywall')) return;
+  paywallOpen = true;
+  $('paywall-lead').textContent = fromPreview
+    ? '할머니를 만났다. 이야기는 여기서부터 앱 안 결제로 이어져요.'
+    : '맛보기는 2장 첫 대면까지예요. 이어서 하려면 2~4장을 열어 주세요.';
+  renderPaywall();
+  setScreen('paywall');
+  $('paywall-buy')?.focus();
+  // 열 때마다 묻는다: 앞서 닿았더라도 그사이 대기 중이던 결제가 끝났거나 환불됐을 수 있다.
+  bg(store.refresh().then(() => renderPaywall()));
+}
+
+function closePaywall() {
+  if (!paywallOpen) return;
+  paywallOpen = false;
+  setScreen('title');
+  renderChapter();
+  $('chapter-btn')?.focus({ preventScroll: true });
+}
+
+function renderPaywall(msg = null) {
+  const buy = $('paywall-buy');
+  if (!buy) return;
+  buy.textContent = store.price ? `2~4장 열기 · ${store.price}` : '2~4장 열기';
+  buy.disabled = store.busy || store.owned;
+  const say = $('paywall-msg');
+  if (msg !== null) say.textContent = msg;
+  else if (store.pending) say.textContent = '결제를 기다리고 있어요. 결제가 끝나면 바로 열려요.';
+  else if (store.reachable === false) say.textContent = 'Play 스토어에 연결하지 못했어요. 인터넷과 Play 스토어 로그인을 확인한 뒤 다시 확인해 주세요.';
+  else say.textContent = '';
+}
+
+const BUY_SAY = {
+  pending: '결제를 기다리고 있어요. 결제가 끝나면 바로 열려요.',
+  canceled: '',
+  unavailable: 'Play 스토어에서 이 상품을 찾지 못했어요. 잠시 뒤 다시 해 주세요.',
+  error: '결제를 마치지 못했어요. 잠시 뒤 다시 해 주세요.',
+  busy: '',
+};
+
+async function buyStory() {
+  renderPaywall('');
+  $('paywall-buy').disabled = true;
+  const r = await store.buy();
+  if (r.result === 'owned') {
+    onStoryOwned();
+    return;
+  }
+  renderPaywall(BUY_SAY[r.result] ?? BUY_SAY.error);
+}
+
+async function checkStory() {
+  renderPaywall('Play 스토어에 확인하는 중…');
+  const r = await store.refresh();
+  if (store.owned) onStoryOwned();
+  else renderPaywall(r.ok ? (store.pending ? null : '이 구글 계정으로 산 기록이 없어요.') : null);
+}
+
+// 산 뒤(또는 대기 중이던 결제가 끝난 뒤): 결제 화면이 열려 있으면 닫고 그 장으로 들어간다.
+function onStoryOwned() {
+  renderChapter();
+  if (!paywallOpen) return;
+  paywallOpen = false;
+  setScreen('title');
+  hud.toast('2~4장이 열렸어요. 고마워요!', 'good');
+  startChapter();
+}
+store.onChange(() => {
+  if (store.owned) onStoryOwned();
+  else if (paywallOpen) renderPaywall();
+  else renderChapter();
+});
+
 // 처음 화면의 장 단추: 1장을 마쳤으면 다음 차례의 장을, 다 끝냈으면 2장부터 다시 걷기를 보인다.
 let replayArmed = null;
 function renderChapter() {
@@ -1493,7 +1602,7 @@ function renderChapter() {
   btn.classList.toggle('hidden', (!info && !replay) || appOnly);
   btn.disabled = game.contextLost || !game.ready;
   replayArmed = null;
-  if (info) btn.textContent = `${info.fresh ? '다음 장' : '이어 가기'} · ${info.ch}장 ${info.title}`;
+  if (info) btn.textContent = `${info.fresh ? '다음 장' : '이어 가기'} · ${info.ch}장 ${info.title}${paywallDue() ? ' (2~4장 열기)' : ''}`;
   else if (replay) btn.textContent = '2장부터 다시 걷기';
 }
 
@@ -2367,6 +2476,8 @@ function frame(now) {
     if (!game.placing.busy) closePlace();
   } else if (esc && minimap.isOpen && game.state === 'play' && !settingsFrom) {
     minimap.close();
+  } else if (esc && paywallOpen) {
+    closePaywall();
   } else if (esc || pKey) {
     if (settingsFrom) closeSettings();
     else if (journalFrom) closeJournal();
@@ -2544,6 +2655,9 @@ function frame(now) {
 $('start-btn').addEventListener('click', newGame);
 $('resume-run-btn')?.addEventListener('click', resumeGame);
 $('new-yes')?.addEventListener('click', confirmNewGame);
+$('paywall-buy')?.addEventListener('click', buyStory);
+$('paywall-check')?.addEventListener('click', checkStory);
+$('paywall-close')?.addEventListener('click', closePaywall);
 for (const r of document.querySelectorAll('input[name="new-village"]')) r.addEventListener('change', () => villageUi.show());
 $('new-village-roll')?.addEventListener('click', () => {
   $('new-village-num').value = String(randomVillage());
@@ -2632,6 +2746,7 @@ if (params.has('debug')) {
     saveRun, resumeGame, readRun: () => readRun(world), backToTitle, pauseGame, endGame,
     wardrobe, drops, closet, openCloset, closeCloset, board, openGrid, closeGrid, online, caches,
     story, dialogue, storyQueue, playScene, openDoc, queueStory, chapters, startChapter, minimap, autoQ, takeCache, get ground() { return ground; },
+    store, openPaywall, closePaywall,
     // sec초를 dt초 간격으로 진행한다. 실제 화면처럼 걷기·충돌을 보려면 dt를 1/60로 준다(최대 0.05, frame의 상한).
     step(sec, dt = 0.05) {
       const ms = Math.min(50, Math.max(1, dt * 1000));
@@ -2746,6 +2861,13 @@ warmUp().then(() => {
   setContextLost(game.contextLost ?? false);
   // 사전 컴파일이 메인 스레드를 오래 막는 느린 기기에서 요청 시간 제한이 헛걸리지 않게, 준비가 끝난 뒤 소식을 받는다.
   renderOnline();
+  // 앱을 열 때마다 Play에 구매를 다시 묻는다(새 기기·다시 설치에서 복원, 환불이면 다시 잠금).
+  if (store.mode === 'native') bg(store.refresh().then(() => renderChapter()));
+  // 앱으로 돌아올 때도 묻는다(#70 리뷰): 백그라운드에 있는 동안 대기 결제가 끝나면 결제 연결이 끊긴 채라 이벤트가 오지 않을 수 있다.
+  // 구글 안내도 onResume에서 구매를 조회하라고 한다. 사면 그때 확인(acknowledge)도 된다.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && store.mode === 'native') bg(store.refresh().then(() => renderChapter()));
+  });
   if (params.get('start') === '1' || boot.then === 'start') startGame();
   else if (boot.then === 'chapter') startChapter();
   else if (boot.then === 'resume') resumeGame();
