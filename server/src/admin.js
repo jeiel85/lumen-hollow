@@ -6,6 +6,9 @@ import { RULES } from './rules.js';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MIN_TOKEN_LENGTH = 32;
 const DAILY_MAX_DAYS = 30;
+// 정리 작업은 하루 한 번(03:17 UTC) 돈다. 마지막 성공이 이보다 오래되면 한 번 이상 빠졌다는 뜻이다.
+const CRON_LATE_MS = 26 * 60 * 60 * 1000;
+const STORY_ROWS = 80; // 이야기 집계 표에 보여 줄 최대 행 수(많이 도달한 순)
 const RANGES = Object.freeze({ '1d': DAY_MS, '7d': 7 * DAY_MS, launch: null });
 const enc = new TextEncoder();
 const utcDay = (ms) => new Date(ms).toISOString().slice(0, 10);
@@ -46,6 +49,23 @@ async function sameSecret(a, b) {
   let diff = 0;
   for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
   return diff === 0;
+}
+
+// 분당 한도 키: 원문 IP 대신 토큰을 열쇠로 한 HMAC(게임 Worker의 IP 키와 같은 방식). 레이트 리밋 카운터 밖에는 남지 않는다.
+async function limitKey(secret, ip) {
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(`admin-rl|${ip}`)));
+  return [...sig.slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// 정리 작업 상태. 실행 기록(cron_runs)이 있으면 그것으로, 없으면(마이그레이션 0001 전이거나 아직 안 돎) 일별 집계 날짜로 본다.
+export function cronState(t, launchAt, lastAggregateDay, log) {
+  if (log?.lastRun) {
+    if (!log.lastRun.ok) return 'failed';
+    return log.lastSuccessAt !== null && log.lastSuccessAt >= t - CRON_LATE_MS ? 'ok' : 'late';
+  }
+  if (lastAggregateDay) return lastAggregateDay >= utcDay(t - 2 * DAY_MS) ? 'ok' : 'late';
+  return t - launchAt < 2 * DAY_MS ? 'pending' : 'late';
 }
 
 const pct = (n, d) => (d > 0 ? Math.round((1000 * n) / d) / 10 : null);
@@ -105,8 +125,17 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
     throw new HttpError(503, 'misconfigured');
   }
 
-  async function authorize(request, token) {
+  // 분당 한도(RL_ADMIN, 선택)는 토큰을 맞히기 전에 모든 요청에 건다. 틀린 토큰 반복은 물론, 토큰이 샜을 때
+  // 조회 반복으로 D1 하루 읽기 한도(게임과 함께 씀)를 다 쓰는 것도 묶는다. 다만 요청 자체는 Worker까지 오므로
+  // Workers 하루 요청 수(10만 건)는 줄이지 못한다(server/README.md '운영 대시보드' 참고).
+  async function authorize(request, env) {
+    const token = env.ADMIN_TOKEN;
     if (typeof token !== 'string' || token.length < MIN_TOKEN_LENGTH) throw new HttpError(503, 'admin_not_configured');
+    if (env.RL_ADMIN) {
+      const key = await limitKey(token, request.headers.get('CF-Connecting-IP') ?? 'unknown');
+      const { success } = await env.RL_ADMIN.limit({ key });
+      if (!success) throw new HttpError(429, 'rate', { 'Retry-After': '60' });
+    }
     const m = /^Bearer ([^\s]+)$/.exec(request.headers.get('Authorization') ?? '');
     if (!m || !(await sameSecret(m[1], token))) throw new HttpError(401, 'unauthorized', { 'WWW-Authenticate': 'Bearer' });
   }
@@ -136,8 +165,10 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
       daily('caches', 'created_at'),
       daily('uses', 'used_at'),
       daily('thanks', 'at'),
+      // GROUP BY +owner: 단항 +는 SQLite가 이 묶음을 위해 caches_owner 색인 전체를 훑는 계획을 고르지 않게 한다.
+      // 그래야 최근 24시간만 caches_created 색인으로 읽는다(test/schema.test.mjs가 실행 계획으로 확인).
       db.prepare(
-        "SELECT owner, count(*) AS n FROM caches WHERE created_at > ?1 AND owner <> 'deleted' GROUP BY owner ORDER BY n DESC, owner LIMIT 5",
+        "SELECT owner, count(*) AS n FROM caches WHERE created_at > ?1 AND owner <> 'deleted' GROUP BY +owner ORDER BY n DESC, owner LIMIT 5",
       ).bind(t - DAY_MS),
       db.prepare('SELECT action, key, count FROM rate_daily WHERE day = ?1 ORDER BY count DESC, key LIMIT 5').bind(utcDay(t)),
     ];
@@ -149,6 +180,24 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
       console.error('[admin] D1 조회 실패', err);
       throw new HttpError(503, 'db_unavailable');
     }
+    // 마이그레이션 0001이 더한 표(cron_runs, story_daily)는 따로 묻는다. 표가 아직 없어도(코드를 먼저 배포한 경우)
+    // 나머지 화면은 그대로 보이고, 이 부분만 '기록 없음'으로 둔다.
+    let extra = null;
+    try {
+      extra = await db.batch([
+        db.prepare('SELECT at, ok, ms, deleted, error FROM cron_runs ORDER BY id DESC LIMIT 1'),
+        db.prepare('SELECT max(at) AS at FROM cron_runs WHERE ok = 1'),
+        db.prepare('SELECT at, error FROM cron_runs WHERE ok = 0 ORDER BY id DESC LIMIT 1'),
+        db.prepare(
+          `SELECT kind, id, sum(n) AS n, sum(skipped) AS skipped FROM story_daily
+           WHERE day >= ?1 AND kind <> 'total' GROUP BY kind, id ORDER BY n DESC, kind, id LIMIT ?2`,
+        ).bind(utcDay(periodFrom), STORY_ROWS),
+        db.prepare("SELECT n FROM story_daily WHERE day = ?1 AND kind = 'total' AND id = ''").bind(utcDay(t)),
+      ]);
+    } catch (err) {
+      console.error('[admin] cron_runs·story_daily 조회 실패(마이그레이션 0001을 적용했는지 확인)', err);
+    }
+
     const rows = res.map((r) => r.results);
     const [decisionRow, periodRow, settingRow, liveRows, statRow, seenD, placesD, usesD, thanksD, owners, rates] = rows;
 
@@ -162,9 +211,24 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
     }
 
     const lastAggregateDay = statRow[0]?.day ?? null;
-    let cron;
-    if (lastAggregateDay) cron = lastAggregateDay >= utcDay(t - 2 * DAY_MS) ? 'ok' : 'late';
-    else cron = t - launchAt < 2 * DAY_MS ? 'pending' : 'late';
+    let cronLog = null; // null: 실행 기록 표가 없다(마이그레이션 0001 전)
+    let story = null;
+    if (extra) {
+      const [lastRun, lastOk, lastFail, storyRows, storyToday] = extra.map((r) => r.results);
+      const r = lastRun[0];
+      cronLog = {
+        lastRun: r ? { at: r.at, ok: r.ok === 1, ms: r.ms, deleted: r.deleted, error: r.error } : null,
+        lastSuccessAt: lastOk[0]?.at ?? null,
+        lastFailure: lastFail[0] ? { at: lastFail[0].at, error: lastFail[0].error } : null,
+      };
+      const todayEvents = storyToday[0]?.n ?? 0;
+      story = {
+        from: utcDay(periodFrom),
+        rows: storyRows.map((s) => ({ kind: s.kind, id: s.id, n: s.n, skipped: s.skipped })),
+        today: { events: Math.min(todayEvents, rules.storyMaxEventsPerDay), max: rules.storyMaxEventsPerDay, full: todayEvents > rules.storyMaxEventsPerDay },
+      };
+    }
+    const cron = cronState(t, launchAt, lastAggregateDay, cronLog);
 
     const series = (list) => new Map(list.map((r) => [r.day, r.n]));
     const [s, p, u, th] = [seenD, placesD, usesD, thanksD].map(series);
@@ -176,7 +240,7 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
 
     const limits = { place: rules.maxPlacesPerIpPerDay, use: rules.maxUsesPerIpPerDay };
     let rowsRead = null;
-    for (const r of res) if (typeof r.meta?.rows_read === 'number') rowsRead = (rowsRead ?? 0) + r.meta.rows_read;
+    for (const r of [...res, ...(extra ?? [])]) if (typeof r.meta?.rows_read === 'number') rowsRead = (rowsRead ?? 0) + r.meta.rows_read;
 
     return {
       now: t,
@@ -198,8 +262,10 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
         maxActiveTotal: rules.maxActiveTotal,
         lastAggregateDay,
         cron,
+        cronLog,
       },
       daily: days,
+      story,
       abuse: {
         topOwners: owners.map((r) => ({ owner: r.owner, n: r.n })),
         maxActivePerPlayer: rules.maxActivePerPlayer,
@@ -214,7 +280,7 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
       const url = new URL(request.url);
       if (url.pathname !== '/api/summary') throw new HttpError(404, 'not_found');
       if (request.method !== 'GET') throw new HttpError(405, 'method_not_allowed', { Allow: 'GET' });
-      await authorize(request, env.ADMIN_TOKEN);
+      await authorize(request, env);
       const launchAt = launchTime(env);
       return json(200, await summary(env.DB, url, now(), launchAt));
     } catch (err) {

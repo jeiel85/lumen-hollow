@@ -103,7 +103,7 @@
         <div id="scoped" class="scoped">
           <p id="period-partial" class="error small" hidden>⚠ 90일보다 오래된 사용·고마워요·접속 기록은 정리 작업이 지워서 이 기간 합계에서 빠져 있어요.</p>
           <div id="kpis" class="kpis"></div>
-          <p class="muted small">접속 플레이어는 온라인 보급품을 켠 채 게임을 연 서로 다른 ID입니다. 온라인을 끈 사람은 세지 않고, 하루(UTC) 단위로 기록돼 기간 시작 날 전체가 들어갑니다.</p>
+          <p class="muted small">접속 플레이어는 온라인 보급품을 켠 채 게임을 연 서로 다른 ID의 수라 근사값입니다. 온라인을 끈 사람은 세지 않고, 브라우저 저장소를 지우거나 '내 온라인 기록 지우기'로 ID가 바뀐 사람은 두 번 세집니다. 하루(UTC) 단위로 기록돼 기간 시작 날 전체가 들어갑니다.</p>
           <h3 class="sub">일별 추이 <span class="muted">(UTC 날짜, 한국 시간 오전 9시에 바뀝니다)</span></h3>
           <div id="charts" class="charts"></div>
           <details class="table-view">
@@ -113,6 +113,26 @@
               <tbody id="daily-table"></tbody>
             </table>
           </details>
+
+          <h3 class="sub">이야기 진행 <span class="muted">(UTC 날짜 단위, 기간 시작 날부터)</span></h3>
+          <p id="story-note" class="muted small"></p>
+          <p class="muted small">온라인을 켠 플레이어의 기기가 보낸 익명 횟수입니다. 누가 보냈는지는 서버에 없어서, 같은 사람이 같은 장면을 다시 보면 다시 셉니다.</p>
+          <div class="grid two">
+            <article class="card">
+              <h3>장</h3>
+              <table class="list">
+                <thead><tr><th scope="col">장</th><th scope="col" class="num">들어감</th><th scope="col" class="num">마침</th></tr></thead>
+                <tbody id="story-chapters"></tbody>
+              </table>
+            </article>
+            <article class="card">
+              <h3>장면 <span class="muted small">(많이 도달한 순)</span></h3>
+              <table class="list">
+                <thead><tr><th scope="col">장면 id</th><th scope="col" class="num">끝남</th><th scope="col" class="num">건너뜀</th><th scope="col" class="num">비율</th></tr></thead>
+                <tbody id="story-scenes"></tbody>
+              </table>
+            </article>
+          </div>
         </div>
       </section>
 

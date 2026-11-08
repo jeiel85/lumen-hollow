@@ -13,10 +13,10 @@ const FREE = [...Array(600).keys()].filter((s) => !BLOCKED_SLOTS.includes(s));
 
 const pid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
-function setup({ rules = RULES, limiter = () => true, env: extra = {}, latency = false } = {}) {
+function setup({ rules = RULES, limiter = () => true, env: extra = {}, latency = false, verify } = {}) {
   const clock = { t: Date.UTC(2026, 10, 6, 12) };
   const db = createD1({ latency });
-  const app = createApp({ now: () => clock.t, rules });
+  const app = createApp({ now: () => clock.t, rules, verify });
   const rl = { limit: async ({ key }) => ({ success: limiter(key) }) };
   const env = { DB: db, IP_HASH_SECRET: 'test-secret', ALLOWED_ORIGINS: `${ORIGIN},http://localhost:8000`, RL_READ: rl, RL_WRITE: rl, ...extra };
   async function call(method, path, { player, body, ip = '203.0.113.1', origin = ORIGIN, headers = {} } = {}) {
@@ -133,6 +133,26 @@ test('쓰기: 본인 불가, 같은 사람 24시간 1회, 8번 쓰면 소진되�
   const row = s.db.raw.prepare('SELECT charges, removed_by FROM caches WHERE id = ?').get(id);
   assert.deepEqual({ ...row }, { charges: 0, removed_by: 'exhausted' });
   assert.equal((await s.placeAs(9, FREE[0])).status, 201, '소진된 슬롯에 다시 둘 수 있다');
+});
+
+test('마지막 하나를 가져간 사람이 다시 물으면(응답이 끊겼던 경우) 소진된 상자라도 used_today', async () => {
+  const s = setup();
+  const id = (await s.placeAs(1, FREE[0], 'bandage')).body.cache.id;
+  for (let n = 2; n < RULES.charges + 1; n++) {
+    assert.equal((await s.call('POST', `/v1/caches/${id}/use`, { player: pid(n), ip: `192.0.2.${n}` })).status, 200);
+  }
+  const last = await s.call('POST', `/v1/caches/${id}/use`, { player: pid(90), ip: '192.0.2.90' });
+  assert.equal(last.status, 200);
+  assert.equal(last.body.charges, 0);
+  const retry = await s.call('POST', `/v1/caches/${id}/use`, { player: pid(90), ip: '192.0.2.90' });
+  assert.equal(retry.status, 409);
+  assert.equal(retry.body.error, 'used_today');
+  // 처음 오는 사람에게는 여전히 사라진 상자다
+  assert.equal((await s.call('POST', `/v1/caches/${id}/use`, { player: pid(91), ip: '192.0.2.91' })).status, 410);
+  // 한계: 재사용 대기(reuseCooldownMs)가 지나면 '최근에 썼다'를 알 수 없다(그때는 410). 상자 수명이 대기보다 길어
+  // 만료된 뒤에 다시 물으면 확인할 수 없다 — 클라이언트는 이어하기에서 곧바로 다시 묻는다.
+  s.clock.t += RULES.reuseCooldownMs + 1;
+  assert.equal((await s.call('POST', `/v1/caches/${id}/use`, { player: pid(90), ip: '192.0.2.90' })).status, 410);
 });
 
 test('같은 밀리초에 두 번 눌러도 횟수와 고마워요가 한 번만 반영된다', async () => {
@@ -326,4 +346,276 @@ test('부모를 먼저 지우면 외래 키가 막는다(연쇄 삭제 없음)',
   const id = (await s.placeAs(1, FREE[0])).body.cache.id;
   await s.call('POST', `/v1/caches/${id}/use`, { player: pid(2) });
   assert.throws(() => s.db.raw.prepare('DELETE FROM caches WHERE id = ?').run(id), /FOREIGN KEY/);
+});
+
+// ---------------------------------------------------------------- 클라이언트에 주는 규칙 수치 (#17)
+
+test('목록 응답에 클라이언트 안내용 규칙 수치(rules)가 있고 서버 규칙을 따른다', async () => {
+  const s = setup({ rules: { ...RULES, charges: 5, maxActivePerPlayer: 2 } });
+  const expected = { charges: 5, maxActivePerPlayer: 2, reuseCooldownMs: RULES.reuseCooldownMs, maxLifetimeMs: RULES.maxLifetimeMs };
+  const first = await s.call('GET', '/v1/caches?layout=1');
+  assert.deepEqual(first.body.rules, expected);
+  assert.deepEqual((await s.call('GET', '/v1/caches?layout=1')).body.rules, expected, 'Worker 메모리에 둔 목록에서도');
+  assert.deepEqual((await s.call('GET', '/v1/caches?layout=2')).body.rules, expected, '다른 배치 버전에서도');
+  s.db.raw.exec("UPDATE settings SET value = 'false' WHERE key = 'enabled'");
+  s.clock.t += RULES.listMemoMs;
+  assert.deepEqual((await s.call('GET', '/v1/caches?layout=1')).body.rules, expected, '킬 스위치가 내려가도');
+  assert.deepEqual(first.body.caches, [], '보급품 목록 형식은 그대로');
+});
+
+// ---------------------------------------------------------------- 2단계 남용 대응 (#17, 설계 10절)
+
+test('판 토큰: 목록마다 새로 주고, 기본(꺼짐)에서는 토큰 없이도 둘 수 있다', async () => {
+  const s = setup();
+  const a = (await s.call('GET', '/v1/caches?layout=1')).body.runToken;
+  s.clock.t += 1000;
+  const b = (await s.call('GET', '/v1/caches?layout=1')).body.runToken;
+  assert.match(a, /^\d{13}\.[0-9a-f]{32}$/);
+  assert.notEqual(a, b, 'Worker 메모리에 둔 목록이어도 토큰은 응답 시각으로 새로 만든다');
+  assert.equal((await s.placeAs(1, FREE[0])).status, 201);
+  const off = setup({ env: { RUN_TOKEN_REQUIRED: 'false' } });
+  assert.equal((await off.placeAs(1, FREE[0])).status, 201);
+});
+
+test('판 토큰을 켜면: 없거나 위조·만료면 403 run_token, 받은 지 3분 전이면 403 too_early', async () => {
+  const s = setup({ env: { RUN_TOKEN_REQUIRED: 'true' } });
+  const place = (n, slot, runToken) => s.call('POST', '/v1/caches', { player: pid(n), body: { layout: 1, slot, kind: 'bandage', note: 0, runToken } });
+  const token = (await s.call('GET', '/v1/caches?layout=1')).body.runToken;
+  const missing = await place(1, FREE[0]);
+  assert.deepEqual([missing.status, missing.body.error], [403, 'run_token']);
+  const early = await place(1, FREE[0], token);
+  assert.deepEqual([early.status, early.body.error], [403, 'too_early']);
+  s.clock.t += RULES.runTokenMinAgeMs - 1;
+  assert.equal((await place(1, FREE[0], token)).body.error, 'too_early');
+  s.clock.t += 1;
+  const [issued, sig] = token.split('.');
+  const forged = [`${issued}.${'0'.repeat(32)}`, `${Number(issued) - 600000}.${sig}`, `${issued}.${sig.toUpperCase()}`, `${token}x`, 42];
+  for (const bad of forged) assert.equal((await place(1, FREE[0], bad)).body.error, 'run_token', String(bad));
+  assert.equal(s.db.raw.prepare('SELECT count(*) AS n FROM rate_daily').get().n, 0, '거절된 요청은 하루 한도를 쓰지 않는다');
+  assert.equal((await place(1, FREE[0], token)).status, 201, '3분이 지나면 둘 수 있다');
+  s.clock.t += RULES.runTokenMaxAgeMs;
+  assert.equal((await place(1, FREE[1], token)).body.error, 'run_token', '24시간이 넘은 토큰은 받지 않는다');
+  const other = setup({ env: { RUN_TOKEN_REQUIRED: 'true', IP_HASH_SECRET: 'another-secret' } });
+  other.clock.t += RULES.runTokenMinAgeMs;
+  const r = await other.call('POST', '/v1/caches', { player: pid(1), body: { layout: 1, slot: FREE[0], kind: 'bandage', note: 0, runToken: token } });
+  assert.equal(r.body.error, 'run_token', '다른 비밀값으로 서명한 토큰은 받지 않는다');
+});
+
+test('사람 확인을 켜면 Turnstile로 확인하고, 실패·장애·설정 누락을 구분한다', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const calls = [];
+  let reply = { success: true };
+  const verify = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) });
+    if (reply instanceof Error) throw reply;
+    return new Response(JSON.stringify(reply));
+  };
+  const s = setup({ env: { HUMAN_CHECK_REQUIRED: 'true', TURNSTILE_SECRET: 'ts-secret' }, verify });
+  const place = (n, slot, humanToken) => s.call('POST', '/v1/caches', { player: pid(n), body: { layout: 1, slot, kind: 'bandage', note: 0, humanToken } });
+
+  assert.equal((await place(1, FREE[0])).body.error, 'human_check', '토큰이 없으면 확인 요청도 보내지 않는다');
+  assert.equal(calls.length, 0);
+  const long = 'h'.repeat(1800); // 실제 토큰은 1KB를 넘을 수 있다(최대 2048자)
+  assert.equal((await place(1, FREE[0], long)).status, 201);
+  assert.deepEqual(calls[0], { url: 'https://challenges.cloudflare.com/turnstile/v0/siteverify', body: { secret: 'ts-secret', response: long } });
+  assert.ok(!('remoteip' in calls[0].body), '원문 IP를 보내지 않는다');
+
+  reply = { success: false, 'error-codes': ['invalid-input-response'] };
+  const denied = await place(2, FREE[1], 'x');
+  assert.deepEqual([denied.status, denied.body.error], [403, 'human_check']);
+  reply = new Error('network down');
+  const down = await place(2, FREE[1], 'x');
+  assert.deepEqual([down.status, down.body.error], [503, 'human_check_unavailable']);
+  assert.equal((await place(2, FREE[1], 'h'.repeat(2049))).body.error, 'human_check', '2048자를 넘는 토큰');
+  assert.equal(s.db.raw.prepare('SELECT count(*) AS n FROM caches').get().n, 1, '거절된 요청은 D1에 쓰지 않는다');
+
+  const noSecret = setup({ env: { HUMAN_CHECK_REQUIRED: 'true' }, verify });
+  const r = await noSecret.placeAs(1, FREE[0]);
+  assert.deepEqual([r.status, r.body.error], [503, 'misconfigured'], '비밀값 없이 켜면 닫힌 채로 실패한다');
+
+  const off = setup({ verify });
+  calls.length = 0;
+  assert.equal((await off.placeAs(1, FREE[0])).status, 201);
+  assert.equal(calls.length, 0, '꺼져 있으면 확인 요청을 보내지 않는다');
+});
+
+// ---------------------------------------------------------------- 이야기 진행 집계 (#20, #32)
+
+const storyRows = (s) => s.db.raw.prepare('SELECT day, kind, id, n, skipped FROM story_daily ORDER BY kind, id').all().map((r) => ({ ...r }));
+const sendStory = (s, events, o = {}) => s.call('POST', '/v1/story', { body: { events }, ...o });
+
+test('이야기 집계: 플레이어 ID 없이 날짜·종류·id별 횟수와 건너뛴 횟수만 더한다', async () => {
+  const s = setup();
+  const r = await sendStory(s, [
+    { kind: 'scene', id: 'arrival', skipped: false },
+    { kind: 'scene', id: 'arrival', skipped: true },
+    { kind: 'scene', id: 'dusk' },
+    { kind: 'chapter', id: '2' },
+    { kind: 'clear', id: '2', skipped: false },
+  ]);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body, { accepted: 5 });
+  assert.equal(r.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+  await sendStory(s, [{ kind: 'scene', id: 'arrival', skipped: false }], { ip: '198.51.100.9' });
+  assert.deepEqual(storyRows(s), [
+    { day: '2026-11-06', kind: 'chapter', id: '2', n: 1, skipped: 0 },
+    { day: '2026-11-06', kind: 'clear', id: '2', n: 1, skipped: 0 },
+    { day: '2026-11-06', kind: 'scene', id: 'arrival', n: 3, skipped: 1 },
+    { day: '2026-11-06', kind: 'scene', id: 'dusk', n: 1, skipped: 0 },
+    { day: '2026-11-06', kind: 'total', id: '', n: 6, skipped: 0 },
+  ]);
+  assert.deepEqual(s.db.raw.prepare('PRAGMA table_info(story_daily)').all().map((c) => c.name), ['day', 'kind', 'id', 'n', 'skipped'], '사람을 가리키는 열이 없다');
+  assert.equal(s.db.raw.prepare('SELECT count(*) AS n FROM rate_daily').get().n, 0, 'IP 키도 남기지 않는다');
+  assert.equal(s.db.raw.prepare('SELECT count(*) AS n FROM seen').get().n, 0);
+  s.clock.t += DAY;
+  await sendStory(s, [{ kind: 'scene', id: 'arrival' }]);
+  assert.equal(s.db.raw.prepare("SELECT n FROM story_daily WHERE day = '2026-11-07' AND kind = 'scene'").get().n, 1, 'UTC 날짜가 바뀌면 새 행');
+});
+
+test('이야기 집계: 본문 형식을 엄격하게 확인한다', async () => {
+  const s = setup();
+  const cases = [
+    [{ events: [] }, 'bad_events'],
+    [{ events: 'scene' }, 'bad_events'],
+    [{}, 'bad_events'],
+    [{ events: Array.from({ length: RULES.storyMaxEvents + 1 }, () => ({ kind: 'scene', id: 'a' })) }, 'bad_events'],
+    [{ events: [{ kind: 'total', id: 'a' }] }, 'bad_event'],
+    [{ events: [{ kind: 'scene', id: 'Arrival' }] }, 'bad_event'],
+    [{ events: [{ kind: 'scene', id: '' }] }, 'bad_event'],
+    [{ events: [{ kind: 'scene', id: 'a'.repeat(25) }] }, 'bad_event'],
+    [{ events: [{ kind: 'scene', id: 'a b' }] }, 'bad_event'],
+    [{ events: [{ kind: 'scene', id: 7 }] }, 'bad_event'],
+    [{ events: [{ kind: 'scene', id: 'a', skipped: 'yes' }] }, 'bad_event'],
+    [{ events: [{ kind: 'chapter', id: '2', skipped: true }] }, 'bad_event'],
+    [{ events: [{ kind: 'scene', id: 'ok' }, null] }, 'bad_event'],
+  ];
+  for (const [body, code] of cases) {
+    const r = await s.call('POST', '/v1/story', { body });
+    assert.deepEqual([r.status, r.body.error], [400, code], JSON.stringify(body).slice(0, 80));
+  }
+  const huge = `{"events":[${Array(90).fill('{"kind":"scene","id":"a"}').join(',')}]}`;
+  assert.equal((await s.call('POST', '/v1/story', { body: huge })).status, 413);
+  assert.equal(storyRows(s).length, 0, '하나라도 틀리면 아무것도 세지 않는다');
+  const max = Array.from({ length: RULES.storyMaxEvents }, () => ({ kind: 'scene', id: 'z'.repeat(24), skipped: true }));
+  assert.equal((await sendStory(s, max)).body.accepted, RULES.storyMaxEvents, '가장 긴 id로 가득 채운 요청도 본문 한도 안이다');
+});
+
+test('이야기 집계: text/plain 본문(sendBeacon)도 받는다', async () => {
+  const s = setup();
+  const r = await s.call('POST', '/v1/story', {
+    body: JSON.stringify({ events: [{ kind: 'scene', id: 'dawn' }] }),
+    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+  });
+  assert.equal(r.status, 200);
+  assert.equal(storyRows(s).find((x) => x.id === 'dawn').n, 1);
+});
+
+test('이야기 집계: 하루 전체 상한을 넘으면 그날은 더 세지 않고, 다음 날 다시 센다', async () => {
+  const s = setup({ rules: { ...RULES, storyMaxEventsPerDay: 5 } });
+  const ev = (n) => Array.from({ length: n }, () => ({ kind: 'scene', id: 'arrival' }));
+  assert.equal((await sendStory(s, ev(3))).body.accepted, 3);
+  assert.equal((await sendStory(s, ev(2))).body.accepted, 2, '상한까지는 받는다');
+  assert.equal((await sendStory(s, ev(1))).body.accepted, 0);
+  // 가득 찬 뒤의 요청은 D1 행을 하나도 바꾸지 않는다(남용 요청이 게임의 하루 쓰기 한도를 쓰지 않게).
+  const batch = s.db.batch;
+  let changes = null;
+  s.db.batch = async (stmts) => {
+    const res = await batch(stmts);
+    changes = res.map((r) => r.meta.changes ?? 0).reduce((a, b) => a + b, 0);
+    return res;
+  };
+  assert.equal((await sendStory(s, ev(3))).body.accepted, 0, '가득 찬 뒤로는 계속 0');
+  assert.equal(changes, 0);
+  s.db.batch = batch;
+  const rows = storyRows(s);
+  assert.equal(rows.find((r) => r.kind === 'scene').n, 5);
+  assert.equal(rows.find((r) => r.kind === 'total').n, 6, '가득 참은 상한+1로 표시한다');
+  s.clock.t += DAY;
+  assert.equal((await sendStory(s, ev(1))).body.accepted, 1);
+});
+
+test('이야기 집계: 동시에 온 요청도 상한을 넘겨 세지 않는다(확인과 더하기가 한 트랜잭션)', async () => {
+  const s = setup({ rules: { ...RULES, storyMaxEventsPerDay: 4 }, latency: true });
+  const res = await Promise.all([1, 2, 3, 4, 5].map(() => sendStory(s, [{ kind: 'scene', id: 'dusk' }])));
+  assert.equal(res.reduce((sum, r) => sum + r.body.accepted, 0), 4);
+  assert.equal(storyRows(s).find((r) => r.kind === 'scene').n, 4);
+});
+
+test('이야기 집계: 킬 스위치·분당 한도·설정 누락을 따른다', async () => {
+  const s = setup();
+  s.db.raw.exec("UPDATE settings SET value = 'false' WHERE key = 'enabled'");
+  assert.equal((await sendStory(s, [{ kind: 'scene', id: 'a' }])).status, 503);
+  assert.equal(storyRows(s).length, 0);
+  const keys = [];
+  const blocked = setup({ limiter: (key) => { keys.push(key); return false; } });
+  const r = await sendStory(blocked, [{ kind: 'scene', id: 'a' }]);
+  assert.deepEqual([r.status, r.body.error], [429, 'rate']);
+  assert.ok(keys.length === 1 && !keys[0].includes('203.0.113'), '게임과 같은 분당 한도(RL_WRITE, IP 해시 키)');
+  assert.equal((await sendStory(setup({ env: { IP_HASH_SECRET: '' } }), [{ kind: 'scene', id: 'a' }])).status, 503);
+  assert.equal((await s.call('OPTIONS', '/v1/story')).status, 204);
+});
+
+// ---------------------------------------------------------------- 정리 작업 실행 기록 (#17, #30)
+
+const cronRuns = (s) => s.db.raw.prepare('SELECT id, at, ok, ms, deleted, error FROM cron_runs ORDER BY id').all().map((r) => ({ ...r }));
+
+test('정리 작업: 성공하면 시각·지운 행 수를 cron_runs에 남긴다', async () => {
+  const s = setup();
+  const id = (await s.placeAs(1, FREE[0])).body.cache.id;
+  await s.call('POST', `/v1/caches/${id}/use`, { player: pid(2) });
+  await s.call('POST', `/v1/caches/${id}/thanks`, { player: pid(2) });
+  await s.call('GET', '/v1/me', { player: pid(2) });
+  await sendStory(s, [{ kind: 'scene', id: 'arrival' }]);
+  await s.app.scheduled(s.env);
+  assert.deepEqual(cronRuns(s), [{ id: 1, at: s.clock.t, ok: 1, ms: 0, deleted: 0, error: null }]);
+
+  s.clock.t += RULES.lifetimeMs + RULES.retentionMs + DAY;
+  // uses 1 + thanks 1 + seen 1 + caches 1 + rate_daily(place, use) 2. 이야기 집계는 400일 보존이라 아직 남는다
+  assert.deepEqual(await s.app.scheduled(s.env), { deleted: 6 });
+  assert.equal(cronRuns(s).at(-1).deleted, 6);
+  assert.equal(storyRows(s).length, 2);
+  s.clock.t += RULES.storyKeepDays * DAY;
+  await s.app.scheduled(s.env);
+  assert.equal(storyRows(s).length, 0, '400일이 지나면 이야기 집계도 지운다');
+  assert.equal(cronRuns(s).at(-1).deleted, 2);
+});
+
+test('정리 작업: 실패하면 오류 메시지(200자)를 남기고 다시 던진다. 아무것도 지우지 않는다', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const s = setup();
+  await s.placeAs(1, FREE[0]);
+  const reason = `D1_ERROR: ${'x'.repeat(300)}`;
+  const broken = {
+    ...s.db,
+    batch: async (stmts) => (stmts.some((x) => x.sql.includes('DELETE FROM uses')) ? Promise.reject(new Error(reason)) : s.db.batch(stmts)),
+  };
+  await assert.rejects(s.app.scheduled({ ...s.env, DB: broken }), { message: reason });
+  const [run] = cronRuns(s);
+  assert.deepEqual({ ok: run.ok, deleted: run.deleted }, { ok: 0, deleted: null });
+  assert.equal(run.error, reason.slice(0, 200));
+  assert.equal(s.db.raw.prepare('SELECT count(*) AS n FROM daily_stats').get().n, 0, '한 트랜잭션이라 집계도 남지 않았다');
+  assert.equal(s.db.raw.prepare('SELECT count(*) AS n FROM caches').get().n, 1);
+});
+
+test('정리 작업: 성공을 기록하지 못하면 실패로 드러낸다', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const s = setup();
+  const broken = {
+    ...s.db,
+    batch: async (stmts) => (stmts.some((x) => x.sql.includes('INTO cron_runs')) ? Promise.reject(new Error('cron_runs 없음')) : s.db.batch(stmts)),
+  };
+  await assert.rejects(s.app.scheduled({ ...s.env, DB: broken }), /cron_runs 없음/);
+  assert.equal(console.error.mock.callCount(), 1);
+});
+
+test('정리 작업: 실행 기록은 최근 30번만 남긴다', async () => {
+  const s = setup();
+  for (let i = 0; i < RULES.cronRunsKept + 5; i++) {
+    await s.app.scheduled(s.env);
+    s.clock.t += HOUR;
+  }
+  const runs = cronRuns(s);
+  assert.equal(runs.length, RULES.cronRunsKept);
+  assert.equal(runs[0].id, 6);
+  assert.equal(runs.at(-1).id, RULES.cronRunsKept + 5);
 });

@@ -22,6 +22,14 @@ binding = "DB"
 database_name = "lumen-hollow-caches"
 database_id = "e0949202-1be3-4d95-ab6d-b0af5f18e1c0"
 
+# 분당 요청 한도(/api/summary, 토큰 확인 전 모든 요청). 키는 토큰으로 만든 HMAC(IP)이라 원문 IP가 아니다.
+# 틀린 토큰 반복과, 토큰이 샜을 때의 조회 반복(D1 읽기 한도 소진)을 묶는다. Workers 하루 요청 수는 줄이지 못한다.
+# 무료 플랜 비용 확인 결과는 server/README.md '비용 원칙'. 빼도 코드는 동작한다.
+[[ratelimits]]
+name = "RL_ADMIN"
+namespace_id = "7303"
+simple = { limit = 20, period = 60 }
+
 # 저장 로그는 게임 Worker와 같은 이유(2026-12-01 요금 체계 변경)로 끈다. 실시간 로그는 npx wrangler tail -c wrangler.admin.toml
 [observability]
 enabled = false
