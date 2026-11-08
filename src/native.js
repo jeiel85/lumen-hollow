@@ -27,3 +27,15 @@ export function initNative({ onBack }) {
   });
   return true;
 }
+
+// 기록 파일 저장(설정 → 기록 → 내보내기). 안드로이드 WebView는 blob 다운로드·Web Share(파일)가 없어서,
+// 앱 안의 FileSave 플러그인(android/.../FileSavePlugin.java)이 시스템 '저장' 창으로 쓴다.
+// 앱이 아니면 null(부른 쪽이 웹 방식으로 내보낸다). 앱이면 저장했으면 true, 취소했으면 false. 실패는 예외.
+let fileSave = null;
+export async function saveTextFile(name, text, mime = 'application/json') {
+  if (!isNativeApp()) return null;
+  fileSave ??= globalThis.capacitorExports?.registerPlugin?.('FileSave') ?? null;
+  if (!fileSave) throw new Error('파일 저장 기능을 찾지 못했어요');
+  const res = await fileSave.save({ name, text, mime });
+  return !!res?.saved;
+}

@@ -1,6 +1,7 @@
 import { load, save, remove, storageAvailable } from './storage.js';
 import { SLOTS, itemById } from './wardrobe.js';
 import { SCENES, CLUES } from './script.js';
+import { isNativeApp, saveTextFile } from './native.js';
 
 // 최고 기록: 이 브라우저의 localStorage에 두고, 파일로 내보내고 가져와 기기·브라우저 사이를 옮긴다.
 // 선택한 보관 방식과 그 한계는 DECISIONS.md의 "기록 보관" 항목에 있다.
@@ -329,6 +330,11 @@ export function initRecordsPanel({ totalZones, onChange, mobile, progress = null
       el.store.textContent = '이 브라우저는 저장소를 막아 두어 기록이 남지 않아요(사생활 보호 모드 등).';
       return;
     }
+    // 앱 기록은 앱 저장소에 있다. 앱을 지우거나 '저장공간 지우기'를 하면 사라진다(브라우저 공간 정리와는 상관없다).
+    if (isNativeApp()) {
+      el.store.textContent = '이 앱에 저장돼요. 앱을 지우거나 앱 저장공간을 비우면 사라지니 가끔 내보내 두세요.';
+      return;
+    }
     let persisted = false;
     try {
       persisted = !!(await navigator.storage?.persisted?.());
@@ -342,6 +348,17 @@ export function initRecordsPanel({ totalZones, onChange, mobile, progress = null
 
   el.exportBtn.addEventListener('click', async () => {
     const file = exportFile(snapshot(progress, totalZones));
+    // 안드로이드 앱: WebView는 아래 공유·다운로드가 되지 않아(조용히 아무것도 안 남는다) 시스템 저장 창으로 쓴다(#49).
+    if (isNativeApp()) {
+      try {
+        const saved = await saveTextFile(file.name, await file.text());
+        say(saved ? `${file.name} 파일로 저장했어요. 다른 기기에서 "가져오기"로 불러오면 돼요.` : '저장을 취소했어요.', saved ? 'good' : '');
+      } catch (err) {
+        console.warn('[records] 앱에서 기록 파일 저장 실패', err);
+        say(`기록 파일을 저장하지 못했어요(${err?.message ?? err}).`, 'warn');
+      }
+      return;
+    }
     // 휴대폰은 공유 시트로 넘기면 '파일에 저장'·메신저 전송을 고를 수 있다(iOS 홈 화면 앱은 다운로드가 막혀 있다).
     if (mobile && navigator.canShare?.({ files: [file] })) {
       try {
