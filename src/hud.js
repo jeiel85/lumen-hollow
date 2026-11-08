@@ -127,14 +127,15 @@ export class Hud {
     el.textContent = text;
   }
 
-  update({ day, dayLabel, hour, zonesOn, zonesTotal, hp, battery, fuses, bandages, flashOn, cans, driving, fuel, powerUsed, powerCap, tripped, load }) {
+  // event: 오늘 밤 사건의 한 단어(#57). 밤에만 시간대 옆에 붙인다.
+  update({ day, dayLabel, hour, zonesOn, zonesTotal, hp, battery, fuses, bandages, flashOn, cans, driving, fuel, powerUsed, powerCap, tripped, load, event = null }) {
     const hh = Math.floor(hour);
     const mm = Math.floor((hour - hh) * 6) * 10;
     this._set('day', this.el.day, dayLabel ?? `${day}일차`);
     this._set('time', this.el.time, `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`);
     const phase = phaseName(hour);
-    this._set('phase', this.el.phase, phase);
     const isNight = phase === '밤' || phase === '해질녘';
+    this._set('phase', this.el.phase, event && isNight ? `${phase} · ${event}` : phase);
     this._set('icon', this.el.icon, isNight ? '☾' : '☀');
     this._set('zones', this.el.zones, `${zonesOn} / ${zonesTotal}`);
     this.el.hp.style.transform = `scaleX(${hp / 100})`;

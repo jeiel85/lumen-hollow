@@ -11,6 +11,7 @@ import { Sound } from './audio.js';
 import { QUALITY, ZOOM, loadSettings, saveSettings, bindSettings } from './settings.js';
 import { loadBest, recordRun, hasRecords, describeBest, initRecordsPanel } from './records.js';
 import { DIFFICULTY, LEVEL_NOTE, levelOf } from './difficulty.js';
+import { NightLog, EVENTS, KINDS, NOTES as NIGHT_NOTES, pickEvent } from './nights.js';
 import { initPwa } from './pwa.js';
 import { initNative, isNativeApp } from './native.js';
 import { Wardrobe, OutfitDrops, Closet, itemLabel, objParticle } from './wardrobe.js';
@@ -149,7 +150,12 @@ const game = {
   savedAt: 0, // 판을 마지막으로 저장한 게임 시간(game.time)
   chapter: 0, // 2~4장을 하는 중이면 그 장 번호(1장 판이면 0)
   difficulty: 'normal', // 이 1장 판의 난이도 단계(시작할 때 정해지고 판 저장에 남는다). 2~4장은 설정의 단계를 바로 따른다.
+  nightEvent: null, // 오늘 밤 사건(#57, src/nights.js EVENTS의 이름). 해질녘에 정하고 새벽에 지운다. 1장 판만.
+  prevEvent: null, // 어젯밤 사건(같은 사건이 이틀 연달아 오지 않게)
+  fog: 0, // 안개 세기(0~1). 안개 낀 밤에 밤 정도를 따라 천천히 오르내린다.
+  surgeIn: 0, // 다음 전압 출렁임까지(게임 초)
 };
+const nightLog = new NightLog();
 
 // 지금 적용할 난이도 단계 값(src/difficulty.js)
 function diffNow() {
@@ -340,8 +346,10 @@ function beginRun({ chapter = false } = {}) {
     state: 'play', nights: 0, hold: 0, holdKey: null, peaceful: false, won: false, shake: 0, hintFlash: false,
     driving: false, holdLock: false, zoomBoost: 0, hintLoad: false, returned: 0, hintTold: false,
     run: game.run + 1, startedAt: game.time, onlineLive: false, onlinePaused: false, cacheTaken: 0, cacheBusy: false,
-    savedAt: game.time, chapter: 0, otherTab: false, pendingTake: null,
+    savedAt: game.time, chapter: 0, otherTab: false, pendingTake: null, nightEvent: null, prevEvent: null, fog: 0, surgeIn: 0,
   });
+  player.reach = 1;
+  player.jam = 0;
   if (!chapter) {
     chapters.end();
     ground = world;
@@ -488,6 +496,9 @@ function resumeGame() {
   env.rainLevel = e.rain;
   beginRun();
   game.difficulty = run.diff;
+  game.nightEvent = run.event;
+  game.prevEvent = run.prev ?? run.event; // 어젯밤 사건이 없던 옛 저장은 오늘 밤 사건으로
+  game.surgeIn = 6;
   game.nights = run.nights;
   game.returned = run.returned;
   game.cacheTaken = run.cacheTaken;
@@ -878,7 +889,25 @@ function reachedChapter() {
   return Math.max(1, game.chapter, chapters.nextInfo()?.ch ?? 1);
 }
 
+// 수첩 '밤의 기록'(#57): 만난 그늘이 종류와 밤 사건의 설명. 아직 못 만난 것은 이름을 가린다.
+function renderNightNotes() {
+  const list = $('journal-nights');
+  if (!list) return;
+  list.replaceChildren(...NIGHT_NOTES.map((n) => {
+    const li = document.createElement('li');
+    const known = nightLog.has(n.id);
+    li.className = known ? 'jrow' : 'jrow locked';
+    const b = document.createElement('b');
+    b.textContent = known ? n.name : '???';
+    const note = document.createElement('small');
+    note.textContent = known ? n.note : '아직 만나지 못했다.';
+    li.append(b, note);
+    return li;
+  }));
+}
+
 function renderJournal() {
+  renderNightNotes();
   dialogue.renderJournal({
     story, scenes: SCENES, docs: DOCS, upTo: reachedChapter(), canReset: journalFrom === 'title',
     onRead: (item) => dialogue.showDoc(item, {
@@ -1988,6 +2017,15 @@ function onTimeEvent(ev) {
     env.rainyNight = game.nights === 0 || Math.random() < 0.55;
     sound.play('dusk');
     if (!queueStory('dusk')) hud.toast('해가 진다. 불빛 가까이 머물자.', 'warn');
+    // 오늘 밤 사건(#57). 산책(peaceful) 중에는 없다.
+    game.nightEvent = game.peaceful ? null : pickEvent(game.nights, game.prevEvent);
+    game.prevEvent = game.nightEvent;
+    game.surgeIn = 6 + Math.random() * 6;
+    if (game.nightEvent) {
+      const e = EVENTS[game.nightEvent];
+      later(3.2, () => hud.toast(`${e.name} — ${e.dusk}`, 'warn'));
+      nightLog.mark(game.nightEvent);
+    }
     if (!game.hintFlash) {
       game.hintFlash = true;
       later(1.6, () => hud.toast(`${mobile ? '손전등 버튼' : 'F 키나 마우스 클릭'}으로 손전등을 켜자. 오래 비추면 그늘이가 흩어진다.`));
@@ -2002,6 +2040,7 @@ function onTimeEvent(ev) {
   } else if (ev === 'dawn') {
     game.nights++;
     env.day++;
+    game.nightEvent = null;
     sound.play('dawn');
     const reset = world.dawnReset();
     wisps.dawn();
@@ -2150,6 +2189,11 @@ function stepWorld(dt, frozen) {
   if (ev.banished) sound.play('banish');
   for (const p of ev.returned) sendHome(p);
   game.dread = ev.nearest < 12 ? 1 - ev.nearest / 12 : 0;
+  // 빛먹이가 곁에 있으면 손전등이 깜박이며 배터리를 더 빨리 잃는다(#57)
+  player.jam = ev.jam;
+  if (ev.jam > 0 && player.flashActive) player.battery = Math.max(0, player.battery - dt * 3 * ev.jam * player.drain);
+  for (const kind of ev.seen) meetKind(kind);
+  if (game.nightEvent === 'surge' && !game.peaceful) stepSurge(dt);
   const gridEvents = world.takeEvents();
   if (gridEvents) for (const e of gridEvents) onGridEvent(e);
 
@@ -2164,7 +2208,28 @@ function stepWorld(dt, frozen) {
   else if (game.time - game.savedAt >= SAVE_EVERY) saveRun();
 }
 
+// 처음 보는 그늘이 종류면 무엇인지 알린다(이 기기에서 한 번, 수첩 '밤의 기록'에 설명이 열린다).
+function meetKind(kind) {
+  if (!nightLog.mark(kind)) return;
+  if (KINDS[kind].meet) hud.toast(KINDS[kind].meet, 'warn');
+}
+
+// 전압 출렁임(#57): 밤이 깊은 동안 12~20초(난이도 배율)마다, 플레이어 곁의 켜진 구역(없으면 아무 켜진 구역)의 가로등이
+// 깜박인 뒤 3초쯤 꺼진다. 은신처 발전기와 트럭 작업등은 흔들리지 않는다.
+function stepSurge(dt) {
+  if (env.night < 0.75) return;
+  game.surgeIn -= dt;
+  if (game.surgeIn > 0) return;
+  game.surgeIn = (12 + Math.random() * 8) * diffNow().surge;
+  const lit = Object.values(world.zones).filter((z) => z.id !== 'H' && z.powered && z.on && !z.tripped && !(z.dip > 0));
+  if (!lit.length) return;
+  const here = world.zoneAt(player.pos.x, player.pos.z);
+  const pick = lit.find((z) => z.id === here && Math.random() < 0.7) ?? lit[(Math.random() * lit.length) | 0];
+  if (world.dip(pick.id) && pick.id === here) sound.play('trip');
+}
+
 // 화면 밖 16m 안에서 다가오는 그늘이(가까운 순 최대 6). 화면 안의 그늘이는 눈으로 보이니 표시하지 않는다.
+// 안개 낀 밤에는 가까이(최대 40% 줄어든 거리) 와서야 뜬다.
 const THREAT_R = 16;
 const threatOut = [];
 function offscreenThreats() {
@@ -2172,10 +2237,11 @@ function offscreenThreats() {
   for (const s of shades.list) {
     if (!s.active || s.state !== 'stalk') continue;
     const d = Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
-    if (d > THREAT_R) continue;
+    const reach = THREAT_R * (1 - 0.4 * game.fog);
+    if (d > reach) continue;
     tmp.set(s.x, 0.8, s.z).project(camera);
     if (Math.abs(tmp.x) < 0.92 && Math.abs(tmp.y) < 0.92) continue;
-    threatOut.push({ sx: (tmp.x * 0.5 + 0.5) * innerWidth, sy: (-tmp.y * 0.5 + 0.5) * innerHeight, k: 1 - d / THREAT_R, d });
+    threatOut.push({ sx: (tmp.x * 0.5 + 0.5) * innerWidth, sy: (-tmp.y * 0.5 + 0.5) * innerHeight, k: 1 - d / reach, d });
   }
   threatOut.sort((a, b) => a.d - b.d);
   if (threatOut.length > 6) threatOut.length = 6;
@@ -2290,6 +2356,11 @@ function frame(now) {
   game.shake = Math.max(0, game.shake - raw * 1.6);
 
   updateCamera(raw);
+  // 안개(#57): 안개 낀 밤이면 밤 정도를 따라 차오르고, 새벽·처음 화면·2~4장에서는 걷힌다.
+  const fogGoal = game.nightEvent === 'fog' && !game.chapter && game.state !== 'title' ? env.night : 0;
+  game.fog += (fogGoal - game.fog) * (1 - Math.exp(-raw * 0.7));
+  if (game.fog < 0.002 && fogGoal === 0) game.fog = 0;
+  player.reach = 1 - 0.42 * game.fog;
   env.update(dt, camFocus, pxPerUnit);
   world.update(dt, game.clock, env.night, camFocus, pxPerUnit);
   wisps.update(dt, game.clock, env.night);
@@ -2321,13 +2392,15 @@ function frame(now) {
     post.render(scene, inCloset ? closet.camera : camera, env.look, game.clock, {
       focus: 0.5, band: 0.07, blurScale: settings.tilt && !inCloset ? (game.state === 'title' ? 1.25 : 1.0) : 0,
       hurt: Math.max(player.hurtFx * (settings.shake ? 0.9 : 0.45), lowHp),
+      fog: inCloset ? 0 : game.fog,
     });
   }
 
   if (game.state === 'play' || game.state === 'pause' || game.state === 'grid') minimap.update(now, game.chapter);
   if (game.state !== 'title') {
     hud.update({
-      day: env.day, dayLabel: game.chapter ? chapters.label : null, hour: env.hour, zonesOn: world.poweredZones, zonesTotal: world.totalZones,
+      day: env.day, dayLabel: game.chapter ? chapters.label : null, hour: env.hour,
+      event: game.nightEvent && !game.chapter ? EVENTS[game.nightEvent].short : null, zonesOn: world.poweredZones, zonesTotal: world.totalZones,
       hp: player.hp, battery: player.battery, fuses: player.fuses, bandages: player.bandages, flashOn: player.flashActive,
       cans: player.cans, driving: game.driving, fuel: car.fuel,
       powerUsed: world.onCount, powerCap: world.capacity, tripped: world.trippedCount, load: loadShown,

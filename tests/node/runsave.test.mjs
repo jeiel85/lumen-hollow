@@ -55,3 +55,22 @@ test('난이도: 쉬움·어려움은 저장되고, 보통은 빠지며, 틀린 
   }
   localStorage.removeItem(RUN_KEY);
 });
+
+// 밤 사건(#57): 오늘 밤 사건과 어젯밤 사건이 따로 남는다(낮에 저장·이어해도 같은 사건이 이틀 연달아 오지 않게, #68 리뷰).
+test('밤 사건: 오늘 밤·어젯밤 사건을 따로 저장하고, 모르는 값은 버린다', () => {
+  writeRun(captureRun({ world, player, car, env, game: { ...game, nightEvent: null, prevEvent: 'fog' }, shades }));
+  let r = readRun(world).run.run;
+  assert.equal(r.event, null);
+  assert.equal(r.prev, 'fog');
+  writeRun(captureRun({ world, player, car, env, game: { ...game, nightEvent: 'surge', prevEvent: 'surge' }, shades }));
+  r = readRun(world).run.run;
+  assert.deepEqual([r.event, r.prev], ['surge', 'surge']);
+  const raw = JSON.parse(localStorage.getItem(RUN_KEY));
+  raw.run.event = 'quake';
+  raw.run.prev = 3;
+  localStorage.setItem(RUN_KEY, JSON.stringify(raw));
+  r = readRun(world);
+  assert.equal(r.status, 'ok');
+  assert.deepEqual([r.run.run.event, r.run.run.prev], [null, null]);
+  localStorage.removeItem(RUN_KEY);
+});

@@ -2,10 +2,14 @@ import * as THREE from 'three';
 import { LOAD_PER_SHADE } from './world.js';
 import { RAM_SPEED } from './vehicle.js';
 import { DIFFICULTY } from './difficulty.js';
+import { KINDS } from './nights.js';
 
 // 그늘이(Shade): 밤에만 나타나는 그림자 형체. 빛에 닿으면 물러나고 오래 비추면 흩어진다.
 const MAX = 18;
 const FAR = 46; // 차로 멀리 달아나면 뒤에 남은 그늘이는 사라진다(새로 깨어날 자리를 비운다).
+const EATER_SEEK = 24; // 빛먹이가 찾아가는 켜진 가로등 거리
+const EATER_LOAD = 5; // 빛먹이 하나가 거는 과부하(보통 그늘이의 배수)
+const JAM_R = 7; // 빛먹이가 손전등을 방해하는 거리
 
 export function glowTexture() {
   const cv = document.createElement('canvas');
@@ -68,7 +72,10 @@ export class Shades {
       g.add(body, head);
       g.visible = false;
       scene.add(g);
-      this.list.push({ g, mat, eyeMat, glowMat, arms, body, head, active: false, state: 'idle', x: 0, z: 0, vx: 0, vz: 0, fade: 0, burn: 0, cool: 0, seed: Math.random() * 100, tag: null, tough: 1, path: null });
+      this.list.push({
+        g, mat, eyeMat, glowMat, arms, body, head, active: false, state: 'idle', x: 0, z: 0, vx: 0, vz: 0, fade: 0, burn: 0, cool: 0,
+        seed: Math.random() * 100, tag: null, tough: 1, path: null, kind: 'shade', size: 1, seek: null, seekAt: 0,
+      });
     }
     this.spawnTimer = 2;
     this.banished = 0;
@@ -86,8 +93,26 @@ export class Shades {
     const s = this.list.find((e) => !e.active);
     if (!s) return false;
     Object.assign(s, { active: true, state: 'rise', x, z, vx: 0, vz: 0, fade: 0, burn: 0, cool: 0, tag, tough, path: path.map((p) => ({ ...p })) });
+    this._kind(s, 'shade');
     s.g.visible = true;
     return true;
+  }
+
+  // 종류에 맞게 크기·눈빛을 바꾼다(그늘이 메시는 미리 만든 묶음을 돌려 쓴다).
+  _kind(s, kind) {
+    const k = KINDS[kind] ?? KINDS.shade;
+    s.kind = kind;
+    s.size = k.look.size;
+    s.seek = null;
+    s.seekAt = -Infinity;
+    s.eyeMat.color.setRGB(...k.look.eye);
+    s.glowMat.color.setRGB(...k.look.glow);
+  }
+
+  count(kind) {
+    let n = 0;
+    for (const s of this.list) if (s.active && s.kind === kind && s.state !== 'die') n++;
+    return n;
   }
 
   hasTarget(tag) {
@@ -121,11 +146,63 @@ export class Shades {
       world.collide(probe, 0.3);
       if (Math.abs(probe.x - x) + Math.abs(probe.z - z) > 0.01) continue; // 벽·건물 안
       Object.assign(s, { active: true, state: 'rise', x, z, vx: 0, vz: 0, fade: 0, burn: 0, cool: 0, tag: null, tough: 1, path: null });
+      this._kind(s, 'shade');
       s.g.visible = true;
       this._last = s;
       return true;
     }
     return false;
+  }
+
+  _become(s, kind, tough) {
+    this._kind(s, kind);
+    s.tough = tough * KINDS[kind].stat.tough;
+  }
+
+  // 떼 그늘이: 한 자리 둘레(0.7~1.6m)에 n마리. 벽·빛 안이면 그 자리는 건너뛴다.
+  _pack(px, pz, world, n, around, tough) {
+    if (!this._spawn(px, pz, world, around)) return 0;
+    const lead = this._last;
+    this._become(lead, 'swarm', tough);
+    const probe = { x: 0, z: 0 };
+    let made = 1;
+    for (let i = 1; i < n * 3 && made < n; i++) {
+      const s = this.list.find((e) => !e.active);
+      if (!s) break;
+      const a = Math.random() * Math.PI * 2;
+      const r = 0.7 + Math.random() * 0.9;
+      const x = lead.x + Math.cos(a) * r;
+      const z = lead.z + Math.sin(a) * r;
+      if (!world.inBounds(x, z) || world.lightAt(x, z)) continue;
+      probe.x = x;
+      probe.z = z;
+      world.collide(probe, 0.3);
+      if (Math.abs(probe.x - x) + Math.abs(probe.z - z) > 0.01) continue;
+      Object.assign(s, { active: true, state: 'rise', x, z, vx: 0, vz: 0, fade: 0, burn: 0, cool: 0, tag: null, path: null });
+      this._become(s, 'swarm', tough);
+      s.g.visible = true;
+      made++;
+    }
+    return made;
+  }
+
+  // 빛먹이가 찾아갈 켜진 가로등(가장 가까운 것). 1초마다, 노리던 가로등이 꺼지면 바로 다시 고른다.
+  _seekLamp(s, world, t) {
+    const live = s.seek && world.zones[s.seek.zone].level >= 0.5;
+    if (t - s.seekAt < 1 && (live || !s.seek)) return live ? s.seek : null;
+    s.seekAt = t;
+    s.seek = null;
+    if (!world.lamps || world.night < 0.3) return null;
+    let best = EATER_SEEK * EATER_SEEK;
+    for (const L of world.lamps) {
+      if (world.zones[L.zone].level < 0.5) continue;
+      const d2 = (L.x - s.x) ** 2 + (L.z - s.z) ** 2;
+      if (d2 < best) {
+        best = d2;
+        s.seek = L;
+      }
+    }
+    return s.seek;
   }
 
   // ctx: { player, world, night, nights, spawning, car, driving, cap, diff }. cap은 저절로 깨어나는 그늘이 수의 상한(빠지면 밤마다
@@ -135,7 +212,8 @@ export class Shades {
     const px = player.pos.x;
     const pz = player.pos.z;
     // returned: 이번 프레임에 흩어져 주인에게 돌아가는 그림자 자리(빛줄기 연출·깨어남 단서용)
-    const events = { hits: 0, banished: 0, rammed: 0, nearest: Infinity, burning: 0, pressing: 0, returned: [] };
+    // jam: 빛먹이가 손전등을 방해하는 세기(0~1), seen: 가까이(14m) 보이는 종류(처음 만남 안내용)
+    const events = { hits: 0, banished: 0, rammed: 0, nearest: Infinity, burning: 0, pressing: 0, returned: [], jam: 0, seen: new Set() };
     const ramming = driving && Math.abs(car.speed) >= RAM_SPEED;
 
     // 장이 정한 상한도 단계 배율을 따른다(쉬움 3 → 2). 하나 아래로는 줄이지 않는다.
@@ -149,7 +227,18 @@ export class Shades {
       const behind = Math.atan2(-Math.cos(player.facing), -Math.sin(player.facing));
       const flank = deep > 0 && Math.random() < Math.min(0.4, 0.08 * deep);
       const tough = (1 + Math.min(0.3, 0.06 * deep)) * diff.tough; // 깊은 밤의 그늘이는 조금 더 오래 비춰야 흩어진다
-      if (this._spawn(px, pz, world, flank ? behind : null)) this._last.tough = cap === undefined ? tough : diff.tough;
+      // 새 그늘이(#57, 1장 판만): 빛먹이는 가로등을 먼저 찾아가고, 떼 그늘이는 한 방향에서 여럿이 함께 온다.
+      const roll = Math.random();
+      const eater = cap === undefined && !!diff.eater && nights >= diff.eater.from && this.count('eater') < diff.eater.max && roll < 0.16;
+      const pack = !eater && cap === undefined && !!diff.swarm && nights >= diff.swarm.from && roll < 0.3
+        && this.activeCount + diff.swarm.size <= target + 1;
+      if (eater) {
+        if (this._spawn(px, pz, world)) this._become(this._last, 'eater', tough);
+      } else if (pack) {
+        this._pack(px, pz, world, diff.swarm.size, flank ? behind : null, tough);
+      } else if (this._spawn(px, pz, world, flank ? behind : null)) {
+        this._last.tough = cap === undefined ? tough : diff.tough;
+      }
       if (deep > 0 && this.activeCount < target && Math.random() < Math.min(0.4, 0.08 * deep)) {
         if (this._spawn(px, pz, world, behind + (Math.random() < 0.5 ? -1 : 1) * Math.PI * 0.5)) this._last.tough = tough;
       }
@@ -172,10 +261,21 @@ export class Shades {
       } else if (s.state === 'stalk' && d > FAR && !s.tag) {
         s.state = 'die';
       } else if (s.state === 'stalk') {
-        const lunge = d < 5 ? 4.6 * diff.speed : base;
+        const stat = KINDS[s.kind].stat;
+        const lunge = (d < 5 ? 4.6 * diff.speed : base) * stat.speed;
         const wob = Math.sin(t * 0.8 + s.seed) * 0.45;
         let ux = dx / d;
         let uz = dz / d;
+        // 빛먹이는 사람이 바로 곁(5m)이 아니면 가까운 켜진 가로등으로 간다(빛에 밀려 가장자리에 붙는다).
+        const lamp = s.kind === 'eater' && d > 5 ? this._seekLamp(s, world, t) : null;
+        if (lamp) {
+          const lx = lamp.x - s.x;
+          const lz = lamp.z - s.z;
+          const ld = Math.hypot(lx, lz) || 0.001;
+          ux = lx / ld;
+          uz = lz / ld;
+        }
+        if (s.kind === 'eater' && d < JAM_R && player.flashActive) events.jam = Math.max(events.jam, 1 - d / JAM_R);
         // 정해진 길이 있으면 그 점들을 먼저 지난다(골대를 돌아 들어오는 식).
         const way = s.path?.[0];
         if (way) {
@@ -226,7 +326,7 @@ export class Shades {
         let lit = world.lightAt(s.x, s.z);
         if (lit) {
           s.burn += dt * 0.25;
-          world.addLoad(lit, dt * LOAD_PER_SHADE * diff.load);
+          world.addLoad(lit, dt * LOAD_PER_SHADE * diff.load * (s.kind === 'eater' ? EATER_LOAD : 1));
           events.pressing++;
           for (let k = 0; lit && k < 4; k++) {
             const n = lit.d || 0.001;
@@ -252,7 +352,7 @@ export class Shades {
           this.banished++;
           events.returned.push({ x: s.x, z: s.z, tag: s.tag });
         } else if (touching && s.cool <= 0 && player.alive) {
-          if (player.hurt(diff.damage, s.x, s.z)) events.hits++;
+          if (player.hurt(Math.round(diff.damage * stat.damage), s.x, s.z)) events.hits++;
           s.cool = 1.3;
           s.vx = -(dx / d) * 5;
           s.vz = -(dz / d) * 5;
@@ -267,7 +367,10 @@ export class Shades {
         }
       }
 
-      if (s.state !== 'die') events.nearest = Math.min(events.nearest, d);
+      if (s.state !== 'die') {
+        events.nearest = Math.min(events.nearest, d);
+        if (d < 14 && s.fade > 0.5 && !s.tag) events.seen.add(s.kind);
+      }
       const hover = Math.sin(t * 2.1 + s.seed) * 0.07;
       s.g.position.set(s.x, world.heightAt(s.x, s.z) + 0.05 + hover, s.z);
       s.g.rotation.y = Math.atan2(dx, dz);
@@ -277,7 +380,7 @@ export class Shades {
       s.eyeMat.opacity = s.fade;
       s.glowMat.opacity = s.fade * (0.55 + 0.25 * Math.sin(t * 3 + s.seed)) * (1 - Math.min(1, burnt));
       const squash = s.state === 'die' ? 0.4 + 0.6 * s.fade : 1;
-      s.g.scale.set(1 + (1 - squash) * 0.6, squash, 1 + (1 - squash) * 0.6);
+      s.g.scale.set((1 + (1 - squash) * 0.6) * s.size, squash * s.size, (1 + (1 - squash) * 0.6) * s.size);
       for (let i = 0; i < 2; i++) s.arms[i].rotation.x = Math.sin(t * 3 + s.seed + i * 1.6) * 0.25 - (d < 4 ? 0.9 : 0.2);
       const sh = s.fade > 0.6 && s.state !== 'die';
       s.body.castShadow = sh;

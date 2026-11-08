@@ -165,6 +165,8 @@ export class Player {
     this.phase = 0;
     this.footfall = 0;
     this.drain = 1; // 손전등 배터리가 닳는 빠르기 배율(난이도 단계, main이 판마다 정한다)
+    this.reach = 1; // 손전등이 닿는 거리 배율(안개 낀 밤에 줄어든다, #57)
+    this.jam = 0; // 빛먹이가 곁에서 손전등을 방해하는 세기(0~1, #57)
     this.reset(0, 0);
   }
 
@@ -273,11 +275,12 @@ export class Player {
     const dx = x - this.pos.x;
     const dz = z - this.pos.z;
     const d = Math.hypot(dx, dz);
-    if (d > FLASH_RANGE || d < 0.01) return 0;
+    const range = FLASH_RANGE * this.reach;
+    if (d > range || d < 0.01) return 0;
     const c = (dx * Math.sin(this.facing) + dz * Math.cos(this.facing)) / d;
     const edge = Math.cos(FLASH_ANGLE * 0.95);
     if (c < edge) return 0;
-    return Math.min(1, (c - edge) / (1 - edge) * 3) * (1 - (d / FLASH_RANGE) * 0.5);
+    return Math.min(1, (c - edge) / (1 - edge) * 3) * (1 - (d / range) * 0.5);
   }
 
   update(dt, t, move, aim, world, night, rain) {
@@ -324,7 +327,9 @@ export class Player {
 
     if (this.flashActive) this.battery = Math.max(0, this.battery - dt * 1.15 * this.drain);
     const on = this.flashActive ? 1 : 0;
-    const flick = this.battery < 15 && on ? (Math.sin(t * 37) * Math.sin(t * 13) > 0.6 ? 0.25 : 1) : 1;
+    let flick = this.battery < 15 && on ? (Math.sin(t * 37) * Math.sin(t * 13) > 0.6 ? 0.25 : 1) : 1;
+    // 빛먹이가 곁에 있으면 가까울수록 자주 깜박인다
+    if (this.jam > 0 && on && Math.sin(t * 31) * Math.sin(t * 7.7) > 1 - this.jam * 1.3) flick *= 0.2;
     this.flash.intensity = on * flick * (14 + 26 * night);
     for (const m of this.mats) m.emissiveIntensity = 0.22 * night;
     for (const m of this.partMats) m.emissiveIntensity = 0.22 * night;

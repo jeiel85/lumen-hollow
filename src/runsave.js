@@ -3,6 +3,7 @@ import { BOUND } from './world.js';
 import { phaseName } from './env.js';
 import { RUN_TAKE_LIMIT } from './online.js';
 import { DIFFICULTY, DEFAULT_LEVEL, isLevel } from './difficulty.js';
+import { isEvent } from './nights.js';
 
 // 진행 중인 판 저장(이어하기). 모바일에서 백그라운드로 간 탭이 종료돼도 처음 화면의 '이어하기'로 돌아온다.
 // 형식과 그 이유는 DECISIONS.md "판 중간 저장" 항목. 형식을 바꾸면 RUN_VERSION을 올리고 이전 형식도 읽게 한다.
@@ -71,6 +72,9 @@ export function captureRun({ world, player, car, env, game, shades }) {
       ...(game.pendingTake ? { pendingTake: { id: game.pendingTake.id, kind: game.pendingTake.kind } } : {}),
       // 난이도 단계(#56). 보통이면 빠진다(단계가 생기기 전의 저장도 보통으로 읽는다).
       ...(game.difficulty && game.difficulty !== DEFAULT_LEVEL ? { diff: game.difficulty } : {}),
+      // 오늘 밤 사건과 어젯밤 사건(#57, 같은 사건이 이틀 연달아 오지 않게). 없으면 빠진다.
+      ...(game.nightEvent ? { event: game.nightEvent } : {}),
+      ...(game.prevEvent ? { prev: game.prevEvent } : {}),
     },
   };
 }
@@ -152,6 +156,9 @@ function validate(raw, world) {
       pendingTake: pendingTakeOf(run.pendingTake),
       // 선택 항목: 모르는 단계 이름이면 보통으로 읽는다(판 전체를 버리지는 않는다).
       diff: isLevel(run.diff) ? run.diff : DEFAULT_LEVEL,
+      // 선택 항목: 모르는 사건이면 사건 없는 밤으로 읽는다.
+      event: isEvent(run.event) ? run.event : null,
+      prev: isEvent(run.prev) ? run.prev : null,
     },
   };
 }
