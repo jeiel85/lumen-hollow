@@ -179,6 +179,24 @@ export const UI_EN = {
   '아직 들은 이야기가 없다.': 'No stories heard yet.',
   '처음 화면의 수첩에서 지울 수 있다.': 'You can clear this from the notebook on the title screen.',
   '한 번 더 누르면 처음부터': 'Press again to restart',
+  // 컷신 그림 설명(화면 낭독기, #45)
+  '그림: {0}': 'Picture: {0}',
+  '어두운 방, 엄마의 두 손이 켜진 손전등을 내 손에 쥐여 준다.': 'A dark room. Mom\'s hands close mine around a lit flashlight.',
+  '비 오는 밤, 노란 우비를 입은 내가 버려진 차와 꺼진 전봇대를 지나 골짜기로 난 빈 길을 걷는다.': 'A rainy night. In a yellow raincoat, I walk the empty road toward the valley, past an abandoned car and dead power poles.',
+  '등대 꼭대기 등실, 할머니가 큰 렌즈 옆에서 쇠 스위치를 내린다. 호수 건너 마을에는 아직 불이 켜져 있다.': 'The lamp room atop the lighthouse. Beside the great lens, Grandma pulls down an iron switch. Across the lake, the town lights are still on.',
+  '비 그친 밤, 섬 등대가 다시 켜져 호수 위로 빛줄기를 보낸다. 선착장에 선 나는 무전기를 들고 있다.': 'A night after the rain. The island lighthouse is lit again, its beam sweeping the lake. I stand on the dock holding a radio.',
+  '안개 낀 호수, 나는 나룻배를 저어 등대섬으로 간다. 섬 선착장에서 할머니가 손을 흔든다.': 'A misty lake. I row a small boat toward the lighthouse island. Grandma waves from the island pier.',
+  '빗속의 돌 선착장, 엄지에 반창고를 감은 할머니 손이 배에 탄 내 손을 끌어 올린다.': 'The stone pier in the rain. Grandma\'s hand, her thumb wrapped in bandage, pulls mine up out of the boat.',
+  '밤의 돌계단, 할머니 손이 내 손을 등잔 불빛 안으로 끌어 넣는다. 뒤로 꺼진 등대와 호수 건너 마을 불빛.': 'The stone steps at night. Grandma draws my hand into the lantern light. Behind us, the dark lighthouse and the town lights across the lake.',
+  '빗속 처마 밑 탁자에 밥그릇 둘과 라디오. 할머니가 주먹밥을 뭉쳐 내 손에 하나 올려 준다.': 'A table under the eaves in the rain, with two rice bowls and a radio. Grandma presses rice into balls and puts one in my hand.',
+  '운동장의 구호 천막, 간이침대 한 줄 앞에 신발 열한 켤레가 가지런하다. 마지막 침대에서 한 사람이 아직 잔다.': 'A relief tent on the schoolyard. Eleven pairs of shoes sit in a neat line before a row of cots. On the last cot, one person is still asleep.',
+  '창고 선반에서 손수건을 펼치니 열쇠와 17번 짐표, 뒷면에 글씨가 적힌 사진 한 장이 나온다.': 'On a storeroom shelf, I unfold a handkerchief: a key with a tag marked 17, and a photo with writing on the back.',
+  '밤의 둑길, 우비 입은 사람들이 손전등을 비추며 들것 여섯을 줄지어 나른다.': 'The levee road at night. People in raincoats carry six stretchers in a line by flashlight.',
+  '등잔을 켠 교실 병상, 나는 잠든 엄마의 손을 잡고 있다. 옆에는 빈 나무 의자.': 'A lamplit sickbed in a classroom. I hold my sleeping mother\'s hand. Beside the bed, an empty wooden chair.',
+  '비 오는 밤 교실 병상, 할머니가 무전기를 깨어난 엄마의 손에 대 준다. 창밖 운동장에 작은 불빛 하나.': 'A rainy night by the classroom sickbed. Grandma holds a radio to Mom\'s hand as she wakes. A small light out on the schoolyard.',
+  '할머니, 담요를 두른 엄마, 내가 침대 끝에 나란히 앉아 주먹밥 조각을 하나씩 들고 있다.': 'Grandma, Mom wrapped in a blanket, and I sit side by side on the edge of the bed, each holding a piece of rice ball.',
+  '해 뜨는 학교 운동장, 구령대 탁자에서 나는 무전기 송신 단추를 누른다.': 'Sunrise over the schoolyard. At a table on the podium, I press the radio\'s transmit button.',
+  '아침 햇살 속 탁자, 내가 무전기를 들고 엄마가 운동화 그림이 그려진 제보를 받아 적는다.': 'A table in the morning sun. I hold the radio while Mom writes down a report with a sketch of sneakers.',
 
   // src/difficulty.js
   '쉬움': 'Easy',
@@ -229,6 +247,7 @@ export const UI_EN = {
   '작업등': 'Work light',
 
   // src/main.js
+  '빛으로 버티는 밤': 'Survive the Night by Light',
   '다음 장': 'Next chapter',
   '이어하기': 'Continue',
   '기본 마을': 'Home village',

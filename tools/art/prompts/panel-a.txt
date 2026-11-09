@@ -1,0 +1,11 @@
+Game UI panel texture for a rainy-night survival game about restoring electricity to a blacked-out town. Seen perfectly straight on: flat, orthographic, no perspective, no drop shadow, no background around it — the panel fills the entire square canvas edge to edge.
+
+The panel looks like the door of an old outdoor electrical cabinet: dark blue-green painted steel (#14211f to #0f1918), lightly worn, faint vertical rain streaks and water stains, very subtle fine texture.
+
+Border: one even frame band about 6% of the canvas width on all four sides — a slightly raised steel rim with a thin warm amber edge highlight (#f4b45c) along its inner and outer edge, as if lit by a nearby lamp; one small round rivet in each of the four corners; a few tiny chipped-paint marks on the rim. All four sides of the frame must look alike (symmetrical) so it can be used for 9-slice scaling. Square corners.
+
+The large center area inside the frame is plain, flat and dark (#0f1918) with only very faint texture and no objects, so small text can be read on it.
+
+No text, no symbols, no warning signs, no logos, no watermark.
+
+Square image, 1024x1024.

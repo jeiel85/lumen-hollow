@@ -310,6 +310,41 @@ function renderBest() {
 const SCREENS = ['title', 'pause', 'end', 'settings', 'closet', 'journal', 'grid', 'paywall'];
 // index.html이 body.front로 시작하므로 처음에는 그림이 깔려 있다. 그림이 화면을 다 덮는 동안에는 3D 장면을 그리지 않는다.
 let titleArt = true;
+// 처음 화면 그림을 받지 못하면(404·오프라인인데 캐시에 없음) 그림 자리를 비우고 그 뒤 3D 장면을 그린다(#45).
+// 글씨가 읽히게 덮는 어두운 겹(.title-art::after)은 남긴다. 모듈이 늦게 오면 그 전에 실패했을 수 있어 지금 상태도 본다.
+// 세로·가로를 바꾸면 다른 그림(<source>)을 받으므로 load가 오면 되살린다.
+let titleArtOk = true;
+{
+  const img = document.querySelector('#title-art img');
+  const set = (ok) => {
+    titleArtOk = ok;
+    $('title-art')?.classList.toggle('failed', !ok);
+  };
+  if (!img) set(false);
+  else {
+    if (img.complete && !img.naturalWidth) set(false);
+    img.addEventListener('error', () => set(false));
+    img.addEventListener('load', () => set(true));
+  }
+  // 로고 그림을 받지 못하면 깨진 그림 자리(대체 글) 대신 글자 로고를 쓴다(#45).
+  const logo = document.querySelector('.title-logo img');
+  const textLogo = () => {
+    const h1 = logo.closest('.title-logo');
+    if (!h1 || h1.classList.contains('text-logo')) return;
+    h1.classList.add('text-logo');
+    const name = document.createElement('span');
+    name.className = 'logo-name';
+    name.textContent = 'LUMEN HOLLOW';
+    const sub = document.createElement('span');
+    sub.className = 'logo-sub';
+    sub.textContent = tr('빛으로 버티는 밤');
+    h1.querySelector('picture')?.replaceWith(name, sub);
+  };
+  if (logo) {
+    if (logo.complete && !logo.naturalWidth) textLogo();
+    logo.addEventListener('error', textLogo);
+  }
+}
 function setScreen(id) {
   if (id !== 'settings') settingsFrom = null;
   if (id !== 'journal') journalFrom = null;
@@ -2626,7 +2661,8 @@ function frame(now) {
   const inCloset = game.state === 'closet';
   // 화질을 바꿔 셰이더를 다시 컴파일하는 동안에는 숨긴 물체까지 켜져 있으니 그리지 않고 직전 화면을 둔다.
   // 처음 화면 그림이 덮고 있으면 그리지 않는다(휴대폰 배터리·발열). 판을 시작하면 그림이 걷히는 동안 바로 다시 그린다.
-  if (!(game.warming && game.ready) && !(titleArt && game.state === 'title')) {
+  // 그림을 받지 못했으면(titleArtOk) 3D 장면이 처음 화면 뒤를 채운다.
+  if (!(game.warming && game.ready) && !(titleArt && titleArtOk && game.state === 'title')) {
     post.render(scene, inCloset ? closet.camera : camera, env.look, game.clock, {
       focus: 0.5, band: 0.07, blurScale: settings.tilt && !inCloset ? (game.state === 'title' ? 1.25 : 1.0) : 0,
       hurt: Math.max(player.hurtFx * (settings.shake ? 0.9 : 0.45), lowHp),
@@ -2901,6 +2937,9 @@ warmUp().then(() => {
   setContextLost(game.contextLost ?? false);
   // 사전 컴파일이 메인 스레드를 오래 막는 느린 기기에서 요청 시간 제한이 헛걸리지 않게, 준비가 끝난 뒤 소식을 받는다.
   renderOnline();
+  // 첫 판의 첫 장면(프롤로그) 그림을 처음 화면에 있는 동안 받아 둔다. 서비스 워커가 아직 없는 첫 방문에서
+  // 시작하자마자 그림을 기다리지 않게(#45). 늦으면 장면이 암전을 잡아 두고 기다린다(src/dialogue.js).
+  if (!story.isSeen('arrival')) dialogue.preload(sceneById('arrival'));
   // 앱을 열 때마다 Play에 구매를 다시 묻는다(새 기기·다시 설치에서 복원, 환불이면 다시 잠금).
   if (store.mode === 'native') bg(store.refresh().then(() => renderChapter()));
   // 앱으로 돌아올 때도 묻는다(#70 리뷰): 백그라운드에 있는 동안 대기 결제가 끝나면 결제 연결이 끊긴 채라 이벤트가 오지 않을 수 있다.

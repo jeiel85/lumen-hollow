@@ -1,0 +1,11 @@
+Title-screen key art for "Lumen Hollow", an isometric survival game. Match the style of the attached in-game screenshot: stylized low-poly 3D diorama, flat-shaded simple geometry, high isometric camera angle (about 35 degrees down), soft tilt-shift miniature depth of field, heavy rain at night.
+
+Scene: a small Korean neighborhood during a total blackout in heavy rain. Every window is dark. A single working streetlight at a crosswalk throws a warm amber pool of light (#ffcf86) onto wet asphalt with glossy reflections and rain ripples. Inside that pool of light stands one small lone figure in a yellow raincoat with the hood up, holding a flashlight; its cool white beam cuts through the rain. Beside the streetlight is a grey metal electrical distribution box with one tiny green indicator light. At the edge of the light, in the darkness, several shadow creatures — soft, smoky, faceless humanoid silhouettes with two tiny pale glowing eyes each — lean toward the light but cannot step into it. Around: low houses with dark tiled roofs, a small corner restaurant with a dark awning, utility poles with sagging power lines, an old parked pickup truck. Far away in the background, a thin pale-blue pillar of light rises into the low clouds.
+
+Color: deep teal-black night (#0b1416, #12221f), warm amber lamplight as the only strong light, restrained cool cyan accents. Atmospheric, lonely and tense but hopeful.
+
+Composition (very important): wide 16:9 landscape. Put the streetlight and the figure in the right part of the frame, around 65-70% from the left edge, slightly below center. Keep the left 45% of the frame dark, calm and low-detail (rain over dark rooftops and empty road), because a logo and menu buttons will be placed on top of it.
+
+No text, no letters, no readable signs, no logos, no UI, no watermark.
+
+Generate at the largest landscape size available (16:9 if possible, otherwise 1536x1024).

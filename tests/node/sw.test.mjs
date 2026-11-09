@@ -52,13 +52,17 @@ test('manifest의 아이콘·스크린샷과 apple-touch-icon이 있고, 아이�
 test('그림(art/)이 쓰는 곳·사전 캐시·폴더와 짝이 맞는다', async () => {
   // 처음 화면·메뉴 그림은 index.html·style.css가, 컷신 그림은 대본 줄의 art(src/script.js)가 가리킨다.
   // 사전 캐시에 없으면 오프라인에서 그림이 비고, 배포 단계가 art/를 빼먹으면 404가 난다.
+  // 서비스 워커는 웹판에서만 쓰고 웹판은 1장 데모라(#50), 사전 캐시에는 1장 장면 그림만 넣는다(#45). 2~4장 그림은 앱이 담는다.
   const { SCENES } = await import(pathToFileURL(path.join(repo, 'src/script.js')).href);
-  const story = SCENES.flatMap((s) => s.lines.filter((l) => l.art).map((l) => `art/story/${l.art}.webp`));
-  const used = new Set([...[read('index.html'), read('style.css')].flatMap((s) => [...s.matchAll(/art\/[\w.-]+\.webp/g)].map((m) => m[0])), ...story]);
+  const storyArt = (keep) => SCENES.filter(keep).flatMap((s) => s.lines.filter((l) => l.art).map((l) => `art/story/${l.art}.webp`));
+  const page = [read('index.html'), read('style.css')].flatMap((s) => [...s.matchAll(/art\/[\w.-]+\.webp/g)].map((m) => m[0]));
+  const web = new Set([...page, ...storyArt((s) => (s.ch ?? 1) === 1)]);
+  const used = new Set([...page, ...storyArt(() => true)]);
   const cached = new Set(sw.UNVERSIONED.filter((p) => p.startsWith('art/')));
   const files = new Set(readdirSync(path.join(repo, 'art'), { recursive: true }).filter((f) => f.endsWith('.webp')).map((f) => `art/${f.split(path.sep).join('/')}`));
-  assert.deepEqual([...used].filter((p) => !cached.has(p)), [], '화면이 쓰는 그림이 사전 캐시에 없다');
-  assert.deepEqual([...cached].filter((p) => !used.has(p)), [], '사전 캐시에 있지만 화면이 쓰지 않는 그림');
+  assert.deepEqual([...web].filter((p) => !cached.has(p)), [], '웹판 화면이 쓰는 그림이 사전 캐시에 없다');
+  assert.deepEqual([...cached].filter((p) => !web.has(p)), [], '사전 캐시에 있지만 웹판 화면이 쓰지 않는 그림(설치만 무겁게 한다)');
+  assert.deepEqual([...used].filter((p) => !files.has(p)), [], '대본·화면이 가리키는 그림 파일이 없다');
   assert.deepEqual([...files].filter((p) => !used.has(p)), [], 'art/에 있지만 쓰지 않는 그림(배포 크기만 늘린다)');
   assert.match(read('.github/workflows/pages.yml'), /cp -r [^\n]*\bart\b[^\n]*_site\//, '배포 단계가 art/를 _site로 옮기지 않는다');
 });

@@ -1,0 +1,12 @@
+Stacked (vertical) version of the attached game title logo for "Lumen Hollow". Keep exactly the same look as the attached logo: the same warm glowing worn serif capitals made of light (cream-white cores fading to warm amber #ffcf86 / #f4b45c with soft bloom), the same glowing light bulb replacing the first letter O in HOLLOW, the same faint diagonal rain streaks, the same clean Korean gothic subtitle with a thin line on each side.
+
+Text, spelled exactly and nothing else:
+- Line 1: LUMEN
+- Line 2: HOLLOW (first O is the glowing light bulb)
+- Line 3, smaller Korean subtitle: 빛으로 버티는 밤
+
+Layout: three centered lines stacked tightly, LUMEN and HOLLOW in the same letter height, the Korean subtitle clearly readable (its letter height about one third of the main letters).
+
+Background: pure flat black (#000000) everywhere, no texture, no vignette, no scenery. Wide empty margins on all sides. No other text, no watermark.
+
+Square image, 1024x1024.
