@@ -29,7 +29,7 @@
 <body>
 <main>
   <h1>Lumen Hollow 개인정보처리방침</h1>
-  <p class="meta">시행일 2026년 11월 9일(앱 안 결제 추가) · 대상: 웹판(jeiel85.github.io/lumen-hollow)과 안드로이드 앱(com.jeiel85.lumenhollow)</p>
+  <p class="meta">시행일 2026년 11월 9일(앱 안 결제 추가, 이야기 집계의 웹·앱 구분) · 대상: 웹판(jeiel85.github.io/lumen-hollow)과 안드로이드 앱(com.jeiel85.lumenhollow)</p>
   <nav><a href="#en">English</a></nav>
 
   <p>Lumen Hollow(이하 "게임")는 개인 개발자 박용은(jeiel85)이 만들고 운영합니다. 게임은 계정이 없고, 이름·연락처·위치정보(GPS)·광고 ID를 받지 않으며, 광고나 분석용 외부 도구를 넣지 않았습니다. 아래는 게임이 다루는 정보 전부와 그 이유입니다.</p>
@@ -51,7 +51,7 @@
   <p>자유롭게 쓰는 글, 이름, 연락처는 받지 않습니다.</p>
 
   <h2>3. 이야기 진행 집계</h2>
-  <p>온라인 보급품이 켜져 있으면, 이야기 장면을 끝까지 봤는지·건너뛰었는지와 장을 시작·마쳤는지를 <b>날짜별 횟수로만</b> 보냅니다. 플레이어 ID와 IP를 함께 보내거나 저장하지 않아 누가 보냈는지 알 수 없습니다. 어디서 게임을 그만두는지 보고 게임을 고치기 위해서이며, 400일 뒤 삭제합니다. 온라인 보급품을 끄면 보내지 않습니다.</p>
+  <p>온라인 보급품이 켜져 있으면, 이야기 장면을 끝까지 봤는지·건너뛰었는지와 장을 시작·마쳤는지를 <b>날짜별 횟수로만</b> 보냅니다. 서버는 웹판과 안드로이드 앱에서 온 횟수를 나눠 셉니다. 플레이어 ID와 IP를 함께 보내거나 저장하지 않아 누가 보냈는지 알 수 없습니다. 어디서 게임을 그만두는지 보고 게임을 고치기 위해서이며, 400일 뒤 삭제합니다. 온라인 보급품을 끄면 보내지 않습니다.</p>
 
   <h2>4. 호스팅 회사의 접속 기록</h2>
   <p>서버(Cloudflare)와 웹판 호스팅(GitHub Pages)은 서비스 운영과 보안을 위해 IP 주소 등 접속 기록을 남길 수 있고, 그 보관은 각 회사의 정책을 따릅니다. 개발자는 이 기록을 따로 모으거나 위 정보와 합치지 않습니다.</p>
@@ -92,7 +92,7 @@
   <p>이 방침을 바꾸면 이 페이지에 새 시행일과 함께 올립니다. 이전 내용은 <a href="https://github.com/jeiel85/lumen-hollow/commits/main/privacy.html" rel="noopener">저장소 기록</a>에서 볼 수 있습니다.</p>
 
   <h2 id="en">Privacy Policy (English summary)</h2>
-  <p class="meta">Effective November 9, 2026 (in-app purchase added) · Applies to the web version and the Android app (com.jeiel85.lumenhollow). The Korean text above prevails.</p>
+  <p class="meta">Effective November 9, 2026 (in-app purchase added; story counts split by web/app) · Applies to the web version and the Android app (com.jeiel85.lumenhollow). The Korean text above prevails.</p>
   <p>Lumen Hollow is made and run by an individual developer, Park Yongeun (jeiel85). There are no accounts. The game does not collect names, contact details, GPS location, or advertising IDs, and it contains no third-party ads or analytics SDKs.</p>
   <h3>Stored only on your device</h3>
   <p>Settings, best records, wardrobe, story progress, and the run in progress are stored only on your device (browser storage or app storage) and are never sent to the server. If Android device backup is on, app storage may be included in your Google account backup according to your device settings.</p>
@@ -101,7 +101,7 @@
   <ul>
     <li>A random player ID generated on your device (the server stores only its SHA-256 hash); caches you leave (slot in the town, item type, a preset message); use and "thanks" records; the UTC dates you connected. Purpose: sharing caches between players and enforcing per-player limits. Deleted 90 days after use/removal; caches stay in the town for at most 7 days.</li>
     <li>An HMAC-SHA256 of your IP address with a secret that changes daily (the raw IP is not stored), for abuse-prevention rate limits. Deleted within 2 days.</li>
-    <li>Story progress counts (whether scenes were finished or skipped, chapters started/finished) as daily totals only, without player ID or IP, to improve the game. Deleted after 400 days.</li>
+    <li>Story progress counts (whether scenes were finished or skipped, chapters started/finished) as daily totals only (counted separately for the web version and the Android app), without player ID or IP, to improve the game. Deleted after 400 days.</li>
   </ul>
   <p>Hosting providers (Cloudflare for the server, GitHub Pages for the web version) may keep access logs including IP addresses under their own policies. Data is processed by Cloudflare, Inc. (USA; database located in the Asia-Pacific region), GitHub, Inc. (USA), and Google LLC (USA, app distribution). We do not sell or share this data with third parties.</p>
   <h3>Your choices</h3>

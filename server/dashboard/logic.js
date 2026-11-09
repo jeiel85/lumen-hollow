@@ -159,12 +159,36 @@ export function cronView(s, format = formatWhen) {
 
 const byId = (a, b) => a.id.localeCompare(b.id, 'en', { numeric: true });
 
-// 서버의 story(없으면 null)를 장 표와 장면 표로 나눈다. 장면은 서버가 정한 순서(많이 도달한 순)를 그대로 쓴다.
-export function storyView(story) {
+export const STORY_SOURCES = Object.freeze(['all', 'web', 'app']);
+
+// src에 맞는 행. 'all'은 서버 행 그대로(서버가 많이 도달한 순으로 준다). 'app'은 앱 몫, 'web'은 전체 − 앱(0이 된 행은 뺀다).
+// 앱 몫을 모르면(마이그레이션 0002 전, story.app === null) 'web'·'app'은 null.
+function storyRows(story, src) {
+  if (src === 'all') return story.rows;
+  const app = story.app;
+  if (!Array.isArray(app)) return null;
+  const key = (r) => `${r.kind}|${r.id}`;
+  let rows;
+  if (src === 'app') rows = app.map((r) => ({ ...r }));
+  else {
+    const minus = new Map(app.map((r) => [key(r), r]));
+    rows = story.rows.map((r) => {
+      const a = minus.get(key(r));
+      return a ? { ...r, n: r.n - a.n, skipped: r.skipped - a.skipped } : r;
+    }).filter((r) => r.n > 0);
+  }
+  return rows.sort((a, b) => b.n - a.n || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+// 서버의 story(없으면 null)를 장 표와 장면 표로 나눈다. src: 'all'(전체) / 'web'(웹판) / 'app'(안드로이드 앱 — 비공개 테스트, #53).
+// 장면은 많이 도달한 순이다. 앱 몫을 모르는데 웹·앱을 고르면 unknown: true와 빈 표를 돌려준다.
+export function storyView(story, src = 'all') {
   if (!story) return null;
+  if (!STORY_SOURCES.includes(src)) src = 'all';
   const chapters = new Map();
   const scenes = [];
-  for (const r of story.rows) {
+  const rows = storyRows(story, src);
+  for (const r of rows ?? []) {
     if (r.kind === 'scene') {
       scenes.push({ id: r.id, n: r.n, skipped: r.skipped, skippedPct: r.n > 0 ? Math.round((1000 * r.skipped) / r.n) / 10 : null });
     } else if (r.kind === 'chapter' || r.kind === 'clear') {
@@ -177,6 +201,8 @@ export function storyView(story) {
   const t = story.today;
   return {
     from: story.from,
+    src,
+    unknown: rows === null,
     chapters: [...chapters.values()].sort(byId),
     scenes,
     today: t.full

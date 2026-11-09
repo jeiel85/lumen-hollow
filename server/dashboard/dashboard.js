@@ -14,6 +14,7 @@ const clock = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-dig
 
 let token = null;
 let range = 'launch';
+let storySrc = 'all'; // 이야기 진행 표의 출처: 'all' / 'web' / 'app'(logic.js STORY_SOURCES)
 let last = null;
 const gate = createGate();
 
@@ -378,7 +379,8 @@ function emptyRow(cols, text) {
 }
 
 function renderStory(story) {
-  const v = storyView(story);
+  for (const b of document.querySelectorAll('button[data-src]')) b.setAttribute('aria-pressed', String(b.dataset.src === storySrc));
+  const v = storyView(story, storySrc);
   if (!v) {
     $('story-note').textContent = '이야기 집계 표가 아직 없어요(마이그레이션 0001을 적용하세요).';
     $('story-chapters').replaceChildren(emptyRow(3, '없음'));
@@ -386,8 +388,12 @@ function renderStory(story) {
     return;
   }
   const note = $('story-note');
-  note.className = v.full ? 'error small' : 'muted small';
-  note.textContent = `${v.from}(UTC)부터 센 값. ${v.today}`;
+  note.className = v.full || v.unknown ? 'error small' : 'muted small';
+  note.textContent = v.unknown
+    ? '웹·앱을 나눈 표가 아직 없어요(마이그레이션 0002를 적용하세요). 전체만 볼 수 있어요.'
+    : v.src === 'all'
+      ? `${v.from}(UTC)부터 센 값. ${v.today}`
+      : `${v.from}(UTC)부터 센 값 · ${v.src === 'app' ? '안드로이드 앱만' : '웹판만(전체 − 앱)'}. 하루 상한은 웹·앱 합계: ${v.today}`;
   $('story-chapters').replaceChildren(...(v.chapters.length === 0 ? [emptyRow(3, '없음')] : v.chapters.map((c) => {
     const tr = el('tr');
     tr.append(el('td', '', `${c.id}장`), el('td', 'num', fmt(c.entered)), el('td', 'num', fmt(c.cleared)));
@@ -410,7 +416,7 @@ function render(d) {
   renderKpis(d.period.metrics, d.period.partial);
   renderDaily(d.daily);
   renderStory(d.story);
-  for (const b of document.querySelectorAll('.filters button')) b.setAttribute('aria-pressed', String(b.dataset.range === d.period.range));
+  for (const b of document.querySelectorAll('button[data-range]')) b.setAttribute('aria-pressed', String(b.dataset.range === d.period.range));
   $('cost').textContent = d.cost.rowsRead === null
     ? '이번 조회가 읽은 D1 행 수: 알 수 없음'
     : `이번 조회가 읽은 D1 행 수: ${fmt(d.cost.rowsRead)} (무료 한도 하루 5,000,000행)`;
@@ -437,9 +443,18 @@ $('logout').addEventListener('click', () => {
 
 $('refresh').addEventListener('click', () => load());
 
-for (const b of document.querySelectorAll('.filters button')) {
+for (const b of document.querySelectorAll('button[data-range]')) {
   b.addEventListener('click', () => {
     if (b.dataset.range !== range) load(b.dataset.range);
+  });
+}
+
+// 이야기 진행의 웹·앱 나누기는 받은 값으로 다시 그리기만 한다(서버에 다시 묻지 않는다).
+for (const b of document.querySelectorAll('button[data-src]')) {
+  b.addEventListener('click', () => {
+    if (b.dataset.src === storySrc) return;
+    storySrc = b.dataset.src;
+    if (last) renderStory(last.story);
   });
 }
 

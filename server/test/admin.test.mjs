@@ -357,6 +357,46 @@ test('이야기 진행: 고른 기간의 UTC 날짜부터 장·장면별로 합�
   assert.deepEqual([later.rows, later.today.events], [[], 0]);
 });
 
+test('이야기 진행: 앱에서 온 몫(app)을 같은 기간으로 따로 준다(#53)', async () => {
+  const s = setup();
+  const story = async (events, origin) => {
+    const res = await s.game.fetch(new Request('https://api.test/v1/story', {
+      method: 'POST', headers: { Origin: origin, 'CF-Connecting-IP': '203.0.113.50', 'Content-Type': 'application/json' }, body: JSON.stringify({ events }),
+    }), s.gameEnv);
+    assert.equal(res.status, 200);
+  };
+  await story([{ kind: 'scene', id: 'arrival' }, { kind: 'scene', id: 'arrival', skipped: true }], ORIGIN);
+  await story([{ kind: 'scene', id: 'arrival', skipped: true }, { kind: 'clear', id: '1' }], RULES.storyAppOrigin);
+  s.clock.t += DAY;
+  await story([{ kind: 'scene', id: 'dusk' }], RULES.storyAppOrigin);
+  const all = (await s.call()).body.story;
+  assert.deepEqual(all.rows, [
+    { kind: 'scene', id: 'arrival', n: 3, skipped: 2 },
+    { kind: 'clear', id: '1', n: 1, skipped: 0 },
+    { kind: 'scene', id: 'dusk', n: 1, skipped: 0 },
+  ]);
+  assert.deepEqual(all.app, [
+    { kind: 'clear', id: '1', n: 1, skipped: 0 },
+    { kind: 'scene', id: 'arrival', n: 1, skipped: 1 },
+    { kind: 'scene', id: 'dusk', n: 1, skipped: 0 },
+  ]);
+  s.clock.t += 2 * DAY;
+  assert.deepEqual((await s.call('/api/summary?range=1d')).body.story.app, [], '기간 밖은 빠진다');
+});
+
+test('마이그레이션 0002 전(story_app_daily 없음)에는 앱 몫만 null이고 나머지는 그대로 나온다', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const s = setup();
+  await seed(s);
+  await s.game.scheduled(s.gameEnv);
+  s.db.raw.exec('DROP TABLE story_app_daily;');
+  const r = await s.call();
+  assert.equal(r.status, 200);
+  assert.ok(r.body.status.cronLog, '실행 기록은 그대로');
+  assert.deepEqual([Array.isArray(r.body.story.rows), r.body.story.app], [true, null]);
+  assert.equal(console.error.mock.callCount(), 1, '원인은 로그로 남긴다');
+});
+
 test('분당 한도(RL_ADMIN): 토큰 확인 전에 걸고, 키는 원문 IP가 아니다', async () => {
   const s = setup();
   const keys = [];

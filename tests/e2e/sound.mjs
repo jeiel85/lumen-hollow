@@ -1,5 +1,5 @@
-// 소리(#1·#6·#14·#55): 엔진·타이어 소리 노드는 운전할 때만 돌고 내린 뒤 정리되는지, 멈춘 AudioContext(전화·백그라운드)가
-// 화면 복귀·다음 입력에 다시 켜지는지, 환경음을 0으로 줄여도 그늘이 접근 속삭임이 들리는지, 발소리 박자, 음악 신호, 배경 음악.
+// 소리(#1·#6·#14·#55·#53): 엔진·타이어 소리 노드는 운전할 때만 돌고 내린 뒤 정리되는지, 멈춘 AudioContext(전화·백그라운드)가
+// 화면 복귀·다음 입력에 다시 켜지는지, 화면이 가려지면 멈추는지, 환경음을 0으로 줄여도 그늘이 접근 속삭임이 들리는지, 발소리 박자, 음악 신호, 배경 음악.
 //   node tests/e2e/sound.mjs [url]
 // 소리를 실제로 듣지는 않는다. 재생 중인 소스 노드 수와 master 출력의 세기(AnalyserNode)로 본다.
 import { launch } from './cdp.mjs';
@@ -288,6 +288,39 @@ check('음악 음량 0: 새로 만들지 않고, 예약한 마디가 끝나면 �
 check('음소거: 새로 만들지 않고 음악 소스가 없다', r.mute.live === 0 && r.mute.madeWhileMuted === 0, r.mute);
 check('설정의 음악 막대가 음량을 바꾸고 저장한다', r.slider.level === 0.3 && r.slider.saved === 0.3 && r.slider.label === '30%', r.slider);
 check('처음 화면에서는 주제 음악', r.title === 'title', r.title);
+
+// 화면이 가려지면(다른 앱·화면 끔·다른 탭) 소리를 멈추고, 가려진 동안의 입력·focus에는 켜지지 않으며, 돌아오면 다시 켜진다(#53).
+// 안드로이드 앱(WebView)은 가려져도 AudioContext를 멈추지 않아 빗소리가 다른 앱 위로 계속 울렸다. 헤드리스 크롬은 늘 보이는 상태라
+// document.hidden을 덮어써 흉내 낸다. 판을 일시정지하는 main.js의 가려짐 처리도 함께 돌므로 맨 끝에 둔다.
+r = await B.ev(`${RUN}
+  const out = {};
+  // 가려짐 처리가 보내는 이야기 집계 beacon(text/plain이라 CORS 사전 요청이 없다)이 운영 서버로 가지 않게 끈다.
+  L.online.pref = false;
+  L.online.storyQueue.length = 0;
+  if (S.ctx.state !== 'running') await S.ctx.resume();
+  out.before = S.ctx.state;
+  const setHidden = (h) => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => h });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (h ? 'hidden' : 'visible') });
+    document.dispatchEvent(new Event('visibilitychange'));
+  };
+  setHidden(true);
+  await wait(300);
+  out.hidden = S.ctx.state;
+  dispatchEvent(new PointerEvent('pointerdown'));
+  dispatchEvent(new Event('focus'));
+  dispatchEvent(new Event('pageshow'));
+  await wait(300);
+  out.inputWhileHidden = S.ctx.state;
+  setHidden(false);
+  await wait(300);
+  out.back = S.ctx.state;
+  delete document.hidden;
+  delete document.visibilityState;
+  out.restored = document.hidden === false;
+  return out;`);
+check('화면이 가려지면 소리를 멈추고, 가려진 동안의 입력·focus에는 켜지지 않는다', r.before === 'running' && r.hidden === 'suspended' && r.inputWhileHidden === 'suspended', r);
+check('화면으로 돌아오면 다시 켜진다', r.back === 'running' && r.restored, r);
 
 // 흉내 낸 'interrupted' 거절은 경고로 한 번 남는 것이 정상이다.
 const errs = B.logs.filter((l) => /error|exception/i.test(l) && !/caches|online|fetch|CORS|ERR_/i.test(l) && !l.startsWith('warning: [sound]'));

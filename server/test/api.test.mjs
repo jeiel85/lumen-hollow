@@ -541,6 +541,46 @@ test('이야기 집계: 동시에 온 요청도 상한을 넘겨 세지 않는�
   assert.equal(storyRows(s).find((r) => r.kind === 'scene').n, 4);
 });
 
+const appRows = (s) => s.db.raw.prepare('SELECT day, kind, id, n, skipped FROM story_app_daily ORDER BY kind, id').all().map((r) => ({ ...r }));
+
+test('이야기 집계: 앱 출처(https://localhost)에서 온 사건은 앱 표에도 세고, 웹 출처는 앱 표에 닿지 않는다(#53)', async () => {
+  const s = setup();
+  await sendStory(s, [{ kind: 'scene', id: 'arrival' }, { kind: 'scene', id: 'arrival', skipped: true }, { kind: 'clear', id: '1' }], { origin: RULES.storyAppOrigin });
+  await sendStory(s, [{ kind: 'scene', id: 'arrival' }, { kind: 'chapter', id: '2' }]);
+  await sendStory(s, [{ kind: 'scene', id: 'dusk' }], { origin: 'https://localhost:8443' });
+  const r = await s.call('POST', '/v1/story', { body: { events: [{ kind: 'scene', id: 'dusk' }] }, headers: { Origin: '' } });
+  assert.equal(r.status, 200, 'Origin이 비어도 웹으로 받는다');
+  assert.deepEqual(appRows(s), [
+    { day: '2026-11-06', kind: 'clear', id: '1', n: 1, skipped: 0 },
+    { day: '2026-11-06', kind: 'scene', id: 'arrival', n: 2, skipped: 1 },
+  ], '앱에서 온 것만, 출처가 정확히 같을 때만');
+  assert.deepEqual(storyRows(s).map((x) => [x.kind, x.id, x.n]), [
+    ['chapter', '2', 1], ['clear', '1', 1], ['scene', 'arrival', 3], ['scene', 'dusk', 2], ['total', '', 7],
+  ], '전체 표는 출처와 상관없이 모두 센다');
+  assert.deepEqual(s.db.raw.prepare('PRAGMA table_info(story_app_daily)').all().map((c) => c.name), ['day', 'kind', 'id', 'n', 'skipped'], '사람을 가리키는 열이 없다');
+});
+
+test('이야기 집계: 하루 상한에 닿은 날에는 앱 표도 더 세지 않는다', async () => {
+  const s = setup({ rules: { ...RULES, storyMaxEventsPerDay: 3 } });
+  const ev = (n) => Array.from({ length: n }, () => ({ kind: 'scene', id: 'arrival' }));
+  const app = { origin: RULES.storyAppOrigin };
+  assert.equal((await sendStory(s, ev(2), app)).body.accepted, 2);
+  assert.equal((await sendStory(s, ev(2), app)).body.accepted, 0);
+  assert.equal(appRows(s)[0].n, 2);
+  assert.equal(storyRows(s).find((x) => x.kind === 'scene').n, 2, '전체와 앱이 어긋나지 않는다');
+});
+
+test('이야기 집계: 정리 작업은 앱 표도 보존 기간(storyKeepDays)이 지나면 지운다', async () => {
+  const s = setup();
+  await sendStory(s, [{ kind: 'scene', id: 'arrival' }], { origin: RULES.storyAppOrigin });
+  s.clock.t += RULES.storyKeepDays * DAY;
+  await s.app.scheduled(s.env);
+  assert.equal(appRows(s).length, 1, '보존 기간 마지막 날까지는 남긴다');
+  s.clock.t += DAY;
+  await s.app.scheduled(s.env);
+  assert.deepEqual([appRows(s).length, storyRows(s).length], [0, 0]);
+});
+
 test('이야기 집계: 킬 스위치·분당 한도·설정 누락을 따른다', async () => {
   const s = setup();
   s.db.raw.exec("UPDATE settings SET value = 'false' WHERE key = 'enabled'");

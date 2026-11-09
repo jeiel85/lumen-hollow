@@ -196,6 +196,37 @@ test('이야기 진행: 장은 들어감·마침으로 묶고, 장면은 건너�
   assert.equal(storyView(null), null, '표가 없으면(마이그레이션 전) null');
 });
 
+test('이야기 진행: 웹·앱으로 나눠 본다 — 앱은 앱 몫, 웹은 전체 − 앱(#53)', () => {
+  const story = {
+    from: '2026-11-09',
+    rows: [
+      { kind: 'scene', id: 'arrival', n: 10, skipped: 4 },
+      { kind: 'scene', id: 'dusk', n: 3, skipped: 0 },
+      { kind: 'chapter', id: '2', n: 2, skipped: 0 },
+      { kind: 'clear', id: '1', n: 4, skipped: 0 },
+    ],
+    app: [
+      { kind: 'chapter', id: '2', n: 2, skipped: 0 },
+      { kind: 'clear', id: '1', n: 1, skipped: 0 },
+      { kind: 'scene', id: 'arrival', n: 2, skipped: 1 },
+      { kind: 'scene', id: 'dusk', n: 3, skipped: 0 },
+    ],
+    today: { events: 19, max: 10000, full: false },
+  };
+  const app = storyView(story, 'app');
+  assert.deepEqual([app.src, app.unknown], ['app', false]);
+  assert.deepEqual(app.chapters, [{ id: '1', entered: 0, cleared: 1 }, { id: '2', entered: 2, cleared: 0 }]);
+  assert.deepEqual(app.scenes.map((x) => [x.id, x.n, x.skippedPct]), [['dusk', 3, 0], ['arrival', 2, 50]], '앱 몫으로 많이 도달한 순');
+  const web = storyView(story, 'web');
+  assert.deepEqual(web.chapters, [{ id: '1', entered: 0, cleared: 3 }], '2장은 모두 앱이라 웹에서 빠진다');
+  assert.deepEqual(web.scenes.map((x) => [x.id, x.n, x.skipped]), [['arrival', 8, 3]], '0이 된 장면(dusk)은 뺀다');
+  assert.deepEqual(storyView(story, 'all').scenes.map((x) => x.id), ['arrival', 'dusk'], '전체는 서버 순서 그대로');
+  assert.equal(storyView(story, 'nope').src, 'all', '모르는 값은 전체로');
+  const before = storyView({ ...story, app: null }, 'web');
+  assert.deepEqual([before.unknown, before.chapters, before.scenes], [true, [], []], '앱 표가 없으면(마이그레이션 0002 전) 나눌 수 없다');
+  assert.equal(storyView({ ...story, app: null }, 'all').unknown, false, '전체는 그대로 볼 수 있다');
+});
+
 test('화면 코드는 logic.js의 것만 쓰고, 서버 값은 textContent로만 넣는다', () => {
   const src = readFileSync(new URL('../dashboard/dashboard.js', import.meta.url), 'utf8');
   assert.match(src, /from '\.\/logic\.js'/);

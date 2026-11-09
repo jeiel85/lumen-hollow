@@ -167,21 +167,33 @@ export class Sound {
     b.out.gain.setTargetAtTime(level, t, tau);
   }
 
-  // 전화가 오거나 백그라운드로 가면 AudioContext가 멈춘다. iOS Safari는 'interrupted'(그 밖은 'suspended') 상태로
+  // 전화가 오면 AudioContext가 멈춘다. iOS Safari는 'interrupted'(그 밖은 'suspended') 상태로
   // 남아 저절로 돌아오지 않을 수 있어서, 화면으로 돌아올 때와 다음 사용자 입력 때마다 다시 켠다.
+  // 화면이 가려지면(다른 앱·화면 끔·다른 탭) 직접 멈춘다. 안드로이드 앱(WebView)과 데스크톱 브라우저는 가려져도 AudioContext를
+  // 멈추지 않아서, 판은 일시정지인데 빗소리·밤 저음이 다른 앱 위로 계속 울렸다(#53 에뮬레이터 확인). 가려진 동안에는 다시 켜지 않는다.
   _watchResume() {
     const ctx = this.ctx;
     this.started = ctx.state === 'running';
     ctx.addEventListener('statechange', () => {
       if (ctx.state === 'running') this.started = true;
     });
-    const kick = () => this.resume();
+    const kick = () => {
+      if (!document.hidden) this.resume();
+    };
     for (const type of RESUME_EVENTS) addEventListener(type, kick, { capture: true, passive: true });
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) kick();
+      if (document.hidden) this.suspend();
+      else kick();
     });
     addEventListener('pageshow', kick);
     addEventListener('focus', kick);
+  }
+
+  // 화면이 가려질 때 소리를 멈춘다. 예약해 둔 소리도 시계와 함께 멈췄다가 다시 켜질 때 이어진다.
+  suspend() {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running') return;
+    ctx.suspend().catch((err) => console.warn('[sound] 화면이 가려졌는데 오디오를 멈추지 못했습니다.', err));
   }
 
   // 멈춘 AudioContext를 다시 켠다. 'interrupted' 동안의 resume()은 끊김이 끝날 때까지 기다렸다가 풀리고,

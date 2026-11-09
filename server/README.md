@@ -135,7 +135,7 @@ Cloudflare 계정이 있다는 전제다. 아래 명령은 모두 `server/` 폴�
 
 새 데이터베이스는 `schema.sql` 하나로 만들고, 이미 있는 데이터베이스는 `migrations/`의 파일을 번호 순서로 적용한다. Wrangler가 적용한 파일을 D1 안의 `d1_migrations` 표에 적어 두므로 같은 파일을 두 번 적용하지 않는다. 운영 D1은 처음에 `schema.sql`로 만들었으므로 첫 적용 때 `0000_initial.sql`(출시 때 스키마, 모두 `IF NOT EXISTS`라 아무것도 바꾸지 않음)과 `0001_hardening.sql`이 함께 적용된다. `test/schema.test.mjs`가 "0000부터 차례로 적용한 결과 = schema.sql"과 "다시 적용해도 그대로"를 확인한다.
 
-**순서: 마이그레이션을 먼저, 코드 배포는 그다음.** 0001이 만드는 표(`cron_runs`, `story_daily`)가 없는 채로 새 게임 Worker를 배포하면 정리 작업과 `POST /v1/story`가 실패한다(대시보드는 그 부분만 '기록 없음'으로 보이고 나머지는 동작한다).
+**순서: 마이그레이션을 먼저, 코드 배포는 그다음.** 0001이 만드는 표(`cron_runs`, `story_daily`)가 없는 채로 새 게임 Worker를 배포하면 정리 작업과 `POST /v1/story`가 실패한다(대시보드는 그 부분만 '기록 없음'으로 보이고 나머지는 동작한다). 0002가 만드는 표(`story_app_daily`, 이야기 집계의 앱 몫)가 없으면 정리 작업 전체와 앱에서 온 `POST /v1/story`가 실패한다(대시보드는 웹·앱 나누기만 못 하고 전체는 보인다). 거꾸로 표를 먼저 만들고 옛 코드가 도는 동안에는 아무것도 깨지지 않는다(옛 코드는 새 표를 모른다).
 
 1. 적용할 파일을 본다(운영 D1을 읽기만 한다).
 
@@ -152,12 +152,12 @@ Cloudflare 계정이 있다는 전제다. 아래 명령은 모두 `server/` 폴�
 3. 확인: 표·색인이 생겼는지 본다.
 
    ```bash
-   npx wrangler d1 execute lumen-hollow-caches --remote --command "SELECT name FROM sqlite_master WHERE name IN ('cron_runs','story_daily','caches_created','caches_live_expiry','thanks_at')"
+   npx wrangler d1 execute lumen-hollow-caches --remote --command "SELECT name FROM sqlite_master WHERE name IN ('cron_runs','story_daily','story_app_daily','caches_created','caches_live_expiry','thanks_at')"
    ```
 
 4. 게임 Worker와 대시보드 Worker를 배포한다(`npx wrangler deploy`, `npx wrangler deploy -c wrangler.admin.toml`).
 
-색인을 만드는 동안 기존 행을 한 번 읽고 쓰므로 그만큼 D1 읽기·쓰기를 쓴다(지금 규모에서 수천 행 이하). 다음 변경은 0001을 고치지 말고 `0002_<이름>.sql`을 새로 만들고, `schema.sql`에도 같은 내용을 넣는다.
+색인을 만드는 동안 기존 행을 한 번 읽고 쓰므로 그만큼 D1 읽기·쓰기를 쓴다(지금 규모에서 수천 행 이하). 다음 변경은 적용한 파일을 고치지 말고 다음 번호(`0003_<이름>.sql`)를 새로 만들고, `schema.sql`에도 같은 내용을 넣는다. 다시 적용해도 바뀌는 것이 없어야 하므로(`test/schema.test.mjs`) 표를 다시 만들거나 열을 더하는 대신 `IF NOT EXISTS`로 새 표를 둔다(0002가 그렇게 했다).
 
 ### 알림 (사용자가 대시보드에서 직접, 2026-11-08 확인)
 

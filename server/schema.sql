@@ -92,6 +92,17 @@ CREATE TABLE IF NOT EXISTS story_daily (
   PRIMARY KEY (day, kind, id)
 );
 
+-- 안드로이드 앱(출처 https://localhost)에서 온 이야기 사건만 한 번 더 센다(마이그레이션 0002, #53).
+-- story_daily는 웹·앱 합계 그대로이고, 웹 = story_daily − story_app_daily. 하루 상한은 story_daily의 'total' 행이 맡는다. 400일 뒤 지운다
+CREATE TABLE IF NOT EXISTS story_app_daily (
+  day     TEXT    NOT NULL,                  -- UTC 'YYYY-MM-DD'
+  kind    TEXT    NOT NULL CHECK (kind IN ('scene', 'chapter', 'clear')),
+  id      TEXT    NOT NULL,                  -- 장면·장 id (^[a-z0-9]{1,24}$)
+  n       INTEGER NOT NULL,
+  skipped INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, kind, id)
+);
+
 -- 서버 설정. enabled = 'false'면 킬 스위치(목록은 enabled:false, 쓰기는 503)
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,

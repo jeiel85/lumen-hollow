@@ -197,6 +197,20 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
     } catch (err) {
       console.error('[admin] cron_runs·story_daily 조회 실패(마이그레이션 0001을 적용했는지 확인)', err);
     }
+    // 마이그레이션 0002가 더한 앱 표(story_app_daily). 없으면 앱 몫만 '모름'(null)으로 두고 전체 수치는 그대로 보인다.
+    // 행 제한을 두지 않는다: 앱 행은 전체 행의 부분집합이라 장면·장 id 수(대본 크기)를 넘지 않는다.
+    let appExtra = null;
+    if (extra) {
+      try {
+        appExtra = await db.batch([
+          db.prepare(
+            'SELECT kind, id, sum(n) AS n, sum(skipped) AS skipped FROM story_app_daily WHERE day >= ?1 GROUP BY kind, id ORDER BY kind, id',
+          ).bind(utcDay(periodFrom)),
+        ]);
+      } catch (err) {
+        console.error('[admin] story_app_daily 조회 실패(마이그레이션 0002를 적용했는지 확인)', err);
+      }
+    }
 
     const rows = res.map((r) => r.results);
     const [decisionRow, periodRow, settingRow, liveRows, statRow, seenD, placesD, usesD, thanksD, owners, rates] = rows;
@@ -225,6 +239,8 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
       story = {
         from: utcDay(periodFrom),
         rows: storyRows.map((s) => ({ kind: s.kind, id: s.id, n: s.n, skipped: s.skipped })),
+        // 앱에서 온 몫(rows의 부분집합). null: 앱 표가 없다(마이그레이션 0002 전). 웹 몫은 rows − app
+        app: appExtra ? appExtra[0].results.map((s) => ({ kind: s.kind, id: s.id, n: s.n, skipped: s.skipped })) : null,
         today: { events: Math.min(todayEvents, rules.storyMaxEventsPerDay), max: rules.storyMaxEventsPerDay, full: todayEvents > rules.storyMaxEventsPerDay },
       };
     }
@@ -240,7 +256,7 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
 
     const limits = { place: rules.maxPlacesPerIpPerDay, use: rules.maxUsesPerIpPerDay };
     let rowsRead = null;
-    for (const r of [...res, ...(extra ?? [])]) if (typeof r.meta?.rows_read === 'number') rowsRead = (rowsRead ?? 0) + r.meta.rows_read;
+    for (const r of [...res, ...(extra ?? []), ...(appExtra ?? [])]) if (typeof r.meta?.rows_read === 'number') rowsRead = (rowsRead ?? 0) + r.meta.rows_read;
 
     return {
       now: t,
