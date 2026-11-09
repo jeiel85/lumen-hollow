@@ -22,6 +22,7 @@ import { EN } from './script.en.js';
 export const SPEAKERS = {
   me: '나', gran: '할머니', other: '낯선 목소리', nar: '',
   owner: '식당 주인', pharm: '약사', kid: '아이', doha: '도하', jeong: '오정석', patient: '낯선 환자', mom: '엄마',
+  neighbor: '깨어난 이웃',
 };
 
 export const CHAPTERS = [
@@ -38,6 +39,7 @@ export const OBJECTIVES = {
   vigil: '새벽까지 등잔 넷을 지키자 — 정시마다 돌계단 무전기',
   search: '다음 당직자를 부를 준비를 하자 — 당직실 인계부와 부두 보관함',
   call: '부두에서 다음 당직자를 부르자',
+  tour: '등대 문 앞으로 가자 — 할머니가 첫 불을 넘긴다',
   leave: '나룻배를 타고 마을로 돌아가자',
   go: '강 건너 구호소에서 가족의 행방을 묻자',
   beds: '침상 다섯에 짐 봉투를 찾아 주자 — 짐 바구니는 구호소 탁자에',
@@ -258,6 +260,25 @@ export const SCENES = [
 
   // ---------------------------------------------------------------- 2장 · 인계
   {
+    // 2장을 처음 시작할 때 마을 선착장에서. 나룻배 바닥의 기름병은 식당 주인이 실어 둔 것이다.
+    id: 'depart',
+    ch: 2,
+    title: '배웅',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '오후의 선착장. 밤사이 불이 돌아온 골목에서 사람들이 하나둘 문을 열고 나와 있었다.', cam: { at: 'dock', cut: true, zoom: 11 } },
+      { who: 'owner', text: '섬에 가는 거요? 윤 할매한테?' },
+      { who: 'me', text: '네. 할머니 아세요?' },
+      { who: 'owner', text: '우리 가게 단골이오. 소등식 날 밤에도 국 한 그릇 비우고 섬으로 갔지.' },
+      { who: 'owner', text: '배 바닥에 병 하나 실어 뒀소. 가게에 남은 등잔 기름이오. 마을엔 이제 전기가 들어왔으니.' },
+      { who: 'me', text: '같이 가요. 할머니도 반가워하실 거예요.' },
+      { who: 'owner', text: '나는 물만 봐도 속이 뒤집히는 사람이오. 대신 전해 주시오.' },
+      { who: 'owner', text: '밥은 먹고 하시라고.' },
+      { who: 'nar', text: '식당 주인은 끝내 선착장 판자에 발을 올리지 않았다.' },
+    ],
+  },
+  {
     id: 'ferry',
     ch: 2,
     title: '나루에서',
@@ -306,6 +327,78 @@ export const SCENES = [
     ],
   },
   {
+    // 첫 밤 당직의 자정 무전(돌계단 무전기로 부르면).
+    id: 'midnight',
+    ch: 2,
+    title: '대답 없음',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'me', radio: true, text: '여기는 등대섬. 자정이에요. 들리는 분 있어요?', cam: { at: 'stoneSteps', cut: true, zoom: 8 } },
+      { who: 'nar', text: '잡음만 길게 이어졌다. 세 번 부르고, 수첩에 \'자정, 대답 없음\'이라고 적었다.' },
+      { who: 'gran', text: '글씨 크게 써라. 다음 사람이 읽기 좋게.' },
+      { who: 'me', text: '주무시는 줄 알았어요.' },
+      { who: 'gran', text: '스무 날 동안 그 말을 예순 번 적었다. 눈 감고도 소리로 안다.' },
+      { who: 'me', text: '대답이 없는데 왜 계속 부르셨어요?' },
+      { who: 'gran', text: '누가 들어서가 아니다. 여기 아직 불이 있다고, 나한테 알리려고.' },
+      { who: 'me', text: '오늘은 제가 대신 알릴게요.' },
+      { who: 'nar', text: '할머니는 대답 대신 내 쪽으로 조금 기대어 앉았다.' },
+    ],
+  },
+  {
+    // 첫 밤 당직 새벽 세 시가 되면 저절로. 숫자를 세던 목소리는 3장 「빈 들것」에서 밝혀진다.
+    id: 'threeam',
+    ch: 2,
+    title: '세 시의 잡음',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '돌계단의 무전기가 저 혼자 지직거렸다.', cam: { at: 'stoneSteps', cut: true, zoom: 8 } },
+      { who: 'other', radio: true, text: '…지직… 아홉… 열… 열하나…' },
+      { who: 'nar', text: '누군가 숫자를 세고 있었다. 주파수를 맞추려는 사이에 소리가 끊겼다.' },
+      { who: 'me', text: '할머니! 방금 누가 있었어요.' },
+      { who: 'gran', text: '들었다. 적어 둬라. 세 시, 숫자 세는 목소리.' },
+      { who: 'me', text: '대답은 아니었잖아요.' },
+      { who: 'gran', text: '스무 날 만에 처음 들은 사람 소리다. 그거면 됐다.' },
+      { who: 'nar', text: '나는 처음으로 \'대답 없음\'이 아닌 말을 적었다.' },
+    ],
+  },
+  {
+    // 첫 밤 당직이 끝나는 새벽. 이어서 인계부·보관함을 본다.
+    id: 'morning',
+    ch: 2,
+    title: '심지를 내리며',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '동이 텄다. 할머니가 일어나 등잔 심지를 하나씩 내렸다.', cam: { at: 'stoneSteps', cut: true, zoom: 9 } },
+      { who: 'gran', text: '심지가 고르게 탔다. 밤새 들여다봤구나.' },
+      { who: 'me', text: '눈 감고 계셨잖아요.' },
+      { who: 'gran', text: '그을음 냄새로 안다. 스무 날을 맡았으니.' },
+      { who: 'me', text: '오늘 밤에도 누가 불을 봐야 하잖아요. 이제 어떡해요?' },
+      { who: 'gran', text: '그래서 인계부를 봐야 한다. 당직실 벽에 하나, 부두 보관함에 하나.' },
+      { who: 'gran', text: '당직은 다음 사람 얼굴을 보고 넘기는 거다. 이 섬에서 제일 오래된 규칙이다.' },
+    ],
+  },
+  {
+    // 인계부와 예비 송수신기를 다 보면(다음 당직자를 부르기 전).
+    id: 'tally',
+    ch: 2,
+    title: '도와 달라는 말',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '인계부 마지막 장에는 할머니 이름만 스물세 번 있었다. 받는 사람 칸은 다 비어 있었다.', cam: { at: 'table', cut: true, zoom: 9 } },
+      { who: 'me', text: '할머니, 왜 한 번도 도와 달라고 안 하셨어요?' },
+      { who: 'gran', text: '불을 끈 사람이 도와 달라고 하면 누가 오겠니.' },
+      { who: 'me', text: '저는 왔잖아요.' },
+      { who: 'gran', text: '너는 불러서 온 게 아니다. 찾아서 온 거지.' },
+      { who: 'me', text: '그럼 이번엔 제가 불러요. 할머니 대신.' },
+      { who: 'gran', text: '…교대 시간은 같이 정하자고 해라. 혼자 서는 당직은 내가 마지막이다.' },
+      { who: 'nar', text: '할머니가 턱으로 부두 쪽 예비 무전기를 가리켰다.' },
+    ],
+  },
+  {
     id: 'relief',
     ch: 2,
     title: '대타',
@@ -313,7 +406,7 @@ export const SCENES = [
     inPerson: true,
     lines: [
       { who: 'me', radio: true, text: '여기는 등대섬. 첫 불 지키는 사람, 한 명 구해요. 교대 시간은 같이 정해요.' },
-      { who: 'other', radio: true, text: '식당 하는 사람이오. 국솥은 이웃한테 맡겼고. 내가 갈게요.' },
+      { who: 'owner', radio: true, text: '어제 선착장에서 본 식당이오. 국솥은 이웃한테 맡겼소. 내가 가리다.' },
       { who: 'gran', text: '배 멀미 심한 양반이 어딜 온다고.' },
       { who: 'owner', radio: true, text: '그래서 나도 밥은 안 먹었수.' },
       { who: 'nar', text: '잠시 뒤 마을에서 온 작업배가 닿았다. 무전기에서 듣던 목소리가 바로 옆에서 났다.', cam: { at: 'pier', cut: true, zoom: 10 } },
@@ -321,6 +414,23 @@ export const SCENES = [
       { who: 'owner', text: '내 가게 문 안 열리디? 잠금쇠가 안에서 휘었어. 뒷문으로 손님들 내보냈지.' },
       { who: 'gran', text: '불 한 바퀴 도는 거 보고 인계란에 이름 쓰시오.' },
       { who: 'nar', text: '할머니는 그가 마지막 획을 긋고 나서야 외투를 집었다.' },
+    ],
+  },
+  {
+    // 대타 뒤, 등대 문 앞에 다가가면. 할머니가 식당 주인에게 첫 불 스위치를 넘긴다.
+    id: 'switch',
+    ch: 2,
+    title: '둘이 정할 것',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '할머니가 등대 문을 열었다. 안쪽 벽에 손때 묻은 스위치 하나가 있었다.', cam: { at: 'towerDoor', cut: true, zoom: 8 } },
+      { who: 'gran', text: '이게 첫 불이오. 의회가 끄라 해서, 내가 내렸소.' },
+      { who: 'owner', text: '알고 있수. 그날 밤 할매가 우리 가게에서 국 한 그릇 비우고 나간 것도.' },
+      { who: 'gran', text: '그러니 이건 혼자 만지지 마시오. 내리든 올리든 둘이 정하시오.' },
+      { who: 'owner', text: '그럼 할매도 혼자 정하지 마시오. 밥 먹는 것부터.' },
+      { who: 'nar', text: '할머니가 처음으로 소리 내어 웃었다. 웃음 끝에 기침이 섞였다.' },
+      { who: 'gran', text: '인계부 맨 끝에 적어 두마. 스위치는 둘이.' },
     ],
   },
   {
@@ -335,11 +445,47 @@ export const SCENES = [
       { who: 'pharm', radio: true, text: '강 건너 대피소입니다. 도시에서 환자들을 옮겼어요. 가족 찾는 분은 이쪽으로 오세요.' },
       { who: 'me', radio: true, text: '엄마가 살던 동네도요?' },
       { who: 'pharm', radio: true, text: '이름을 잃어버린 분들이 있어요. 오시면 짐부터 같이 봐요.' },
-      { who: 'nar', text: '우리는 빈 밥그릇을 포개 놓고 나룻배를 밀었다. 마을 나루에서부터는 강둑을 따라 걸었다.' },
+      { who: 'nar', text: '우리는 빈 밥그릇을 포개 놓았다. 할머니가 외투 단추를 맨 위까지 잠갔다.' },
+    ],
+  },
+  {
+    // 섬을 떠나는 나룻배에 오르면. 끝나면 3장.
+    id: 'farewell',
+    ch: 2,
+    title: '섬을 등지고',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '나룻배가 부두를 떠났다. 할머니는 노를 잡지 않고 뱃머리에 앉았다.', cam: { at: 'lake', cut: true, zoom: 16 } },
+      { who: 'owner', radio: true, text: '여기 등대섬. …이렇게 말하는 거 맞수?' },
+      { who: 'gran', radio: true, text: '맞소. 대답이 없어도 세 번.' },
+      { who: 'owner', radio: true, text: '대답이 있으면?' },
+      { who: 'gran', radio: true, text: '그럼 이름을 물으시오. 그리고 적으시오.' },
+      { who: 'nar', text: '할머니는 스무 날 동안 한 번도 등지지 않았던 섬을 등지고 앉아 있었다.' },
+      { who: 'me', text: '안 돌아보세요?' },
+      { who: 'gran', text: '불이 켜져 있으면 됐다. 이제는 앞을 봐야지.' },
+      { who: 'nar', text: '마을 나루에서부터는 강둑을 따라 걸었다.' },
     ],
   },
 
   // ---------------------------------------------------------------- 3장 · 빈 들것
+  {
+    // 3장을 처음 시작할 때 강 건너 나루에서.
+    id: 'riverside',
+    ch: 3,
+    title: '둑길 위의 자국',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '강 건너 나루에 닿았다. 푯말에 분필로 \'구호소 → 둑길 따라\'라고 적혀 있었다.', cam: { at: 'crossing', cut: true, zoom: 12 } },
+      { who: 'gran', text: '스무 날을 앉아만 있었더니 다리가 남의 다리 같구나.' },
+      { who: 'me', text: '천천히 가요. 이번엔 제가 기다릴게요.' },
+      { who: 'nar', text: '물에 잠긴 옛길 옆으로 둑길 하나가 남아 있었다. 진흙에 들것 다리 자국이 여러 줄 찍혀 있었다.' },
+      { who: 'gran', text: '누가 저 길로 사람을 메고 갔구나. 한 번이 아니다.' },
+      { who: 'me', text: '엄마도 저 길로 왔을까요?' },
+      { who: 'gran', text: '가 보면 알겠지. 묻는 건 가서 하자.' },
+    ],
+  },
   {
     id: 'count',
     ch: 3,
@@ -354,6 +500,22 @@ export const SCENES = [
       { who: 'pharm', text: '도시에서 온 분들은 본관 처마 밑 병상에 모셨어요. 비가 들이쳐 표찰 다섯 장이 번졌고요.', cam: { at: 'beds', cut: true, zoom: 10 }, art: null },
       { who: 'me', text: '엄마도 거기 있을까요?' },
       { who: 'pharm', text: '가서 봐요. 짐 바구니 봉투도 제 침상을 찾아 줘요. 깨어난 분들이 거들 거예요.' },
+    ],
+  },
+  {
+    // 본관 침상에 첫 봉투를 제자리에 놓으면.
+    id: 'neighbors',
+    ch: 3,
+    title: '먼저 깬 사람',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '봉투를 놓자 곁에 있던 이웃 하나가 침상 난간을 소매로 닦았다.', cam: { at: 'beds', cut: true, zoom: 8 } },
+      { who: 'neighbor', text: '나도 저렇게 누워 있었대요. 약국에서 여기까지 메여 왔다는데, 하나도 기억이 안 나요.' },
+      { who: 'me', text: '깰 때 어땠어요?' },
+      { who: 'neighbor', text: '꿈에 누가 자꾸 불을 비춰 줬어요. 눈이 부셔서 떴더니 발밑에 내 그림자가 먼저 와 있더라고요.' },
+      { who: 'neighbor', text: '그래서 신발부터 찾았어요. 그림자가 발에 붙었나 보려고.' },
+      { who: 'nar', text: '깨어난 사람들이 왜 다들 신발부터 찾는지 알 것 같았다.' },
     ],
   },
   {
@@ -403,6 +565,23 @@ export const SCENES = [
     ],
   },
   {
+    // 그날 밤 둑길 밤길의 절반쯤에서. 들것을 내려놓고 쉬어 간 가로등.
+    id: 'marks',
+    ch: 3,
+    title: '불 밑의 자국',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '가로등 밑 진흙에 네모난 자국이 패어 있었다. 들것을 내려놓고 쉬어 간 자리였다.', cam: { at: 'restLamp', cut: true, zoom: 8 } },
+      { who: 'nar', text: '기둥에 분필로 그은 줄이 있었다. 여섯 줄. 그 아래 또 여섯 줄.' },
+      { who: 'me', radio: true, text: '할머니, 여기서 쉬어 갔나 봐요. 기둥에 줄이 그어져 있어요.' },
+      { who: 'gran', radio: true, text: '몇 줄이냐.' },
+      { who: 'me', radio: true, text: '여섯, 그리고 여섯이요.' },
+      { who: 'gran', radio: true, text: '세면서 왔구나. 무서울 때는 세는 게 낫다. 너도 세면서 오너라. 다음 불까지.' },
+      { who: 'nar', text: '나는 다음 가로등까지 걸음을 셌다.' },
+    ],
+  },
+  {
     // 밤 둑길을 건너 구호소에 닿으면(#58). 이어서 약사의 인계 쪽지를 받는다.
     id: 'stretchers',
     ch: 3,
@@ -420,6 +599,39 @@ export const SCENES = [
     ],
   },
   {
+    // 약사에게 명부와 짐표를 돌려줄 때. 끝나면 약사의 인계 쪽지를 받는다. 2장 「세 시의 잡음」의 목소리가 밝혀진다.
+    id: 'handback',
+    ch: 3,
+    title: '빈 들것',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '약사는 명부와 봉투를 받아 빈 들것 위에 가지런히 놓았다.', cam: { at: 'tent', cut: true, zoom: 9 } },
+      { who: 'me', text: '이 들것은 왜 비어 있어요?' },
+      { who: 'pharm', text: '열한 분이 깨고 나서 치우려다 말았어요. 아직 누가 올지 몰라서요.' },
+      { who: 'me', text: '등대섬에서 새벽 세 시에 숫자 세는 목소리를 들었어요.' },
+      { who: 'pharm', text: '…저예요. 세 시마다 숨소리를 세거든요. 무전기가 켜져 있는 줄 몰랐네요.' },
+      { who: 'pharm', text: '17번 분은 별관 동쪽 교실에 모셨어요. 창이 동쪽이라 아침 해가 제일 먼저 들어요.' },
+      { who: 'pharm', text: '가 보세요. 가는 길에 읽을 쪽지 하나 드릴게요.' },
+    ],
+  },
+  {
+    // 별관 계단에 가까이 가면(보호자 자리 앞). 할머니가 먼저 와 있다.
+    id: 'doorstep',
+    ch: 3,
+    title: '문 앞에서',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '할머니가 별관 계단 앞에 먼저 와 서 있었다. 외투 단추를 자꾸 만지작거렸다.', cam: { at: 'steps', cut: true, zoom: 9 } },
+      { who: 'gran', text: '얘야, 너 먼저 들어가거라.' },
+      { who: 'me', text: '같이 가요.' },
+      { who: 'gran', text: '네 엄마가 눈을 뜨면 처음 보는 얼굴이 내 얼굴이면 안 될 것 같다. 불 끈 사람 얼굴이.' },
+      { who: 'me', text: '엄마는 아직 못 깨요. 그림자가 돌아와야 해요.' },
+      { who: 'gran', text: '안다. 그러니 오늘 밤은 문 밖에 있으마. 당직은 문 밖에서도 서는 거다.' },
+    ],
+  },
+  {
     id: 'chair',
     ch: 3,
     title: '보호자 자리',
@@ -430,6 +642,23 @@ export const SCENES = [
       { who: 'gran', text: '얘야, 엄마한테 내 얘기는 내가 하마.' },
       { who: 'me', text: '네. 근데 먼저 엄마 손 좀 잡을게요.' },
       { who: 'nar', text: '엄마 손바닥에는 손전등 손잡이와 같은 너비의 굳은살이 있었다. 내 엄지가 그 자리에 꼭 들어갔다.', cam: { at: 'windowBed', zoom: 6 }, art: 'chair-hands' },
+    ],
+  },
+  {
+    // 보호자 자리 다음 날 새벽. 끝나면 4장(이튿날 오후).
+    id: 'outside',
+    ch: 3,
+    title: '문 밖의 당직',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '새벽에 문을 열었다. 할머니가 계단 맨 위에 앉아 손전등을 무릎에 세워 두고 있었다.', cam: { at: 'steps', cut: true, zoom: 8, hour: 5.8 }, art: null },
+      { who: 'me', text: '밤새 여기 계셨어요?' },
+      { who: 'gran', text: '네 엄마 숨소리를 셌다. 세다 보니 날이 샜다.' },
+      { who: 'me', text: '들어오시지.' },
+      { who: 'gran', text: '문 하나 사이로도 숨소리는 들린다. 스무 날 동안 무전기로 듣던 것보다 가깝다.' },
+      { who: 'me', text: '오늘은 들어오세요. 엄마 옆자리는 할머니 거예요.' },
+      { who: 'gran', text: '…그래. 해 뜨거든 들어가마. 얼굴부터 씻고.' },
     ],
   },
 
@@ -450,6 +679,41 @@ export const SCENES = [
     ],
   },
   {
+    // 예비등 둘을 다 이으면. 오정석이 문가에 앉은 까닭(1장 은신처 관리 일지).
+    id: 'watchman',
+    ch: 4,
+    title: '문가의 당번',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '두 등이 켜지자 문가 의자에 앉은 오정석의 그림자가 교실 바닥에 내려앉았다.', cam: { at: 'doorBed', cut: true, zoom: 7 } },
+      { who: 'jeong', text: '도하가 그러더라고요. 아빠는 왜 맨날 문 옆에만 앉느냐고.' },
+      { who: 'me', text: '왜요?' },
+      { who: 'jeong', text: '그날 밤 대피소 문을 내가 지켰어요. 밖에서 애가 불렀는데 못 열었어요. 밤에는 문밖을 보지 말라고 써 붙인 게 나였거든.' },
+      { who: 'jeong', text: '이분 가족도 어디서 문을 두드리고 있을지 몰라요. 그래서 이번엔 문가에 앉았어요.' },
+      { who: 'me', text: '도하는 원망 안 해요. 손전등 켜고 식당 뒤에서 잤대요.' },
+      { who: 'jeong', text: '알아요. 그 애는 진작 날 용서했어요. 내가 나를 용서하는 데 시간이 좀 걸리네요.' },
+    ],
+  },
+  {
+    // 계단에 앉아 밤을 기다리면(밤이 오기 전). 할머니가 나와 곁에 앉는다.
+    id: 'stairs',
+    ch: 4,
+    title: '계단에서',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '해가 기울었다. 할머니가 교실에서 나와 내 옆 계단에 앉았다.', cam: { at: 'steps', cut: true, zoom: 8, hour: 18.6 } },
+      { who: 'gran', text: '네 엄마가 이 학교를 다녔다. 3학년 때 이 계단에서 넘어져 무릎을 깼지.' },
+      { who: 'gran', text: '업고 나룻배로 섬까지 갔다. 등대 불 밑에서 약을 바르니 그제야 울음을 그치더라.' },
+      { who: 'me', text: '엄마는 그 얘기 한 번도 안 했어요.' },
+      { who: 'gran', text: '그 뒤로는 불 밑에서만 울었으니까. 네 앞에서는 안 울었겠지.' },
+      { who: 'me', text: '엄마가 깨면 무슨 말부터 하실 거예요?' },
+      { who: 'gran', text: '모르겠다. 스무 날 동안 그 말만 연습했는데, 아직 첫마디를 못 정했다.' },
+      { who: 'nar', text: '운동장 끝이 어두워졌다. 할머니는 교실로 들어가 엄마 곁에 앉았다.' },
+    ],
+  },
+  {
     id: 'firsthome',
     ch: 4,
     title: '문가',
@@ -463,6 +727,23 @@ export const SCENES = [
       { who: 'me', text: '엄마인 줄 알았어요.' },
       { who: 'pharm', text: '잠깐 앉을래요? 내가 비출게요.' },
       { who: 'me', text: '물 한 모금만 주세요. 아직 비출 수 있어요.' },
+    ],
+  },
+  {
+    // 약사에게 물을 받으면(둘째 그림자 전). 3장 「열둘을 데려온 길」의 마지막 말을 받는다.
+    id: 'water',
+    ch: 4,
+    title: '열셋',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '약사가 물병 뚜껑을 따서 내 손에 쥐여 주었다.', cam: { at: 'steps', cut: true, zoom: 8 } },
+      { who: 'pharm', text: '문가 분이 깨셨어요. 신발부터 찾으셨고요.' },
+      { who: 'pharm', text: '열둘 다 데려왔다는 말, 이제는 해도 되겠어요.' },
+      { who: 'me', text: '수첩에 다시 쓰실 거예요?' },
+      { who: 'pharm', text: "네. '이송 무사' 옆에 한 줄 더요. 열둘 모두 깨어남." },
+      { who: 'me', text: '엄마는 그 열둘에 없어요.' },
+      { who: 'pharm', text: '그러니까 하나 더 세요. 이번엔 같이 세요. 열셋.' },
     ],
   },
   {
@@ -500,6 +781,24 @@ export const SCENES = [
     ],
   },
   {
+    // 세 사람 다음, 남은 창 전. 2장에서 넘긴 섬 당직의 정시 무전.
+    id: 'island',
+    ch: 4,
+    title: '섬에서 온 무전',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '창턱의 무전기가 지직거렸다.', cam: { at: 'windowBed', cut: true, zoom: 8 } },
+      { who: 'owner', radio: true, text: '여기 등대섬. 정시 무전이오. 등잔 넷 다 살아 있소.' },
+      { who: 'gran', radio: true, text: '들었소. 적어 두시오.' },
+      { who: 'owner', radio: true, text: '적었수. 그런데 대답을 들으니까 적을 게 많아지네.' },
+      { who: 'mom', text: '엄마, 누구야?' },
+      { who: 'gran', text: '다음 당직이다. 섬에 불 보는 사람이 하나 더 생겼다.' },
+      { who: 'mom', text: '이제 혼자 안 서네.' },
+      { who: 'nar', text: '할머니는 무전기를 창턱에 도로 세워 두었다. 잡음이 그친 뒤에도 한참 그쪽을 보았다.' },
+    ],
+  },
+  {
     // 세 사람 다음, 아직 밤(#58). 운동장 가로등 하나를 꺼 세 번째 그림자에게 본관으로 가는 길을 낸다.
     id: 'third',
     ch: 4,
@@ -512,6 +811,27 @@ export const SCENES = [
       { who: 'me', text: '하나를 끄면 길이 나겠네요. 끈 자리는 제가 비출게요.', cam: { at: 'classroom', cut: true, zoom: 9 } },
       { who: 'mom', text: '다녀와. 이번엔 우리가 창가에서 보고 있을게.' },
       { who: 'gran', text: '가거라. 남의 집 창도 창이다.' },
+    ],
+  },
+  {
+    // 세 번째 그림자를 보낸 이튿날 아침, 방송 전. 장 제목의 점호.
+    id: 'rollcall',
+    ch: 4,
+    title: '아침 점호',
+    when: 'chapter',
+    inPerson: true,
+    lines: [
+      { who: 'nar', text: '아침 해가 동쪽 창으로 먼저 들어왔다. 할머니가 교실 칠판에 점호판을 옮겨 적었다.', cam: { at: 'classroom', cut: true, zoom: 10 } },
+      { who: 'gran', text: '점호하자. 창가, 윤씨 딸.' },
+      { who: 'mom', text: '여기.' },
+      { who: 'gran', text: '문가.' },
+      { who: 'patient', text: '…여기 있소. 이름은 아직 안 떠오르오.' },
+      { who: 'jeong', text: '당직 오정석, 여기 있습니다.' },
+      { who: 'pharm', text: '약국에서 온 열둘, 모두 여기 있어요.' },
+      { who: 'gran', text: '섬.' },
+      { who: 'owner', radio: true, text: '여기 있수. 밥도 먹었수.' },
+      { who: 'me', text: '할머니도 여기 있어요.' },
+      { who: 'nar', text: '할머니가 점호판 맨 아래에 처음으로 자기 이름을 적었다. 당직 칸이 아니라, 곁에 앉은 사람 칸에.' },
     ],
   },
   {

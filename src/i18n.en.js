@@ -679,9 +679,11 @@ export const UI_EN = {
   '정시다. 돌계단 무전기로 부르자.': 'It\'s on the hour. Call from the radio by the stone steps.',
   '정시 무전 · 여기는 등대섬. 들리는 분 있어요?': 'Hourly call · This is Lighthouse Island. Is anyone there?',
   '대답 없음. 할머니처럼 적어 두었다.': 'No answer. I wrote it down, the way Grandma did.',
-  '대답 없음. …멀리서 지직 소리가 한 번 났다.': 'No answer. …A single crackle, somewhere far off.',
-  '날이 밝았다. 할머니가 심지를 하나씩 내렸다.': 'Day broke. Grandma turned the wicks down one by one.',
+  '다시 불렀다. 숫자를 세던 목소리는 다시 들리지 않았다.': 'I called again. The counting voice didn\'t come back.',
+  '인계부는 당직실 벽에, 예비 송수신기는 부두 보관함에 있다.': 'The handover log is on the watch room wall. The spare radio is in the locker on the dock.',
   '식당 주인이 부두 등잔 밑 깡통에 접은 종이를 넣었다.': 'The diner owner slipped a folded page into the tin under the pier lamp.',
+  '할머니가 식당 주인을 데리고 등대 문 앞으로 갔다.': 'Grandma took the diner owner over to the lighthouse door.',
+  '할머니가 먼저 별관 쪽으로 걸어갔다.': 'Grandma has gone on ahead toward the annex.',
   // 3장 침상 다섯·둑길 밤길
   '짐 바구니는 구호소 탁자에 있다. 봉투를 하나씩 들고 침상으로 가자.': 'The luggage basket is on the relief station table. Carry the bags to the beds one at a time.',
   '칸막이를 걷었다. 엄마가 아니었다. 이분들을 찾는 사람도 어딘가 있을 것이다.': 'I pulled the curtain aside. It wasn\'t Mom. Someone out there must be looking for these people too.',

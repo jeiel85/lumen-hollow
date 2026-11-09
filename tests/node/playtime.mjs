@@ -1,4 +1,4 @@
-// 2~4장 보강(#58)으로 늘어난 플레이 시간 추정. 실제 플레이 측정이 아니라 모형이다(BACKLOG.md: 비공개 테스트에서 실측).
+// 2~4장 보강(#58)과 장마다 12장면 보강(v0.25.0)으로 늘어난 플레이 시간 추정. 실제 플레이 측정이 아니라 모형이다(BACKLOG.md: 비공개 테스트에서 실측).
 //   node tests/node/playtime.mjs
 // 모형: 장면 줄 = 글자 수/42(찍히는 속도) + 1.2초(읽고 넘기기), 기록 = 글자 수/12 + 2초, 걷기 = 직선 거리 × 1.3 / 5.2m/s,
 // 길게 누르기 = dur + 0.4초, 밤 = 게임 시간 × HOUR_SECONDS / 그 장의 시간 배율. 헤매기·실패·다시 하기는 넣지 않는다(하한).
@@ -57,17 +57,36 @@ const parts = {
   },
 };
 
-const fmt = (s) => `${Math.floor(s / 60)}분 ${String(Math.round(s % 60)).padStart(2, '0')}초`;
-let all = 0;
-for (const [ch, items] of Object.entries(parts)) {
-  const sum = Object.values(items).reduce((a, b) => a + b, 0);
-  all += sum;
-  console.log(`\n${ch}장 +${fmt(sum)}`);
-  for (const [k, v] of Object.entries(items)) console.log(`  ${k.padEnd(30)} ${fmt(v)}`);
+// 장마다 12장면 보강(v0.25.0): 새 장면 읽기와 새로 걷는 차례(2장 등대 문 앞) 하나
+const added = {
+  2: ['depart', 'midnight', 'threeam', 'morning', 'tally', 'switch', 'farewell'],
+  3: ['riverside', 'neighbors', 'marks', 'handback', 'doorstep', 'outside'],
+  4: ['watchman', 'stairs', 'water', 'island', 'rollcall'],
+};
+const twelve = {};
+for (const [ch, ids] of Object.entries(added)) {
+  twelve[ch] = Object.fromEntries(ids.map((id) => [`「${SCENES.find((s) => s.id === id).title}」`, scene(id)]));
 }
+twelve[2]['돌계단 → 등대 문 앞'] = walk([spot('call'), L.towerMark]);
+
+const fmt = (s) => `${Math.floor(s / 60)}분 ${String(Math.round(s % 60)).padStart(2, '0')}초`;
+const report = (title, table) => {
+  let all = 0;
+  console.log(`\n== ${title}`);
+  for (const [ch, items] of Object.entries(table)) {
+    const sum = Object.values(items).reduce((a, b) => a + b, 0);
+    all += sum;
+    console.log(`\n${ch}장 +${fmt(sum)}`);
+    for (const [k, v] of Object.entries(items)) console.log(`  ${k.padEnd(30)} ${fmt(v)}`);
+  }
+  return all;
+};
+const all = report('2~4장 보강(#58, v0.24.0)', parts);
+const allTwelve = report('장마다 12장면 보강(v0.25.0)', twelve);
 // 지금 2~4장 장면·기록 전체(보강 전후 비교용)
 const ch = (x) => x.ch ?? 1;
 const sceneAll = SCENES.filter((s) => ch(s) > 1).reduce((t, s) => t + scene(s.id), 0);
 const docAll = CLUES.filter((c) => ch(c) > 1 && c.body).reduce((t, c) => t + doc(c.id), 0);
-console.log(`\n보강으로 늘어난 합(하한): +${fmt(all)}`);
+console.log(`\n#58 보강으로 늘어난 합(하한): +${fmt(all)}`);
+console.log(`장마다 12장면 보강으로 늘어난 합(하한): +${fmt(allTwelve)}`);
 console.log(`2~4장 장면 ${SCENES.filter((s) => ch(s) > 1).length}개 읽기 ${fmt(sceneAll)}, 기록 ${CLUES.filter((c) => ch(c) > 1 && c.body).length}개 ${fmt(docAll)}`);

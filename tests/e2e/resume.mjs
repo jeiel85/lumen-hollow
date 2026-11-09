@@ -32,7 +32,7 @@ await B.ev(`T.seen(${JSON.stringify(CH1)}); lumen.startChapter(); lumen.step(0.5
 await real(2800);
 await B.ev(`lumen.step(0.5); return 1`);
 await B.shot(`${prefix}-01-village`);
-await B.ev(`T.use('boatVillage'); lumen.step(0.2); return 1`);
+await B.ev(`T.settle(); T.use('boatVillage'); lumen.step(0.2); return 1`); // 2장 시작의 「배웅」을 넘기고
 await real(900);
 await B.ev(`lumen.step(0.6); lumen.dialogue.advance(); lumen.step(2.5); return 1`);
 await real(600);
@@ -54,7 +54,7 @@ r = await B.ev(`
   return T.st();`);
 check('4장 예비등을 켠 뒤 재개하면 밤을 기다리는 차례', r.ch === 4 && r.step === 'wait' && r.hour < 17, r);
 r = await B.ev(`
-  T.use('wait'); lumen.step(3);
+  T.settle(); T.use('wait'); T.settle(); lumen.step(3); // 「문가의 당번」(예비등 둘 뒤)·「계단에서」(기다리기)를 넘기고
   const P = lumen.player; P.flashOn = true;
   for (let t = 0; t < 90 && !lumen.chapters.flag('home1'); t += 0.25) {
     const s = lumen.shades.list.find(e => e.active && e.tag === 't1');
@@ -73,7 +73,7 @@ check('문가 장면 뒤 쉬는 차례(밤)', r.step === 'rest' && r.hour > 20, 
 
 // ---------------------------------------------------------------- QA ⑤: 둘째 밤에 쓰러짐 → 다시 하기
 r = await B.ev(`
-  T.use('water'); lumen.step(3);
+  T.use('water'); T.settle(); lumen.step(3); // 「열셋」을 넘기고
   T.goto(lumen.chapters.river.stepsOut.x + 14, lumen.chapters.river.stepsOut.z + 4); // 불빛 밖 운동장으로
   lumen.player.flashOn = false;
   for (let t = 0; t < 80 && lumen.game.state === 'play'; t += 0.5) { lumen.player.hp = Math.min(lumen.player.hp, 20); lumen.step(0.5); }
