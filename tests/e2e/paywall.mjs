@@ -64,7 +64,7 @@ r = await B.ev(`${SETUP}
   await new Promise((ok) => setTimeout(ok, 600));
   L.step(1.5); skip();
   return { owned: L.store.owned, paywall: shown(), chapter: L.game.chapter, step: L.chapters.step };`);
-check('사면 바로 2장의 다음 차례로 들어간다', r.owned && !r.paywall && r.chapter === 2 && r.step === 'search', r);
+check('사면 바로 2장의 다음 차례(등잔)로 들어간다', r.owned && !r.paywall && r.chapter === 2 && r.step === 'oil', r);
 
 // 대기 중이던 결제가 화면 밖에서 끝나면, 결제 화면을 다시 열 때 묻는 확인에서 열린다(#70 리뷰: 열 때마다 묻는다)
 r = await B.ev(`${SETUP}

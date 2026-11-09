@@ -18,11 +18,15 @@ export const EN = {
 
   objectives: {
     ferry: 'Take the boat to see Grandma',
+    oil: 'Fill the island\'s four oil lamps — oil can behind the watch room, oil bottle in the ferry boat',
+    vigil: 'Keep all four oil lamps lit until dawn — radio from the stone steps on the hour',
     search: 'Get ready to call the next watchkeeper — the handover log in the watch room and the locker on the dock',
     call: 'Call the next watchkeeper from the dock',
     leave: 'Take the ferry boat back to town',
     go: 'Ask after your family at the relief station across the river',
+    beds: 'Find each of the five beds its luggage bag — the basket is on the relief station table',
     store: 'At the levee storehouse, match the numbers on the register and the luggage tag',
+    levee: 'Follow the levee streetlamps back to the relief station',
     back: 'Return the register and the luggage tag to the pharmacist at the relief station',
     annex: 'Go to the east classroom in the annex',
     lamps: 'Light the spare lamps so both patients make it through the night',
@@ -30,6 +34,7 @@ export const EN = {
     night: 'Shine your light on the shadow coming across the schoolyard',
     rest: 'Take a sip of water, then shine again',
     class: 'Go back to the classroom',
+    route: 'Turn off one streetlamp at the switchboard and send the shadow to the main building window',
     broadcast: 'Start the morning broadcast from the broadcast booth',
   },
 
@@ -221,6 +226,21 @@ export const EN = {
         'Pressing the radio rubbed it raw. Have you eaten?',
         'Tell me about Mom first.',
         'Grandma put the lids back on the two bowls she\'d set out.',
+        'Let\'s fill the oil lamps before the sun goes down. We\'ll talk by the fire.',
+      ],
+    },
+    rules: {
+      title: 'Rules of the Watch',
+      lines: [
+        'The fourth wick caught. Grandma sat down on the stone steps and drew my hand into the lamplight.',
+        'There are only three rules to a watch. Watch the light, watch the water, and listen to the radio.',
+        'Purple eyes go for the light before they go for people. Shine on them before they reach a lamp.',
+        'Call once on the hour. If no one answers, call up to three times, then write it down.',
+        'When are you going to tell me about Mom?',
+        'What there is to say about your mother, I\'ll say in front of your mother. That way I can\'t run from it.',
+        'Then I\'ll listen tonight. Get some sleep, Grandma.',
+        'First time in twenty days anyone\'s said that to me. Wake me if even one lamp goes out.',
+        'Grandma didn\'t lie down. She set the radio on the step beside me and closed her eyes sitting up.',
       ],
     },
     relief: {
@@ -257,7 +277,18 @@ export const EN = {
         'Are they all awake?',
         'Eleven are. The last one is still sleeping. But that one\'s from around here.',
         'Eleven pairs of shoes were lined up neatly beside the stretcher. The ones who had woken were waiting for the patient.',
-        'The people from the city are on a separate register. Could you bring the register and the luggage tags from the levee storehouse?',
+        'The people from the city are in beds under the eaves of the main building. The rain blew in and smeared five of their bed tags.',
+        'Could Mom be there?',
+        'Go and look. And find each luggage bag in the basket its own bed. The ones who\'ve woken will help.',
+      ],
+    },
+    fivebeds: {
+      title: 'Five Beds',
+      lines: [
+        'I slipped new tags onto all five beds. Mom wasn\'t one of the five.',
+        'Someone must be looking for all five of them. Like me.',
+        'That\'s why the tags matter. People who are searching remember the things before they remember a name.',
+        'Now let\'s check the register. Could you bring the register and the luggage tags from the levee storehouse?',
         'The pharmacist held out a key wrapped in a handkerchief. Mud had dried hard along the levee path out to the storehouse.',
       ],
     },
@@ -280,6 +311,18 @@ export const EN = {
         'I found her the next day. The little rascal was asleep under the lamp by the diner\'s back door.',
         'I turned on my flashlight. But I was sleepy, so I was going to look for Dad in the morning.',
         'At the end of every sentence, the child let go of her dad\'s radio button too soon. Those short silences didn\'t scare me anymore.',
+      ],
+    },
+    stretchers: {
+      title: 'The Road That Brought Twelve',
+      lines: [
+        'You crossed that levee alone, at night?',
+        'The streetlamps kept going out. But I could always see the next light.',
+        'We split twelve people across six stretchers and came down that road. Two trips.',
+        'The one in front carried a flashlight, the one behind carried the stretcher. When we rested, we set the stretchers down under a light.',
+        'In the record I only wrote \'transfer safe.\' Truth is, I was so scared I just counted. One through twelve.',
+        'So that\'s how you brought all twelve.',
+        'I can only say I brought all of them once the last one wakes up.',
       ],
     },
     chair: {
@@ -341,6 +384,16 @@ export const EN = {
         'We sat perched on the edge of the same chair and ate the cold rice. Nobody got up first.',
       ],
     },
+    third: {
+      title: 'The Window Left',
+      lines: [
+        'From the doorway, the pharmacist called softly. At the far end of the schoolyard, a shadow was stuck, unable to go forward or back.',
+        'It wants to reach the main building, but the schoolyard lights block the way. The watch room switchboard only powers two of the three.',
+        'Then if I turn one off, it\'ll have a path. I\'ll shine on the dark spot myself.',
+        'Go on. This time we\'ll be watching from the window.',
+        'Go. Someone else\'s window is still a window.',
+      ],
+    },
     broadcast: {
       title: 'The First Morning Broadcast',
       lines: [
@@ -351,6 +404,16 @@ export const EN = {
         'Blue sneakers. Only the left lace is white.',
         'Hold on. I\'m writing it down. Only the left lace white.',
         'By the window, Mom slid a fresh sheet of paper over to me.',
+      ],
+    },
+    reports: {
+      title: 'After the First Report',
+      lines: [
+        'The patient in bed eleven in the main building woke up at dawn. Asked for their shoes first thing.',
+        'Whoever\'s looking for the blue sneakers, can you hear me? They\'re in the main building of the old school across the river. They woke up at dawn.',
+        '…The lace broke, so I tied it with a white one. I\'m on my way.',
+        'A second report came in. Then a third. Mom wrote them down, and I pressed the transmit button.',
+        'Under the roll board, Grandma drew up a new watch schedule. This time there weren\'t enough spaces.',
       ],
     },
   },
@@ -490,6 +553,38 @@ export const EN = {
         'Returned by Oh Jeong-seok. My kid keeps thinking the radio\'s a toy, so I tie the strap up high.',
       ],
     },
+    page1926: {
+      title: 'Watch Journal · Winter 1926',
+      where: 'Under the lamp at the lighthouse foot',
+      body: [
+        'Winter solstice, 1926. The twelve households take turns standing the First Light watch, one night each.',
+        'Sleeping tonight: five. Sitting with them: five. The two left over watch the lamps.',
+        'Never leave a sleeper\'s side empty. Do not leave your post until you have seen the next person\'s face.',
+      ],
+      note: 'One page, in twelve different hands.',
+    },
+    page1979: {
+      title: 'Watch Journal · Rainy Season 1979',
+      where: 'Under the lamp on the stone steps',
+      body: [
+        'No more boats on the lake, they said, so the watch was cut to two.',
+        'The council says the light turns fine, so it\'s all right.',
+        'The light turns fine because someone is watching it.',
+        'Park steps down. Next on watch: the Yun family\'s eldest daughter.',
+      ],
+      note: 'Under "eldest daughter," in Grandma\'s handwriting, a single word: "Yes."',
+    },
+    pagelast: {
+      title: 'Watch Journal · This Year',
+      where: 'Under the lamp at the watch room eaves',
+      body: [
+        'Alone since the day after lights-out. No one to hand over to.',
+        'Day seventeen. No answer. No answer. No answer. Writing it down.',
+        'Leaving the space under the pier lamp empty. That\'s the next person\'s place.',
+        'Day twenty.',
+      ],
+      note: 'In the space for day twenty there was only the first letter of my name. The rest had run.',
+    },
 
     // ---------------------------------------------------------------- 3장
     manifest: {
@@ -522,6 +617,59 @@ export const EN = {
       ],
       hand: '— Seo-yun',
     },
+    bed3: {
+      title: 'New Bed Tag · No. 3',
+      where: 'Beds under the main building eaves',
+      cue: 'a grey wool glove on the left hand',
+      bag: 'one right-hand glove, a city bus ticket',
+      body: ['No. 3 · gym east door', 'grey wool gloves, city bus ticket'],
+      note: 'Awakened neighbor — "When I woke, it was my hands that were cold first. I\'ll put the glove on for them."',
+    },
+    bed8: {
+      title: 'New Bed Tag · No. 8',
+      where: 'Beds under the main building eaves',
+      cue: 'glasses marks on the bridge of the nose',
+      bag: 'gold-rimmed glasses, tape on the left arm',
+      body: ['No. 8 · bench at the market bus stop', 'gold-rimmed glasses, tape on the left arm'],
+      note: 'Awakened neighbor — "You can\'t throw out taped-up glasses. My husband was the same."',
+    },
+    bed11: {
+      title: 'New Bed Tag · No. 11',
+      where: 'Beds under the main building eaves',
+      cue: 'a blue sneaker on the right foot only, blue lace',
+      bag: 'a left blue sneaker, white lace',
+      body: ['No. 11 · gym stairs', 'blue sneakers, only the left lace white'],
+      note: 'Awakened neighbor — "A swapped lace like that — someone tied those shoes for them."',
+    },
+    bed14: {
+      title: 'New Bed Tag · No. 14',
+      where: 'Beds under the main building eaves',
+      cue: 'mustard-yellow yarn wound around the fingers',
+      bag: 'a half-knitted mustard scarf, two needles',
+      body: ['No. 14 · apartment guard booth', 'half-knitted mustard scarf'],
+      note: 'Awakened neighbor — "I\'ll leave the needles in so the stitches don\'t slip. They\'ll want to keep knitting when they wake."',
+    },
+    bed20: {
+      title: 'New Bed Tag · No. 20',
+      where: 'Beds under the main building eaves',
+      cue: 'a star drawn in ballpoint on the back of the hand',
+      bag: 'a crayon drawing, five stars and two people',
+      body: ['No. 20 · in front of the gym kiosk', 'ballpoint star on the hand, a child\'s drawing'],
+      note: 'Awakened neighbor — "I\'ll pull the sleeve down so the star doesn\'t rub off. The kid who drew it will want to check."',
+    },
+    carrybook: {
+      title: 'The Pharmacist\'s Transfer Notebook',
+      where: 'Relief station table',
+      body: [
+        '[Transfer · Hanbit Pharmacy → relief station across the river · Han Seo-yun]',
+        'Night one. Six stretchers, two to each, front and back. Six of the twelve moved. Transfer safe.',
+        'Night two. The remaining six. Two levee streetlamps out. Flashlights instead. Transfer safe.',
+        'From four days later, waking one or two at a time. On waking, they ask for their shoes first.',
+        'Eleven awake. The ones who woke carry the stretchers now. More hands to carry than ever.',
+        'One left. Decide who will sit with them.',
+      ],
+      note: 'A small dot beside every number. Like marks from counting, one at a time.',
+    },
 
     // ---------------------------------------------------------------- 4장
     roster: {
@@ -533,6 +681,36 @@ export const EN = {
         'Door: name unknown — on watch: Oh Jeong-seok.',
         'No empty seats. Everyone has someone beside them.',
       ],
+    },
+    tag1958: {
+      title: 'Name Tag · Park ○○',
+      where: 'Shoe cabinet, main building',
+      body: ['Grade 1, Class 1 · Park ○○', '1958'],
+      note: 'A child of the Park family from the handover log, maybe. The given name was worn away.',
+    },
+    tag1960: {
+      title: 'Name Tag · Yun ○○',
+      where: 'Under the podium',
+      body: ['Grade 6, Class 1 · Yun ○○', '1960'],
+      note: 'It was Grandma\'s handwriting. She already had the habit of writing her letters big.',
+    },
+    tag1963: {
+      title: 'Name Tag · Han ○○',
+      where: 'Behind the schoolyard watch room',
+      body: ['Grade 4, Class 2 · Han ○○', '1963'],
+      note: 'Same family name as the pharmacist. I think she\'d smile if I asked.',
+    },
+    tag1986: {
+      title: 'Name Tag · Oh Jeong-seok',
+      where: 'Classroom lectern',
+      body: ['Grade 2, Class 1 · Oh Jeong-seok', '1986'],
+      note: 'It was Mr. Oh\'s name. His second-grade handwriting looked exactly like Doha\'s.',
+    },
+    tag1991: {
+      title: 'Name Tag · No Name',
+      where: 'Desk drawer at the back of the classroom',
+      body: ['Grade 3, Class 2 · ○○○', '1991'],
+      note: 'The name had been rubbed out. On the back, in Grandma\'s handwriting, was our old home phone number.',
     },
   },
 };

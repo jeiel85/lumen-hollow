@@ -42,7 +42,7 @@ await real(800);
 await B.ev(`lumen.step(0.3); return 1`);
 await B.shot(`${prefix}-03-island-day`);
 let r = await B.ev(`return T.st()`);
-check('섬에서 탐색 차례', r.step === 'search', r);
+check('섬에서 등잔 차례(#58: 첫 대면 뒤)', r.step === 'oil', r);
 
 // ---------------------------------------------------------------- QA ④: 첫 귀환 직후 종료 → 재개
 r = await B.ev(`
@@ -104,8 +104,8 @@ r = await B.ev(`
   const titles = [...document.querySelectorAll('#journal-clues .jt')].map(e => e.textContent);
   document.getElementById('journal-close').click();
   return { heads, n: titles.length };`);
-// 1장 문서 기록 8(급수탑은 장면이라 문서가 아니다) + 2장 2(인계부·예비 송수신기)
-check('1장만 마쳤으면 수첩에는 2장까지만', r.heads.length === 2 && r.n === 10, r);
+// 1장 문서 기록 8(급수탑은 장면이라 문서가 아니다) + 2장 5(인계부·예비 송수신기·당직 일지 셋)
+check('1장만 마쳤으면 수첩에는 2장까지만', r.heads.length === 2 && r.n === 13, r);
 
 console.log(`\n${res.filter(Boolean).length}/${res.length} 통과`);
 const errs = B.logs.filter((l) => /error|exception/i.test(l) && !/caches|online|fetch|CORS|ERR_/i.test(l));

@@ -114,8 +114,58 @@ check('섬에 닿으면 첫 대면 장면', r.ok, r);
 await B.ev(`T.peek(3); return 1`);
 await B.shot('05-landing');
 r = await B.ev(`T.watch(); return T.st()`);
-check('첫 대면 뒤 탐색 목표', r.step === 'search' && r.state === 'play', r);
+check('첫 대면 뒤 등잔 목표(시간이 멈춘 오후)', r.step === 'oil' && r.state === 'play' && r.obj.includes('등잔'), r);
 await B.shot('06-island');
+// 2장 등잔 넷(#58): 기름 없이는 못 채우고, 기름통·기름병이 둘씩 채운다. 앞의 셋은 당직 일지가 나온다.
+r = await B.ev(`const h0 = lumen.env.hour; lumen.step(5); return { blocked: T.use('lampTower'), still: Math.abs(lumen.env.hour - h0) < 0.01 }`);
+check('기름 없이는 등잔을 못 채우고, 그동안 시간이 멈춰 있다', String(r.blocked).startsWith('blocked:') && r.still, r);
+r = await B.ev(`return [T.use('oilCan'), T.use('oilBottle'), lumen.chapters.oilLeft]`);
+check('기름통·기름병을 주우면 등잔 넷 분', r[2] === 4, r);
+r = await B.ev(`
+  const out = [];
+  for (const id of ['lampDock', 'lampTower', 'lampSteps', 'lampHut']) {
+    out.push(T.use(id));
+    lumen.step(1.2);
+    out.push(lumen.dialogue.docOpen ? document.getElementById('doc-title').textContent : '-');
+    if (id !== 'lampHut') T.settle();
+  }
+  return { out, found: ['page1926', 'page1979', 'pagelast'].filter((c) => lumen.story.isFound(c)) }`);
+check('등잔 넷을 채우면 깡통 셋에서 당직 일지(부두는 빈 깡통)', r.out[1] === '-' && r.out[3].includes('1926') && r.out[5].includes('1979'), r);
+await B.shot('06b-watch-journal');
+r = await B.ev(`lumen.dialogue.closeDoc(); lumen.step(0.6); const s = lumen.dialogue.scene?.id; return { s, st: T.st() }`);
+check('넷째 일지를 닫으면 당직 수칙 장면', r.s === 'rules' || r.st.q.includes('rules'), r);
+await B.ev(`T.until('rules'); T.peek(1); lumen.step(0.3); return 1`);
+await B.sleep(900);
+await B.shot('06c-rules-art');
+r = await B.ev(`T.watch(); return T.st()`);
+check('당직 수칙 뒤 해 질 녘 첫 밤 당직', r.step === 'vigil' && r.hour >= 18 && r.hour < 19, r);
+// 정시 무전과 빛먹이
+r = await B.ev(`
+  lumen.env.setHour(21.05); lumen.step(0.3);
+  const due = !!lumen.chapters.spot('radio').show();
+  const label = T.use('radio');
+  return { due, label, after: lumen.chapters.spot('radio').show() }`);
+check('정시(21시)에 돌계단 무전기로 부른다', r.due && String(r.label).includes('정시 무전') && !r.after, r);
+r = await B.ev(`
+  const C = lumen.chapters, L = C.lanterns.find((l) => l.id === 'lampHut');
+  T.goto(C.lakeRefs.stepsOut.x, C.lakeRefs.stepsOut.z);
+  lumen.shades.clear();
+  lumen.shades.spawnKind(L.x, L.z, lumen.ground, 'eater', 1.7);
+  const e = lumen.shades.list.find((s) => s.active && s.kind === 'eater');
+  e.x = L.x + 4.5; e.z = L.z; e.state = 'stalk'; e.fade = 1;
+  let t = 0;
+  for (; t < 40 && !L.out; t += 0.5) lumen.step(0.5);
+  return { out: L.out, t, spot: C.spot('lampHut').show(), label: C.nearest(L.x, L.z)?.label }`);
+check('빛먹이가 등잔에 붙으면 등잔이 꺼지고, 다시 붙일 수 있다', r.out && r.spot && String(r.label).includes('다시 붙이기'), r);
+await B.shot('06d-vigil-eater');
+r = await B.ev(`lumen.shades.clear(); T.use('lampHut'); const L = lumen.chapters.lanterns.find((l) => l.id === 'lampHut'); return { out: L.out, on: L.on }`);
+check('꺼진 등잔을 다시 붙였다', !r.out && r.on, r);
+r = await B.ev(`
+  lumen.env.setHour(5.7);
+  let t = 0;
+  for (; t < 30 && !lumen.chapters.flag('vigil'); t += 0.5) { lumen.player.hp = 100; lumen.step(0.5); }
+  return { t, st: T.st() }`);
+check('새벽이 오면 첫 밤 당직이 끝나고 인계부·보관함 차례', r.st.flags.includes('vigil') && r.st.step === 'search', r);
 r = await B.ev(`return T.use('spare')`);
 check('부두 보관함 열기(순서 자유: 보관함 먼저)', String(r).includes('보관함'), r);
 r = await B.ev(`T.settle(); return { st: T.st(), found: lumen.story.isFound('spare') }`);
@@ -152,7 +202,30 @@ check('구호소에 다가가면 열두 번째 칸 장면', r.scene === 'count',
 await B.ev(`T.peek(8); return 1`);
 await B.shot('12-count-shoes');
 r = await B.ev(`T.watch(); return T.st()`);
-check('창고 목표', r.step === 'store', r);
+check('본관 처마 밑 침상 목표(#58)', r.step === 'beds' && r.obj.includes('침상'), r);
+r = await B.ev(`return { bed: T.use('bed11'), tag: T.use('tag') }`);
+check('봉투 없이는 침상에 놓을 수 없고, 창고 기록은 아직 닫혀 있다', String(r.bed).startsWith('blocked:') && r.tag === 'no-spot' || String(r.tag) === 'nothing-near', r);
+r = await B.ev(`
+  const C = lumen.chapters;
+  T.use('basket');
+  const carry = C.carry;
+  const wrong = T.use('bed11');
+  return { carry, wrong, found: lumen.story.isFound('bed11') || lumen.story.isFound('bed3') }`);
+check('짝이 틀리면 놓이지 않는다(3번 봉투 → 11번 침상)', r.carry === 'bed3' && !r.found, r);
+r = await B.ev(`
+  const C = lumen.chapters, out = [];
+  for (const id of ['bed3', 'bed8', 'bed11', 'bed14', 'bed20']) {
+    for (let k = 0; k < 6 && C.carry !== id; k++) T.use('basket');
+    out.push(T.use(id));
+    lumen.step(0.3);
+    out.push(document.getElementById('doc-title').textContent);
+    T.settle();
+  }
+  return { out, st: T.st() }`);
+check('봉투 다섯을 제 침상에 놓으면 표찰 다섯', r.out.filter((x) => String(x).startsWith('새 표찰')).length === 5, r);
+await B.shot('12b-beds');
+r = await B.ev(`lumen.step(0.6); const s = lumen.dialogue.scene?.id; T.watch(); return { s, seen: lumen.story.isSeen('fivebeds'), st: T.st() }`);
+check('다섯 자리 장면 뒤 창고 목표', r.seen && r.st.step === 'store', r);
 r = await B.ev(`return T.use('tag')`);
 check('봉투부터 열기(역순)', String(r).includes('봉투'), r);
 r = await B.ev(`lumen.step(0.2); return { hand: document.getElementById('doc-hand').textContent, body: document.getElementById('doc-body').textContent }`);
@@ -170,6 +243,18 @@ r = await B.ev(`lumen.dialogue.closeDoc(); lumen.step(0.4); lumen.step(1.6); ret
 check('뒤집고 닫으면 엄마의 열쇠 장면', r.scene === 'key' || r.st.q.includes('key'), r);
 r = await B.ev(`T.watch(); lumen.step(3.0); const s = lumen.dialogue.scene?.id; return { s, st: T.st() }`);
 check('귀로에 문 밖의 아이 무전', r.s === 'knock', r);
+r = await B.ev(`T.watch(); lumen.step(2); return T.st()`);
+check('무전 뒤 그날 밤: 둑길 밤길 목표', r.step === 'levee' && r.hour > 19, r);
+r = await B.ev(`
+  const lamps = lumen.chapters.river.leveeLamps; const off = lamps.map(() => 0), on = lamps.map(() => 0);
+  for (let i = 0; i < 48; i++) { lumen.player.hp = 100; lumen.step(0.25); lamps.forEach((L, k) => { if (L.on) on[k]++; else off[k]++; }); }
+  return { off, on }`);
+check('둑길 가로등이 저마다 꺼졌다 켜진다(출렁임)', r.off.every((n) => n > 0) && r.on.every((n) => n > 0), r);
+await B.shot('13b-levee-night');
+r = await B.ev(`const t = lumen.chapters.river.tentMark; T.goto(t.x - 3, t.z + 3); lumen.step(0.5); const s = lumen.dialogue.scene?.id; T.peek(3); return s`);
+check('구호소에 닿으면 열둘을 데려온 길 장면', r === 'stretchers', r);
+await B.sleep(900);
+await B.shot('13c-stretchers');
 r = await B.ev(`T.watch(); return T.st()`);
 check('약사에게 반납 목표', r.step === 'back', r);
 r = await B.ev(`return T.use('return')`);
@@ -181,8 +266,8 @@ r = await B.ev(`const t = lumen.chapters.river.stepsMark; T.goto(t.x + 2.5, t.z)
 check('별관 입구에서 보호자 자리 장면', r.scene === 'chair', r);
 await B.ev(`T.peek(2); return 1`);
 await B.shot('15-chair-classroom');
-r = await B.ev(`T.watch(); lumen.step(2.0); return { st: T.st(), scene: lumen.dialogue.scene?.id }`);
-check('4장으로 넘어가 두 사람 장면', r.st.ch === 4 && (r.scene === 'roll' || r.st.q.includes('roll')), r);
+r = await B.ev(`T.watch(); lumen.step(0.4); const card = document.getElementById('chapter-card-text').textContent; lumen.step(1.6); return { st: T.st(), scene: lumen.dialogue.scene?.id, card }`);
+check('4장으로 넘어가 이튿날 오후, 두 사람 장면', r.st.ch === 4 && r.card.includes('이튿날 오후') && (r.scene === 'roll' || r.st.q.includes('roll')), r);
 
 // ---------------------------------------------------------------- 4장
 r = await B.ev(`T.watch(); return T.st()`);
@@ -196,6 +281,8 @@ await B.ev(`T.settle(); return 1`);
 r = await B.ev(`return T.use('lampDoor')`);
 r = await B.ev(`lumen.step(2); return T.st()`);
 check('두 등을 켜면 밤을 기다리기', r.step === 'wait', r);
+r = await B.ev(`const l = T.use('tag1991'); lumen.step(0.3); const t = document.getElementById('doc-title').textContent; T.settle(); return { l, t, n: lumen.chapters.nameTags }`);
+check('이름표 하나를 줍는다(교실 뒤 책상 서랍)', String(r.l).includes('이름표') && r.n.found === 1, r);
 await B.shot('17-lamps-day');
 r = await B.ev(`return T.use('wait')`);
 r = await B.ev(`lumen.step(2.0); return T.st()`);
@@ -242,12 +329,52 @@ r = await B.ev(`return T.use('class')`);
 r = await B.ev(`lumen.step(0.3); const s = lumen.dialogue.scene?.id; T.peek(6); return s`);
 check('세 사람 장면', r === 'truth', r);
 await B.shot('21-truth');
-r = await B.ev(`T.watch(); lumen.step(2); return T.st()`);
+r = await B.ev(`const ok = T.until('third'); return { ok, st: T.st() }`);
+check('세 사람 뒤 아직 밤, 남은 창 장면', r.ok && r.st.hour > 20, r);
+r = await B.ev(`T.watch(); lumen.step(2.5); const R = lumen.chapters.river; return { st: T.st(), lamps: Object.fromEntries(Object.entries(R.laneLamps).map(([k, L]) => [k, L.on])), t3: lumen.shades.hasTarget('t3') }`);
+check('길 내기 목표: 천막 쪽만 꺼져 있고 세 번째 그림자가 나온다', r.st.step === 'route' && r.lamps.west && r.lamps.mid && !r.lamps.east && r.t3, r);
+await B.shot('21b-route');
+// 틀린 길(천막 쪽)에서 흩으면 본관에 닿지 못하고 다시 모인다
+r = await B.ev(`
+  const P = lumen.player; P.flashOn = true;
+  let t = 0, seen = false, gone = false;
+  for (; t < 90; t += 0.25) {
+    const s = lumen.shades.list.find((e) => e.active && e.tag === 't3' && e.state !== 'die');
+    if (s) { seen = true; T.goto(s.x - 2.5, s.z - 2.5); P.facing = Math.atan2(s.x - P.pos.x, s.z - P.pos.z); P.battery = 100; P.hp = 100; }
+    else if (seen) { gone = true; break; }
+    lumen.step(0.25);
+  }
+  return { t, seen, gone, home3: lumen.chapters.flag('home3'), st: T.st() }`);
+check('틀린 길(천막 쪽)에서 흩으면 본관 창으로 가지 않는다', r.seen && r.gone && !r.home3 && r.st.step === 'route', r);
+r = await B.ev(`return [T.use('board'), T.use('board')]`);
+check('배전반을 두 번 눌러 서쪽 골대 쪽을 끈다', String(r[1]).includes('서쪽 골대 쪽'), r);
+r = await B.ev(`
+  const C = lumen.chapters, R = C.river, P = lumen.player;
+  const lamps = Object.fromEntries(Object.entries(R.laneLamps).map(([k, L]) => [k, L.on]));
+  T.goto(R.bedsMark.x, R.bedsMark.z + 2); P.flashOn = true;
+  let t = 0, near = 99;
+  for (; t < 120 && !C.flag('home3'); t += 0.25) {
+    const s = lumen.shades.list.find((e) => e.active && e.tag === 't3' && e.state !== 'die');
+    if (s) {
+      near = Math.hypot(s.x - R.bedsMark.x, s.z - R.bedsMark.z);
+      if (near < 8) { P.facing = Math.atan2(s.x - P.pos.x, s.z - P.pos.z); P.flashOn = true; } else P.flashOn = false;
+      P.battery = 100; P.hp = 100;
+    }
+    lumen.step(0.25);
+  }
+  return { lamps, t, home3: C.flag('home3') }`);
+check('서쪽 길로 온 그림자를 침상 앞에서 비추면 본관 창으로', !r.lamps.west && r.lamps.mid && r.lamps.east && r.home3, r);
+await B.shot('21c-third-home');
+r = await B.ev(`lumen.step(4); return T.st()`);
 check('아침 방송 목표', r.step === 'broadcast' && r.hour < 8, r);
 await B.shot('22-morning');
 r = await B.ev(`return T.use('podium')`);
-r = await B.ev(`lumen.step(0.3); const s = lumen.dialogue.scene?.id; T.watch(); lumen.step(0.5); return { s, state: lumen.game.state, title: document.getElementById('end-title').textContent, text: document.getElementById('end-text').textContent, journal: !document.getElementById('end-journal-btn').classList.contains('hidden') }`);
-check('첫 아침 방송 뒤 끝 화면', r.s === 'broadcast' && r.state === 'end' && r.title === '《돌아갈 자리》' && r.journal, r);
+r = await B.ev(`lumen.step(0.3); const s = lumen.dialogue.scene?.id; const ok = T.until('reports'); T.peek(4); return { s, ok }`);
+check('첫 아침 방송 뒤 첫 제보 다음 장면', r.s === 'broadcast' && r.ok, r);
+await B.sleep(900);
+await B.shot('22b-reports-memo');
+r = await B.ev(`T.watch(); lumen.step(0.5); return { state: lumen.game.state, title: document.getElementById('end-title').textContent, text: document.getElementById('end-text').textContent, best: document.getElementById('end-best').textContent, journal: !document.getElementById('end-journal-btn').classList.contains('hidden') }`);
+check('끝 화면: 제목·글·찾은 이름표 수', r.state === 'end' && r.title === '《돌아갈 자리》' && r.best.includes('1/5') && r.journal, r);
 await B.shot('23-end');
 r = await B.ev(`document.getElementById('end-journal-btn').click(); lumen.step(0.2); return { prog: document.getElementById('journal-progress').textContent, heads: [...document.querySelectorAll('#journal-scenes .jhead')].map(e => e.textContent) }`);
 check('수첩에 1~4장이 모두', r.heads.length === 4, r);

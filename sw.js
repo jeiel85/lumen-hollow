@@ -34,6 +34,7 @@ const UNVERSIONED = [
   // 이야기 장면의 컷신 그림(src/script.js 줄의 art). 오프라인에서도 장면이 그림과 함께 나오게 미리 받는다.
   ...['prologue-hand', 'prologue-road', 'confession-switch', 'finale-firstlight', 'ferry-row', 'landing-hands',
     'bowls-riceballs', 'count-shoes', 'key-photo', 'chair-hands', 'mom-wakes', 'three-riceball', 'broadcast-morning',
+    'watch-hands', 'stretchers-levee', 'reports-memo',
   ].map((n) => `art/story/${n}.webp`),
 ];
 const NAV_TIMEOUT = 4000;

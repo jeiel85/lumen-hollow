@@ -89,12 +89,25 @@ export class Shades {
   // 이야기가 정한 그늘이(4장 마지막 밤). tag는 흩어질 때 returned에 실려 누구에게 돌아가는지 가린다.
   // path의 점들을 차례로 지나 플레이어에게 다가오고, tough만큼 오래 비춰야 흩어지며, 멀리 있어도 사라지지 않는다.
   // 생김새는 다른 그늘이와 같다(누구의 그림자인지는 돌아간 창으로만 알린다).
-  spawnTarget(x, z, tag, { path = [], tough = 3 } = {}) {
+  // hold: 길의 마지막 점에 닿아도 그 자리에 머문다(플레이어에게 오지 않는다, 4장 세 번째 그림자).
+  spawnTarget(x, z, tag, { path = [], tough = 3, hold = false } = {}) {
     const s = this.list.find((e) => !e.active);
     if (!s) return false;
-    Object.assign(s, { active: true, state: 'rise', x, z, vx: 0, vz: 0, fade: 0, burn: 0, cool: 0, tag, tough, path: path.map((p) => ({ ...p })) });
+    Object.assign(s, { active: true, state: 'rise', x, z, vx: 0, vz: 0, fade: 0, burn: 0, cool: 0, tag, tough, path: path.map((p) => ({ ...p })), hold });
     this._kind(s, 'shade');
     s.g.visible = true;
+    return true;
+  }
+
+  // 목표 그림자의 길을 바꾼다(4장 배전반으로 가로등을 바꿨을 때). 지금 자리에서 새 길을 따른다.
+  setPath(tag, path) {
+    for (const s of this.list) if (s.active && s.tag === tag && s.state !== 'die') s.path = path.map((p) => ({ ...p }));
+  }
+
+  // 이야기가 정한 때에 특정 종류의 그늘이를 깨운다(2장 섬의 빛먹이). 깨웠으면 true.
+  spawnKind(px, pz, world, kind, tough = 1) {
+    if (!this._spawn(px, pz, world)) return false;
+    this._become(this._last, kind, tough);
     return true;
   }
 
@@ -187,15 +200,17 @@ export class Shades {
   }
 
   // 빛먹이가 찾아갈 켜진 가로등(가장 가까운 것). 1초마다, 노리던 가로등이 꺼지면 바로 다시 고른다.
+  // 2~4장 무대는 구역이 없어 무대가 정한다(world.lampOn — 섬 등잔만).
   _seekLamp(s, world, t) {
-    const live = s.seek && world.zones[s.seek.zone].level >= 0.5;
+    const on = (L) => (world.lampOn ? world.lampOn(L) : world.zones[L.zone].level >= 0.5);
+    const live = s.seek && on(s.seek);
     if (t - s.seekAt < 1 && (live || !s.seek)) return live ? s.seek : null;
     s.seekAt = t;
     s.seek = null;
     if (!world.lamps || world.night < 0.3) return null;
     let best = EATER_SEEK * EATER_SEEK;
     for (const L of world.lamps) {
-      if (world.zones[L.zone].level < 0.5) continue;
+      if (!on(L)) continue;
       const d2 = (L.x - s.x) ** 2 + (L.z - s.z) ** 2;
       if (d2 < best) {
         best = d2;
@@ -281,8 +296,8 @@ export class Shades {
         if (way) {
           const wx = way.x - s.x;
           const wz = way.z - s.z;
-          const wd = Math.hypot(wx, wz);
-          if (wd < 1.3) s.path.shift();
+          const wd = Math.hypot(wx, wz) || 0.001;
+          if (wd < 1.3 && (s.path.length > 1 || !s.hold)) s.path.shift();
           else {
             ux = wx / wd;
             uz = wz / wd;

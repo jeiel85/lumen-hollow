@@ -24,7 +24,7 @@ const EMPTY = { nights: 0, zones: 1, winDay: 0 };
 const PART_V = { wardrobe: 1, story: 1, chapters: 1 };
 const PART_NAME = { wardrobe: tr('옷장'), story: tr('이야기 진행'), chapters: tr('2~4장 진행') };
 // 2~4장 진행 표시. src/chapters.js의 FLAGS와 같아야 한다(tests/node/records.test.mjs가 검사한다).
-export const CHAPTER_FLAGS = ['lampDoor', 'lampYard', 'home1', 'home2', 'flip'];
+export const CHAPTER_FLAGS = ['lampDoor', 'lampYard', 'home1', 'home2', 'home3', 'flip', 'oilCan', 'oilBottle', 'vigil', 'lampTower', 'lampSteps', 'lampHut', 'lampDock'];
 
 const SCENE_IDS = new Set(SCENES.map((s) => s.id));
 const CLUE_IDS = new Set(CLUES.map((c) => c.id));

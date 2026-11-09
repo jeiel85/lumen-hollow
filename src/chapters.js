@@ -3,7 +3,7 @@ import { Builder, Frame, geo } from './geometry.js';
 import { LAMP_RADIUS, makePoolTexture, pushOut, segmentBlocked, sightBoxes } from './world.js';
 import { load, save, remove } from './storage.js';
 import { LAKE, ISLAND, clueById } from './story.js';
-import { CHAPTERS, OBJECTIVES } from './script.js';
+import { CHAPTERS, OBJECTIVES, BEDS, NAMETAGS } from './script.js';
 import { tr } from './i18n.js';
 
 // 2~4장: 1장을 마친 뒤 이어지는 이야기. 마을과 겹치지 않는 두 무대(호수의 등대섬, 강 건너 옛 학교)를 짓고,
@@ -11,9 +11,17 @@ import { tr } from './i18n.js';
 // 그래서 탭이 어디서 닫혀도 다시 열면 그 차례에서 이어진다. 대본은 script.js, 장면 재생·화면은 main·dialogue가 한다.
 
 const KEY = 'lumen.chapters';
-const VERSION = 1; // 저장 형식: { v: 1, flags: [표시] }. 바꾸면 DECISIONS.md도 고친다.
-// 장면·기록만으로는 알 수 없는 진행: 4장 예비등 둘, 목표 그림자 귀환 둘(장면보다 먼저 남긴다), 3장 사진 뒤집기
-const FLAGS = new Set(['lampDoor', 'lampYard', 'home1', 'home2', 'flip']);
+// 저장 형식: { v: 1, flags: [표시] }. 바꾸면 DECISIONS.md도 고친다. #58에서 표시만 늘었다(형식·버전 그대로,
+// DECISIONS.md "2~4장 보강"). 표시 목록은 src/records.js CHAPTER_FLAGS와 같아야 한다.
+const VERSION = 1;
+// 장면·기록만으로는 알 수 없는 진행: 4장 예비등 둘, 목표 그림자 귀환 셋(장면보다 먼저 남긴다), 3장 사진 뒤집기,
+// 2장 기름 두 곳·등잔 넷·첫 밤 당직(#58)
+const FLAGS = new Set(['lampDoor', 'lampYard', 'home1', 'home2', 'home3', 'flip', 'oilCan', 'oilBottle', 'vigil', 'lampTower', 'lampSteps', 'lampHut', 'lampDock']);
+const LANTERNS = ['lampTower', 'lampSteps', 'lampHut', 'lampDock'];
+// 4장 운동장 가로등 셋(서·가운데·동). 배전반은 둘만 켠다. 꺼진 쪽으로 세 번째 그림자가 지나간다.
+const LANE_NAMES = { west: tr('서쪽 골대 쪽'), mid: tr('구령대 앞'), east: tr('구호소 천막 쪽') };
+const LANE_ORDER = ['east', 'mid', 'west'];
+const BED_REACH = 10; // 세 번째 그림자를 이만큼 본관 침상 가까이에서 흩어야 그 창으로 돌아간다
 
 const WARM = new THREE.Color(1.0, 0.72, 0.42);
 // 3·4장 무대(강 건너 옛 학교)의 원점. 마을 바닥(±150)과 호숫가 숲 밖이라 서로 보이지 않는다.
@@ -146,8 +154,22 @@ class Stage {
     return null;
   }
 
-  // 무대의 등은 차단기가 없다(그늘이가 몰려도 꺼지지 않는다).
-  addLoad() {}
+  // 무대의 등은 차단기가 없다(그늘이가 몰려도 꺼지지 않는다). 2장 섬 등잔(oil)만 그늘이가 오래 몰리면 꺼진다(#58).
+  addLoad(lit, amount) {
+    const L = lit.L;
+    if (!L.oil || !L.on) return;
+    L.load += amount;
+    if (L.load < 1) return;
+    L.load = 0;
+    L.on = false;
+    L.out = true;
+    this.onOut?.(L);
+  }
+
+  // 빛먹이가 찾아갈 등인가: 무대에서는 켜진 등잔만(고정등은 꺼지지 않으니 노리지 않는다).
+  lampOn(L) {
+    return !!L.oil && L.on && L.level >= 0.5;
+  }
 
   inBounds(x, z) {
     if (!this.walkable(x, z, 0.6)) return false;
@@ -240,6 +262,11 @@ export class Chapters {
     this.timer = 0;
     this.wispBusy = false;
     this.knockAt = null;
+    // 이번 실행 동안만 기억하는 것(#58): 3장 들고 있는 봉투, 2장 정시 무전, 4장 배전반에서 끈 가로등
+    this.carry = null;
+    this.calls = new Set();
+    this.off = 'east';
+    this.once = new Set();
     this.npcs = {};
     this.spots = [];
     this.links = null; // attach()로 받는 { api, shades, wisps }
@@ -291,8 +318,14 @@ export class Chapters {
     return this.story.isSeen('finale');
   }
 
+  // 끝 화면 앞의 마지막 장면. 0.23.0까지 방송에서 끝냈던 저장은 이어 가기로 「첫 제보 다음」을 본다.
   get done() {
-    return this.story.isSeen('broadcast');
+    return this.story.isSeen('reports');
+  }
+
+  // 찾은 이름표 수(4장, 끝 화면)
+  get nameTags() {
+    return { found: NAMETAGS.filter((id) => this.story.isFound(id)).length, total: NAMETAGS.length };
   }
 
   // 처음 화면 단추에 쓸 다음 장: { ch, title, fresh(그 장을 아직 시작하지 않음) }. 1장을 마치지 않았거나 다 끝냈으면 null.
@@ -304,6 +337,7 @@ export class Chapters {
   }
 
   // 지금 할 차례. fresh면 이번 실행의 상태(진행 중인 장·밤)를 무시하고 저장된 진행만 본다.
+  // #58에서 끼운 차례(등잔·첫 밤, 침상·둑길 밤, 세 번째 그림자)는 그 뒤 차례를 이미 지난 저장이면 건너뛴다.
   _derive(fresh = false) {
     const S = (id) => this.story.isSeen(id);
     const F = (id) => this.story.isFound(id);
@@ -315,18 +349,22 @@ export class Chapters {
       if (!S('ferry')) return { ch: 2, step: 'ferry' };
       if (!S('landing')) return { ch: 2, step: 'landing' };
       if (S('relief')) return { ch: 2, step: 'bowls' };
+      if (!LANTERNS.every(G)) return { ch: 2, step: 'oil' };
+      if (!S('rules')) return { ch: 2, step: 'rules' };
+      if (!G('vigil')) return { ch: 2, step: 'vigil' };
       if (F('islandbook') && F('spare')) return { ch: 2, step: 'call' };
       return { ch: 2, step: 'search' };
     }
     if (!S('chair')) {
       if (!S('count')) return { ch: 3, step: 'go' };
+      if (!G('flip') && !S('fivebeds')) return { ch: 3, step: BEDS.every(F) ? 'fivebeds' : 'beds' };
       if (!G('flip')) return { ch: 3, step: F('manifest') && F('tag') ? 'compare' : 'store' };
       if (!S('key')) return { ch: 3, step: 'key' };
       if (!S('knock')) return { ch: 3, step: 'knock' };
-      if (!F('transfer')) return { ch: 3, step: 'back' };
+      if (!F('transfer')) return { ch: 3, step: S('stretchers') ? 'back' : 'levee' };
       return { ch: 3, step: 'annex' };
     }
-    if (!S('broadcast')) {
+    if (!S('reports')) {
       const night = !fresh && this.night;
       if (!S('roll')) return { ch: 4, step: 'roll' };
       if (!(G('lampDoor') && G('lampYard'))) return { ch: 4, step: 'lamps' };
@@ -335,17 +373,22 @@ export class Chapters {
       if (!G('home2')) return { ch: 4, step: !fresh && this.restDone ? 'night2' : 'rest' };
       if (!S('secondhome')) return { ch: 4, step: 'secondhome' };
       if (!S('truth')) return { ch: 4, step: 'class' };
-      return { ch: 4, step: 'broadcast' };
+      if (!S('broadcast')) {
+        if (!S('third')) return { ch: 4, step: 'third' };
+        if (!G('home3')) return { ch: 4, step: 'route' };
+        return { ch: 4, step: 'broadcast' };
+      }
+      return { ch: 4, step: 'reports' };
     }
     return { ch: 5 };
   }
 
   get objective() {
     return OBJECTIVES[{
-      ferry: 'ferry', landing: 'ferry', search: 'search', call: 'call', bowls: 'call', leave: 'leave',
-      go: 'go', store: 'store', compare: 'store', key: 'store', knock: 'back', back: 'back', annex: 'annex',
+      ferry: 'ferry', landing: 'ferry', oil: 'oil', rules: 'oil', vigil: 'vigil', search: 'search', call: 'call', bowls: 'call', leave: 'leave',
+      go: 'go', beds: 'beds', fivebeds: 'beds', store: 'store', compare: 'store', key: 'store', knock: 'levee', levee: 'levee', back: 'back', annex: 'annex',
       roll: 'lamps', lamps: 'lamps', wait: 'wait', night1: 'night', firsthome: 'night', rest: 'rest', night2: 'night',
-      secondhome: 'night', class: 'class', broadcast: 'broadcast',
+      secondhome: 'night', class: 'class', third: 'route', route: 'route', broadcast: 'broadcast', reports: 'broadcast',
     }[this.step]] ?? '';
   }
 
@@ -356,14 +399,18 @@ export class Chapters {
   // 게임 시간이 흐르는 빠르기. 2장만 해가 지고, 3·4장은 이야기가 시각을 정한다.
   // 2장도 나룻배에 오르기 전(마을 선착장)에는 멈춘다: 첫 밤은 섬에서 맞는다(#33, 마을에 머물다 해가 지면
   // 갈 수 없는 섬의 돌계단으로 가라는 안내가 떴다).
+  // 등잔을 채우는 동안은 멈춘다(#58: 다 채우면 「당직 수칙」이 해 질 녘으로 넘긴다). 첫 밤 당직은 조금 느리게 흘러
+  // 정시 무전 사이에 등잔을 돌볼 틈이 있다(밤 약 2.5분).
   get timeScale() {
-    return this.ch === 2 && this.step !== 'ferry' ? 1 : 0;
+    if (this.ch !== 2 || ['ferry', 'landing', 'oil', 'rules'].includes(this.step)) return 0;
+    return this.step === 'vigil' ? 0.6 : 1;
   }
 
-  // 저절로 깨어나는 그늘이: 2장 밤, 4장 마지막 밤(목표 그림자를 쫓는 동안)
+  // 저절로 깨어나는 그늘이: 2장 밤, 3장 둑길 밤길, 4장 마지막 밤(목표 그림자를 쫓는 동안)
   spawning(night) {
     if (this.ch === 2) return night > 0.75;
-    if (this.ch === 4) return (this.step === 'night1' || this.step === 'night2') && night > 0.75;
+    if (this.ch === 3) return this.step === 'levee' && night > 0.75;
+    if (this.ch === 4) return ['night1', 'night2', 'route'].includes(this.step) && night > 0.75;
     return false;
   }
 
@@ -383,6 +430,14 @@ export class Chapters {
     this.wispBusy = false;
     this.knockAt = null;
     this.timer = 0;
+    this.carry = null;
+    this.calls.clear();
+    this.off = 'east';
+    this.once.clear();
+    for (const L of this.lanterns) {
+      L.out = false;
+      L.load = 0;
+    }
     const d = this._derive(true);
     if (d.ch < 2 || d.ch > 4) return null;
     this.ch = d.ch;
@@ -390,9 +445,11 @@ export class Chapters {
     let at;
     let hour;
     let rainy = false;
+    let sub = null;
     if (d.ch === 2) {
       this.stage = this.lake;
-      hour = 15.0; // 해 지기까지 약 20초. 섬에서 첫 밤을 고정등 아래에서 맞게 된다.
+      // 등잔을 채우는 동안은 시간이 멈춘 오후. 첫 밤 당직을 마친 뒤의 차례는 이튿날 아침에서 잇는다.
+      hour = this.flags.has('vigil') ? 7.5 : 15.0;
       rainy = true;
       this.story.parkBoat();
       if (d.step === 'ferry') {
@@ -401,7 +458,14 @@ export class Chapters {
         this._moorAtIsland();
         at = this.pierEnd;
         if (d.step === 'landing') play.push('landing');
+        if (d.step === 'rules') play.push('rules');
         if (d.step === 'bowls') play.push('bowls');
+        if (d.step === 'vigil') {
+          // 첫 밤 당직을 다시: 해 질 녘 돌계단에서
+          hour = 18.3;
+          rainy = false;
+          at = this.lakeRefs.stepsOut;
+        }
       }
     } else {
       this.stage = this.river;
@@ -409,29 +473,44 @@ export class Chapters {
       hour = 10.5;
       if (d.ch === 3) {
         if (d.step === 'go') at = this.river.start;
-        else if (d.step === 'annex') at = this.river.tentOut;
+        else if (['beds', 'fivebeds', 'back', 'annex'].includes(d.step)) at = this.river.tentOut;
         else at = this.river.storeOut;
+        if (d.step === 'fivebeds') play.push('fivebeds');
         if (d.step === 'key') play.push('key');
         if (d.step === 'knock') play.push('knock');
+        // 문 밖의 아이 무전 뒤로는 그날 밤이다(#58: 둑길 밤길 → 반납 → 별관).
+        if (['levee', 'back', 'annex'].includes(d.step)) {
+          this.night = true;
+          hour = 19.6;
+        }
       } else {
         at = this.river.stepsOut;
         hour = 16.6;
-        if (d.step === 'roll') play.push('roll');
-        if (['firsthome', 'rest', 'secondhome', 'class'].includes(d.step)) {
+        if (d.step === 'roll') {
+          play.push('roll');
+          sub = tr('이튿날 오후'); // 3장이 밤(보호자 자리)으로 끝난다
+        }
+        if (['firsthome', 'rest', 'secondhome', 'class', 'third', 'route'].includes(d.step)) {
           this.night = true;
           hour = 20.6;
         }
         if (d.step === 'firsthome') play.push('firsthome');
         if (d.step === 'secondhome') play.push('secondhome');
-        if (d.step === 'broadcast') {
+        if (d.step === 'third') {
+          at = this.river.classOut;
+          play.push('third');
+        }
+        if (d.step === 'route') at = this.river.boardOut;
+        if (d.step === 'broadcast' || d.step === 'reports') {
           at = this.river.podiumOut;
           hour = 7.2;
         }
+        if (d.step === 'reports') play.push('reports');
       }
     }
     for (const id of play) this.queued.add(id);
     this._refresh();
-    return { ch: d.ch, title: CHAPTERS[d.ch - 1].title, x: at.x, z: at.z, facing: at.a ?? 0, hour, rainy, play };
+    return { ch: d.ch, title: CHAPTERS[d.ch - 1].title, sub, x: at.x, z: at.z, facing: at.a ?? 0, hour, rainy, play };
   }
 
   // 장을 떠날 때(처음 화면, 끝 화면 뒤)
@@ -448,6 +527,10 @@ export class Chapters {
       L.on = false;
       L.level = 0;
     }
+    for (const c of this.oilCans) c.mesh.visible = false;
+    this.radioMesh.visible = false;
+    for (const t of this.river.nameTags) t.mesh.visible = false;
+    for (const L of Object.values(this.river.laneLamps)) L.on = false;
   }
 
   // ---------------------------------------------------------------- 차례 맞추기
@@ -460,7 +543,7 @@ export class Chapters {
     const api = this.links?.api;
     if (!api) return;
     // 진행만으로 정해지는 장면은 바로 튼다(이미 줄 섰으면 두 번 세우지 않는다).
-    if (['landing', 'bowls', 'key', 'roll', 'firsthome', 'secondhome'].includes(this.step)) this._play(this.step);
+    if (['landing', 'rules', 'bowls', 'fivebeds', 'key', 'roll', 'firsthome', 'secondhome', 'third', 'reports'].includes(this.step)) this._play(this.step);
     if (this.step === 'knock' && this.knockAt === null) {
       // 창고를 나서는 길에 걸려 오는 무전
       this.knockAt = 1;
@@ -485,14 +568,36 @@ export class Chapters {
         this._moorAtIsland();
         api.place(this.pierEnd);
         break;
+      case 'landing':
+        api.later(0.8, () => api.toast(tr('등잔 넷을 채우자. 기름은 당직실 뒤 기름통과 나룻배 바닥에 있다.')));
+        break;
+      case 'rules':
+        // 장면 첫 줄이 해 질 녘(18.3시)으로 넘겼다. 할머니는 돌계단에서 눈을 붙이고, 첫 밤 당직이 시작된다.
+        this.timer = 12; // 첫 빛먹이까지
+        api.later(0.8, () => api.toast(tr('해가 졌다. 등잔 넷을 새벽까지 지키자. 정시마다 돌계단 무전기로 부른다.'), 'warn'));
+        break;
       case 'relief':
         api.toast(tr('식당 주인이 인계부에 이름을 적었다.'), 'story');
+        api.later(2.6, () => api.toast(tr('식당 주인이 부두 등잔 밑 깡통에 접은 종이를 넣었다.'), 'story'));
         break;
       case 'bowls':
         api.later(0.8, () => api.toast(tr('섬을 떠날 때다. 부두의 나룻배로 가자.')));
         break;
       case 'count':
+        api.later(0.8, () => api.toast(tr('짐 바구니는 구호소 탁자에 있다. 봉투를 하나씩 들고 침상으로 가자.')));
+        break;
+      case 'fivebeds':
         api.later(0.8, () => api.toast(tr('약사에게 창고 열쇠를 받았다.'), 'good'));
+        break;
+      case 'knock':
+        // 창고를 나서는 길의 무전 뒤로 해가 진다(#58). 둑길 가로등이 출렁인다.
+        this.night = true;
+        api.card(tr('그날 밤'));
+        api.setHour(19.6);
+        api.later(1.6, () => api.toast(tr('어느새 해가 졌다. 둑길 가로등이 웅웅거린다. 불빛을 따라 구호소로 돌아가자.'), 'warn'));
+        break;
+      case 'stretchers':
+        this.links.shades.clear();
         break;
       case 'chair':
         // 3장이 끝났다. 같은 무대에서 4장을 시작한다.
@@ -502,14 +607,14 @@ export class Chapters {
         api.later(0.6, () => api.toast(tr('약사가 물병을 들고 계단 아래에 서 있다.')));
         break;
       case 'truth':
-        this.night = false;
+        // 아직 밤이다. 이어서 「남은 창」(#58).
         this.links.shades.clear();
-        this.links.player.flashOn = false;
-        api.card(tr('이튿날 아침'));
-        api.setHour(7.2);
-        api.place(this.river.classOut);
         break;
-      case 'broadcast':
+      case 'third':
+        this.timer = 1.5;
+        api.later(0.8, () => api.toast(tr('당직실 배전반으로 가자. 지금은 {0} 가로등이 꺼져 있다.', [LANE_NAMES[this.off]]), 'warn'));
+        break;
+      case 'reports':
         api.finish();
         return;
       default:
@@ -550,18 +655,29 @@ export class Chapters {
     const st = this.step;
     const unread = (ids) => this.spots.filter((s) => ids.includes(s.clue) && !this.story.isFound(s.clue));
     if (st === 'ferry') list = [this.spot('boatVillage')];
-    else if (st === 'search') list = unread(['islandbook', 'spare']);
+    else if (st === 'oil') {
+      // 기름이 있으면 아직 안 채운 등잔, 없으면 아직 안 주운 기름
+      list = this.oilLeft > 0
+        ? this.lanterns.filter((L) => !this.flag(L.id)).map((L) => this.spot(L.id))
+        : ['oilCan', 'oilBottle'].filter((f) => !this.flag(f)).map((f) => this.spot(f));
+    } else if (st === 'vigil') {
+      const out = this.lanterns.filter((L) => L.out).map((L) => this.spot(L.id));
+      list = this._callDue() ? [this.spot('radio')] : out;
+    } else if (st === 'search') list = unread(['islandbook', 'spare']);
     else if (st === 'call') list = [this.spot('call')];
     else if (st === 'leave') list = [this.spot('boatIsland')];
     else if (st === 'go') list = [this.river.tentMark];
+    else if (st === 'beds') list = this.carry ? BEDS.filter((id) => !this.story.isFound(id)).map((id) => this.spot(id)) : [this.spot('basket')];
     else if (st === 'store') list = unread(['manifest', 'tag']);
     else if (st === 'compare') list = [this.spot('manifest')];
+    else if (st === 'levee') list = [this.river.tentMark];
     else if (st === 'back') list = [this.spot('return')];
     else if (st === 'annex') list = [this.river.stepsMark];
     else if (st === 'lamps') list = ['lampDoor', 'lampYard'].filter((f) => !this.flag(f)).map((f) => this.spot(f));
     else if (st === 'wait') list = [this.spot('wait')];
     else if (st === 'rest') list = [this.spot('water')];
     else if (st === 'class') list = [this.spot('class')];
+    else if (st === 'route') list = this.off === 'west' ? [this.river.bedsMark] : [this.spot('board')];
     else if (st === 'broadcast') list = [this.spot('podium')];
     return list.filter(Boolean);
   }
@@ -601,36 +717,102 @@ export class Chapters {
     this.api.openDoc(clue);
   }
 
-  // 플레이 중 매 프레임(게임 시간): 다가가면 시작되는 장면, 4장 목표 그림자
+  // 플레이 중 매 프레임(게임 시간): 다가가면 시작되는 장면, 2장 첫 밤의 빛먹이·정시 무전, 4장 목표 그림자
   update(dt, player) {
     if (!this.ch) return;
     const px = player.pos.x;
     const pz = player.pos.z;
     const R = this.river;
-    if (this.step === 'go' && Math.hypot(px - R.tentMark.x, pz - R.tentMark.z) < 8) this._play('count');
-    if (this.step === 'annex' && Math.hypot(px - R.stepsMark.x, pz - R.stepsMark.z) < 3.6) this._play('chair');
-    if ((this.step === 'night1' || this.step === 'night2') && !this.wispBusy) {
-      const tag = this.step === 'night1' ? 't1' : 't2';
-      const sh = this.links.shades;
-      if (!sh.hasTarget(tag)) {
-        this.timer -= dt;
-        if (this.timer <= 0) {
-          const t = tag === 't1' ? R.target1 : R.target2;
-          if (sh.spawnTarget(t.x, t.z, tag, { path: t.path, tough: 3.2 })) this.timer = 5;
-        }
+    const sh = this.links.shades;
+    const near = (p, r) => Math.hypot(px - p.x, pz - p.z) < r;
+    if (this.step === 'go' && near(R.tentMark, 8)) this._play('count');
+    if (this.step === 'annex' && near(R.stepsMark, 3.6)) this._play('chair');
+    if (this.step === 'levee' && near(R.tentMark, 7)) this._play('stretchers');
+    if (this.step === 'beds' && near(R.bedsMark, 6) && this._first('beds')) {
+      this.api.toast(tr('칸막이를 걷었다. 엄마가 아니었다. 이분들을 찾는 사람도 어딘가 있을 것이다.'), 'story');
+    }
+    if (this.step === 'vigil') {
+      // 정시마다 한 번 알린다(21·0·3시). 빛먹이는 하나씩, 등잔이 켜져 있는 동안 깨어난다.
+      const slot = this._slot();
+      if (slot >= 0 && !this.calls.has(slot) && this._first(`call${slot}`)) this.api.toast(tr('정시다. 돌계단 무전기로 부르자.'), 'warn');
+      this.timer -= dt;
+      if (this.stage.night > 0.75 && this.timer <= 0 && sh.count('eater') < 1 && this.lanterns.some((L) => L.on)) {
+        if (sh.spawnKind(px, pz, this.stage, 'eater', 1.7)) {
+          this.timer = 26;
+          if (this._first('eater')) this.api.later(1.0, () => this.api.toast(tr('보랏빛 눈이 등잔 쪽으로 간다.'), 'warn'));
+        } else this.timer = 2;
       }
     }
+    const tag = { night1: 't1', night2: 't2', route: 't3' }[this.step];
+    if (tag && !this.wispBusy && !sh.hasTarget(tag)) {
+      this.timer -= dt;
+      if (this.timer <= 0) {
+        const t = { t1: R.target1, t2: R.target2, t3: R.target3 }[tag];
+        const path = tag === 't3' ? R.lanes[this.off] : t.path;
+        if (sh.spawnTarget(t.x, t.z, tag, { path, tough: 3.2, hold: tag === 't3' })) this.timer = 5;
+      }
+    }
+  }
+
+  // 이번 실행에서 처음이면 true(한 번만 띄울 안내)
+  _first(key) {
+    if (this.once.has(key)) return false;
+    this.once.add(key);
+    return true;
+  }
+
+  // 2장 정시 무전 차례: 21시 → 0, 0시 → 1, 3시 → 2. 그 사이 시각이면 -1
+  _slot() {
+    const h = this.links.api.hour();
+    if (h >= 21) return 0;
+    if (h < 3) return 1;
+    if (h < 6) return 2;
+    return -1;
+  }
+
+  _callDue() {
+    const slot = this.step === 'vigil' ? this._slot() : -1;
+    return slot >= 0 && !this.calls.has(slot);
+  }
+
+  // 2장 등잔에 쓸 남은 기름(기름통·기름병이 등잔 둘씩)
+  get oilLeft() {
+    const got = (this.flag('oilCan') ? 2 : 0) + (this.flag('oilBottle') ? 2 : 0);
+    return got - LANTERNS.filter((f) => this.flag(f)).length;
   }
 
   // 흩어진 그늘이. 목표 그림자면 정해진 창으로 보내고 true(main이 따로 보내지 않는다).
   onReturned(p) {
     if (!this.ch || !p.tag) return false;
     const R = this.river;
+    const { wisps, shades } = this.links;
+    if (p.tag === 't3') {
+      // 세 번째 그림자는 본관 침상 가까이에서 흩어야 그 창으로 돌아간다. 아니면 다시 모인다.
+      if (Math.hypot(p.x - R.bedsMark.x, p.z - R.bedsMark.z) > BED_REACH) {
+        this.timer = 5;
+        this.api.toast(tr('빛이 본관까지 가지 못하고 흩어졌다. 그림자가 운동장 끝에 다시 모인다.'), 'warn');
+        return true;
+      }
+      this._setFlag('home3');
+      this.wispBusy = true;
+      const win = R.bedWindow;
+      this.api.sound('banish');
+      wisps.spawn(p, { x: win.x, y: 2.2, z: win.z }, () => {
+        this.wispBusy = false;
+        if (this.ch !== 4) return;
+        wisps.flash({ x: win.x, y: 1.6, z: win.z });
+        this.api.sound('hint');
+        this.api.toast(tr('빛이 본관 창으로 들어갔다.'), 'story');
+        shades.clear();
+        this._dress();
+        this.api.later(2.2, () => this._morning());
+      });
+      return true;
+    }
     const first = p.tag === 't1';
     this._setFlag(first ? 'home1' : 'home2');
     this.wispBusy = true;
     const bed = first ? R.doorBed : R.windowBed;
-    const { wisps, shades } = this.links;
     this.api.sound('banish');
     wisps.spawn(p, { x: bed.x, y: 2.4, z: bed.z }, () => {
       this.wispBusy = false;
@@ -644,9 +826,30 @@ export class Chapters {
     return true;
   }
 
-  // 2장의 해질녘·밤·새벽 안내
+  // 4장 마지막 밤이 끝나고 이튿날 아침(세 번째 그림자를 보낸 뒤)
+  _morning() {
+    if (this.ch !== 4) return;
+    this.night = false;
+    this.links.shades.clear();
+    this.links.player.flashOn = false;
+    this.api.card(tr('이튿날 아침'));
+    this.api.setHour(7.2);
+    this.api.place(this.river.classOut);
+    this._refresh();
+  }
+
+  // 2장의 해질녘·밤·새벽 안내. 첫 밤 당직(vigil)은 새벽이 오면 끝난다.
   onTime(ev) {
     if (this.ch !== 2) return null;
+    if (this.step === 'vigil') {
+      if (ev === 'night') return [tr('그늘이가 섬으로 올라온다. 등잔에서 너무 멀어지지 말자.'), 'warn'];
+      if (ev === 'dawn') {
+        this._setFlag('vigil');
+        this._refresh();
+        return [tr('날이 밝았다. 할머니가 심지를 하나씩 내렸다.'), 'good'];
+      }
+      return null;
+    }
     if (ev === 'dusk') return [tr('해가 진다. 부두 돌계단의 고정등 아래로 가자.'), 'warn'];
     if (ev === 'night') return [tr('그늘이가 섬으로 올라온다.'), 'warn'];
     if (ev === 'dawn') return [tr('섬에 날이 밝는다.'), 'good'];
@@ -657,6 +860,17 @@ export class Chapters {
 
   tick(dt, t, night, player) {
     if (this.stage) this.stage.night = night;
+    // 3장 둑길 밤길: 둑길 가로등이 차례로 깜박인 뒤 3초쯤 꺼진다(밤 사건 '전압 출렁임'과 같은 꼴, #58).
+    const surge = this.ch === 3 && this.step === 'levee';
+    this.river.leveeLamps.forEach((L, i) => {
+      if (!surge) {
+        L.on = true;
+        return;
+      }
+      const ph = (t + i * 2.3) % 8.5;
+      L.on = ph < 1.1 ? Math.sin(t * 38 + i) > 0 : ph >= 4.1;
+      if (ph < 1.1 && this._first('surge')) this.api.toast(tr('가로등이 깜박인다. 꺼지기 전에 다음 불빛까지 가거나, 멈춰 서서 손전등을 켜 두자.'), 'warn');
+    });
     for (const st of [this.lake, this.river]) {
       for (const L of st.lamps) {
         L.level += ((L.on ? 1 : 0) - L.level) * (1 - Math.exp(-dt * 3));
@@ -734,20 +948,35 @@ export class Chapters {
   _dress() {
     for (const n of Object.values(this.npcs)) n.mesh.visible = false;
     const S = (id) => this.story.isSeen(id);
+    const F = (id) => this.story.isFound(id);
     const G = (f) => this.flags.has(f);
     const L = this.lakeRefs;
     const R = this.river;
     this.workBoat.visible = this.ch === 2 && S('relief');
-    for (const lamp of this.lake.lamps) lamp.on = this.ch === 2;
+    for (const lamp of this.lake.lamps) lamp.on = this.ch === 2 && (!lamp.oil || (G(lamp.id) && !lamp.out));
+    for (const c of this.oilCans) c.mesh.visible = this.ch === 2 && this.step !== 'ferry' && !G(c.id);
+    this.radioMesh.visible = this.ch === 2 && (this.step === 'rules' || this.step === 'vigil');
     R.lampDoor.on = this.ch === 4 && G('lampDoor');
     R.lampYard.on = this.ch === 4 && G('lampYard');
+    // 운동장 가로등 셋: 4장 세 번째 그림자 차례에만, 배전반에서 끈 하나를 빼고 켠다.
+    for (const [k, lamp] of Object.entries(R.laneLamps)) lamp.on = this.ch === 4 && this.step === 'route' && this.off !== k;
+    for (const t of R.nameTags) t.mesh.visible = this.ch === 4 && !F(t.id);
     R.chairShade.visible = this.ch === 4 && G('lampDoor') && G('lampYard');
+    // 본관 처마 밑 침상 다섯(3·4장). 11번은 세 번째 그림자가 돌아가면 일어나 앉는다.
+    const beds = this.ch === 3 || this.ch === 4;
+    R.bedSpots.forEach((b, i) => {
+      const up = this.ch === 4 && b.id === 'bed11' && G('home3');
+      this._show(`bp${i}`, beds && !up ? b.lie : null, 0);
+      if (b.id === 'bed11') this._show('bp11sit', up ? b.sit : null, 0);
+    });
     if (this.ch === 2) {
       if (this.step === 'ferry' || this.step === 'landing') this._show('gran', L.granPier, L.granPier.a);
+      else if (this.step === 'rules' || this.step === 'vigil') this._show('granSit', L.granSteps, L.granSteps.a);
       else this._show('gran', L.granTable, L.granTable.a);
       if (S('relief')) this._show('ownerSit', L.ownerSteps, L.ownerSteps.a);
     } else if (this.ch === 3) {
-      this._show('pharm', R.pharmTent, 0);
+      const atBeds = this.step === 'beds' || this.step === 'fivebeds';
+      this._show('pharm', atBeds ? R.pharmBeds : R.pharmTent, atBeds ? Math.PI : 0);
       this._show('gran', S('count') ? R.granTent : R.granStart, S('count') ? 0 : Math.PI / 2);
       this._show('patientTent', R.stretcher, 0);
       R.villagers.forEach((v, i) => this._show(`n${i + 1}`, v, 0));
@@ -767,6 +996,36 @@ export class Chapters {
     const m = this.lakeRefs.mooring;
     this.story.boat.position.set(m.x, 0, m.z);
     this.story.boat.rotation.set(0, m.a, 0);
+  }
+
+  // 2장 등잔에 기름을 채운다. 앞의 셋은 밑 깡통에서 당직 일지 한 장이 나온다(다 읽고 닫으면 다음 차례를 센다).
+  _fill(L) {
+    this._setFlag(L.id);
+    L.out = false;
+    L.load = 0;
+    this.api.sound('power');
+    this.api.toast(tr('등잔에 불이 붙었다. ({0}/4)', [LANTERNS.filter((f) => this.flag(f)).length]), 'good');
+    this._dress();
+    const clue = L.clue ? clueById(L.clue) : null;
+    if (clue) {
+      this.api.later(0.9, () => {
+        if (this.ch !== 2) return;
+        this.api.toast(tr('등잔 밑 깡통에 접힌 종이가 있었다.'), 'story');
+        this.api.openDoc(clue);
+      });
+    } else {
+      this.api.later(0.9, () => this.ch === 2 && this.api.toast(tr('부두 등잔 밑 깡통은 비어 있었다.'), 'story'));
+      this._refresh();
+    }
+  }
+
+  // 첫 밤에 꺼진 등잔을 다시 붙인다(기름은 그대로 있다).
+  _relight(L) {
+    L.out = false;
+    L.load = 0;
+    this.api.sound('power');
+    this.api.toast(tr('{0} 등잔을 다시 붙였다.', [L.where]), 'good');
+    this._dress();
   }
 
   // 2장: 마을 선착장에서 배를 타고 섬으로(나루 장면이 도는 동안 저어 간다)
@@ -799,6 +1058,31 @@ export class Chapters {
     this.world.cands.push({ kind: 1, ref: L.light, x, y: y0 + 3.0, z: z + 0.4, color: WARM, i: 0, d: 0 });
     stage.lamps.push(L);
     stage.colliders.push({ t: 1, x, z, r: 0.16 });
+    return L;
+  }
+
+  // 2장 섬 등잔(#58): 땅에 놓인 작은 석유등. 빛이 좁고(반경 3.4), 그늘이가 오래 몰리면 꺼진다(Stage.addLoad).
+  _lantern(b, stage, x, z, y0, id) {
+    b.add(geo.cyl(8), x, y0 + 0.06, z, 0.34, 0.12, 0.34, 0x6e543d);
+    b.add(geo.cyl(8), x, y0 + 0.16, z, 0.26, 0.1, 0.26, 0xb08a4a);
+    b.add(geo.cyl(8), x, y0 + 0.56, z, 0.18, 0.06, 0.18, 0xb08a4a);
+    b.add(geo.box(), x, y0 + 0.66, z, 0.03, 0.14, 0.2, 0x3c4245);
+    const headMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+    const head = new THREE.Mesh(this.headGeo, headMat);
+    head.position.set(x, y0 + 0.36, z);
+    head.scale.set(0.62, 0.95, 0.62);
+    const poolMat = new THREE.MeshBasicMaterial({
+      map: this.poolTex, color: new THREE.Color(1.0, 0.7, 0.38), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0,
+    });
+    const pool = new THREE.Mesh(this.poolGeo, poolMat);
+    pool.position.set(x, y0 + 0.07, z);
+    pool.scale.set(3.4 * 2.3, 1, 3.4 * 2.3);
+    pool.renderOrder = 2;
+    this.root.add(head, pool);
+    const L = { id, x, z, r: 3.4, on: false, level: 0, oil: true, out: false, load: 0, headMat, poolMat, light: { level: 0, power: 18 } };
+    this.world.cands.push({ kind: 1, ref: L.light, x, y: y0 + 0.9, z, color: WARM, i: 0, d: 0 });
+    stage.lamps.push(L);
+    stage.colliders.push({ t: 1, x, z, r: 0.2 });
     return L;
   }
 
@@ -845,6 +1129,42 @@ export class Chapters {
     pf.add(b, geo.box(), -0.55, 1.1, 12.4, 0.84, 0.06, 0.6, 0x335874);
     pf.add(b, geo.box(), -0.55, 0.82, 12.69, 0.3, 0.12, 0.02, 0xe8e2d0);
     st.colliders.push({ t: 1, x: bx, z: bz, r: 0.42 });
+    // 섬 등잔 넷(#58): 등대 아래, 돌계단, 당직실 처마, 부두. 앞의 셋 밑 깡통에 당직 일지가 한 장씩 있다.
+    const lan = (lx, lz, id, where, clue, y0 = ISLAND.top) => Object.assign(this._lantern(b, st, lx, lz, y0, id), { where, clue });
+    this.lanterns = [
+      lan(LAKE.x + 2.6, LAKE.z + 1.2, 'lampTower', tr('등대 아래'), 'page1926'),
+      lan(pf.px(-1.1, R - 1.6), pf.pz(-1.1, R - 1.6), 'lampSteps', tr('돌계단'), 'page1979'),
+      lan(hf.px(-1.95, 2.95), hf.pz(-1.95, 2.95), 'lampHut', tr('당직실 처마'), 'pagelast'),
+      lan(pf.px(-0.62, R + 0.8), pf.pz(-0.62, R + 0.8), 'lampDock', tr('부두'), null, 0.48),
+    ];
+    st.onOut = (L) => {
+      if (this.ch === 2) this.api.toast(tr('{0} 등잔이 꺼졌다. 다시 붙이자.', [L.where]), 'warn');
+    };
+    // 기름: 당직실 뒤 기름통, 나룻배 바닥의 기름병(2장에만 보인다), 첫 밤 당직의 돌계단 무전기
+    const prop = (build) => {
+      const pb = new Builder();
+      build(pb);
+      const m = new THREE.Mesh(pb.build(), this.world.staticMat);
+      m.castShadow = true;
+      m.visible = false;
+      this.root.add(m);
+      return m;
+    };
+    this.oilCans = [
+      { id: 'oilCan', mesh: prop((pb) => {
+        hf.add(pb, geo.box(), 2.3, ISLAND.top + 0.26, -1.35, 0.36, 0.52, 0.22, 0xa8402f);
+        hf.add(pb, geo.box(), 2.3, ISLAND.top + 0.56, -1.35, 0.2, 0.08, 0.06, 0x3c4245);
+      }) },
+      { id: 'oilBottle', mesh: prop((pb) => {
+        pf.add(pb, geo.cyl(8), 1.6, 0.32, 11.5, 0.16, 0.34, 0.16, 0x7a8a5a);
+        pf.add(pb, geo.cyl(6), 1.6, 0.53, 11.5, 0.07, 0.1, 0.07, 0x3c4245);
+      }) },
+    ];
+    st.colliders.push({ t: 1, x: hf.px(2.3, -1.35), z: hf.pz(2.3, -1.35), r: 0.26 });
+    this.radioMesh = prop((pb) => {
+      pf.add(pb, geo.box(), -0.15, 0.56, R - 0.3, 0.34, 0.22, 0.18, 0x3a3f44);
+      pf.add(pb, geo.cyl(6), -0.05, 0.8, R - 0.3, 0.03, 0.3, 0.03, 0x2a2a2a);
+    });
     // 당직실 벽의 인계부
     hf.add(b, geo.box(), -1.05, 1.55, 1.34, 0.62, 0.78, 0.05, 0x5d4a3a);
     hf.add(b, geo.box(), -1.05, 1.55, 1.37, 0.5, 0.64, 0.02, 0xf2ecdc);
@@ -880,6 +1200,8 @@ export class Chapters {
       granPier: at(pf, 0.7, R + 0.2, 0, ISLAND.top),
       granTable: at(hf, 2.0, 2.25, -Math.PI / 2, ISLAND.top),
       ownerSteps: at(pf, -0.75, R - 0.3, 0, 0.18),
+      granSteps: at(pf, -0.75, R - 0.3, 0, 0.18), // 첫 밤 당직(식당 주인이 오기 전)
+      stepsOut: at(pf, 0.3, R - 1.6, Math.PI),
     };
     this.villageStart = at(df, 0.6, -4.8);
     this.pierEnd = at(pf, 0, ISLAND.pier - 0.8, Math.PI);
@@ -887,6 +1209,7 @@ export class Chapters {
       lake: { x: LAKE.x + 19.5 * U, z: LAKE.z + 19.5 * U },
       pier: at(pf, 0, R + 1.6),
       table: at(hf, 0.75, 2.6),
+      stoneSteps: at(pf, -0.4, R - 0.6),
     };
 
     this._npc('gran', 'gran', tr('할머니'));
@@ -903,6 +1226,38 @@ export class Chapters {
       label: () => (this.story.isFound('spare') ? tr('다시 읽기 · 예비 송수신기 종이띠') : tr('보관함 열기 · 예비 송수신기')), act: () => this._readClue('spare'),
     });
     add({ id: 'call', x: pf.px(0, R - 1.0), z: pf.pz(0, R - 1.0), top: 2.0, show: () => this.step === 'call', label: tr('예비 무전기로 다음 당직자 부르기'), dur: 1.0, act: () => this._play('relief') });
+    // 2장 등잔·기름·정시 무전(#58)
+    for (const L of this.lanterns) {
+      add({
+        id: L.id, x: L.x, z: L.z, top: 1.4,
+        show: () => this.ch === 2 && ((this.step === 'oil' && !this.flag(L.id)) || (this.flag(L.id) && L.out)),
+        label: () => (this.flag(L.id) ? tr('등잔 다시 붙이기 · {0}', [L.where]) : tr('등잔에 기름 채우기 · {0}', [L.where])),
+        blocked: () => (!this.flag(L.id) && this.oilLeft <= 0 ? tr('기름이 없다 — 당직실 뒤 기름통이나 나룻배 바닥의 기름병을 가져오자') : null),
+        dur: 1.0,
+        act: () => (this.flag(L.id) ? this._relight(L) : this._fill(L)),
+      });
+    }
+    const oil = (id, x, z, label, said) => add({
+      id, x, z, top: 1.2, reach: 1.5, show: () => this.step === 'oil' && !this.flag(id), label, dur: 0.6,
+      act: () => {
+        this._setFlag(id);
+        this.api.sound('pickup');
+        this.api.toast(said, 'good');
+        this._dress();
+      },
+    });
+    oil('oilCan', hf.px(2.3, -0.75), hf.pz(2.3, -0.75), tr('기름통 들기 · 당직실 뒤'), tr('기름통을 들었다. 등잔 둘은 채울 수 있다.'));
+    oil('oilBottle', pf.px(0.75, 11.6), pf.pz(0.75, 11.6), tr('기름병 꺼내기 · 나룻배 바닥'), tr('나룻배 바닥에서 기름병을 꺼냈다. 등잔 둘은 채울 수 있다.'));
+    add({
+      id: 'radio', x: pf.px(0.35, R - 0.5), z: pf.pz(0.35, R - 0.5), top: 1.4, reach: 1.6, show: () => this._callDue(),
+      label: tr('정시 무전 · 여기는 등대섬. 들리는 분 있어요?'), dur: 1.0,
+      act: () => {
+        const slot = this._slot();
+        this.calls.add(slot);
+        this.api.sound('hint');
+        this.api.toast(slot === 2 ? tr('대답 없음. …멀리서 지직 소리가 한 번 났다.') : tr('대답 없음. 할머니처럼 적어 두었다.'), 'story');
+      },
+    });
     add({ id: 'boatIsland', x: this.lakeRefs.mooring.x, z: this.lakeRefs.mooring.z, reach: 2.3, top: 1.2, show: () => this.step === 'leave', label: tr('나룻배로 마을에 돌아가기'), dur: 0.8, act: () => this.api.next() });
     return st;
   }
@@ -976,8 +1331,8 @@ export class Chapters {
     for (const bz of [-11, -7]) A(geo.box(), -68, 0.5, bz, 0.12, 1.0, 0.12, 0x3a3f44);
     for (const [k, c] of [[0, 0xd8d4c8], [1, 0xc8372d], [2, 0xd8d4c8], [3, 0xc8372d]]) A(geo.box(), -68, 0.85, -10.25 + k * 0.85, 0.08, 0.22, 0.84, c);
     box(-68.2, -67.8, -11.2, -6.8);
-    // 둑길 가로등
-    for (const lx of [-62, -34, -6, 22]) this._lamp(b, st, RIVER.x + lx, RIVER.z - 20.6, true);
+    // 둑길 가로등(3장 둑길 밤길에 출렁인다, #58)
+    const leveeLamps = [-62, -34, -6, 22].map((lx) => this._lamp(b, st, RIVER.x + lx, RIVER.z - 20.6, true));
     this._lamp(b, st, RIVER.x - 72.6, RIVER.z - 21.0, true, 0.5);
     for (const tx of [-56, -18, 8]) tree(tx, -16.5, 1.1);
 
@@ -1011,6 +1366,37 @@ export class Chapters {
     A(geo.box(), 31, 2.6, -10.2, 3.2, 0.12, 1.6, 0x5a6062);
     box(12, 50, -19, -11);
     this._lamp(b, st, RIVER.x + 33.4, RIVER.z - 9.6, true);
+    // 본관 서쪽 처마 밑 병상(#58): 도시에서 온 환자 다섯의 침상(왼쪽부터 11·3·20·8·14번), 칸막이, 처마
+    A(geo.box(), 17.6, 2.7, -10.25, 9.4, 0.1, 1.6, 0x5a6a7a, 0, 0.12);
+    const bedXs = [14.2, 15.9, 17.6, 19.3, 21.0];
+    const bedIds = ['bed11', 'bed3', 'bed20', 'bed8', 'bed14'];
+    for (const bx of bedXs) {
+      A(geo.box(), bx, 0.45, -9.4, 1.0, 0.08, 2.0, 0x8a9096);
+      A(geo.box(), bx, 0.55, -9.4, 0.92, 0.16, 1.9, 0xe9e6dc);
+      A(geo.box(), bx, 0.68, -10.05, 0.6, 0.1, 0.36, 0xf2f0ea);
+      for (const [lx, lz] of [[-0.45, -0.95], [0.45, -0.95], [-0.45, 0.95], [0.45, 0.95]]) A(geo.box(), bx + lx, 0.2, -9.4 + lz, 0.06, 0.4, 0.06, 0x6e747a);
+      A(geo.box(), bx, 0.9, -8.42, 0.34, 0.22, 0.03, 0xf2ecdc); // 표찰
+    }
+    for (const cx of [15.05, 16.75, 18.45, 20.15]) A(geo.box(), cx, 0.85, -9.7, 0.04, 1.5, 1.4, 0xc9d4d8);
+    box(13.6, 21.6, -11, -8.35);
+    // 구호소 탁자의 짐 바구니(봉투 다섯)와 약사의 이송 수첩
+    A(geo.box(), 46.0, 0.96, -6.3, 0.56, 0.24, 0.4, 0x9a7a4a);
+    for (const [ox, c] of [[-0.14, 0xc9a86a], [0.0, 0xb08a4a], [0.14, 0xd8c8a0]]) A(geo.box(), 46.0 + ox, 1.12, -6.3, 0.1, 0.16, 0.3, c);
+    A(geo.box(), 44.95, 0.85, -6.15, 0.3, 0.02, 0.4, 0xf2ecdc);
+    // 본관 신발장(이름표 하나가 위에 있다)
+    A(geo.box(), 28.6, 0.5, -10.7, 1.4, 1.0, 0.45, 0x8a6a48);
+    for (const sy of [0.3, 0.62]) A(geo.box(), 28.6, sy, -10.47, 1.3, 0.04, 0.02, 0x5d4a3a);
+    box(27.9, 29.3, -10.95, -10.45);
+    // 4장 운동장 가로등 셋(배전반이 둘만 켠다)과 당직실 서쪽 벽의 작은 배전반
+    const laneLamps = {
+      west: this._lamp(b, st, RIVER.x + 12.4, RIVER.z + 3.0, false),
+      mid: this._lamp(b, st, RIVER.x + 30.5, RIVER.z + 4.4, false),
+      east: this._lamp(b, st, RIVER.x + 46.2, RIVER.z + 3.6, false),
+    };
+    A(geo.box(), 60.92, 1.4, 2.6, 0.12, 0.8, 0.6, 0x5a6062);
+    A(geo.box(), 60.85, 1.5, 2.6, 0.02, 0.5, 0.44, 0x2f3437);
+    A(geo.box(), 67.5, 0.25, 1.6, 0.5, 0.5, 0.5, 0x8a6a48);
+    circ(67.5, 1.6, 0.35);
 
     // 구호소 천막: 들것 둘(하나는 비었다), 신발 열한 켤레, 탁자의 무전기와 등, 깨어난 이웃의 걸상
     A(geo.box(), 42, 2.7, -5, 9, 0.1, 5, 0xeef0ec);
@@ -1155,7 +1541,38 @@ export class Chapters {
     const wins = new THREE.Mesh(winB.build(), st.winMat);
     this.root.add(wins);
 
+    // 이름표 다섯(4장, 줍고 나면 사라진다)
+    const tagGeo = new THREE.BoxGeometry(0.16, 0.02, 0.1);
+    const tagMat = new THREE.MeshBasicMaterial({ color: 0xf6f2e6 });
+    const nameTags = [
+      ['tag1958', 28.4, 1.02, -10.62, 28.6, -9.8],
+      ['tag1960', 22.6, 0.04, -1.5, 22.1, -1.4],
+      ['tag1963', 67.5, 0.52, 1.6, 68.0, 2.4],
+      ['tag1986', -8.2, 1.37, 14.3, -7.3, 14.2],
+      ['tag1991', -6.4, 0.97, 20.2, -5.4, 20.2],
+    ].map(([id, mx, my, mz, sx, sz]) => {
+      const mesh = new THREE.Mesh(tagGeo, tagMat);
+      mesh.position.set(RIVER.x + mx, my, RIVER.z + mz);
+      mesh.rotation.y = 0.4;
+      mesh.visible = false;
+      this.root.add(mesh);
+      return { id, mesh, spot: P(sx, sz) };
+    });
+    const pathOf = (pts) => pts.map(([x, z]) => P(x, z));
     Object.assign(st, {
+      leveeLamps, laneLamps, nameTags,
+      bedSpots: bedXs.map((bx, i) => ({ id: bedIds[i], x: RIVER.x + bx, z: RIVER.z - 7.85, lie: P(bx, -8.45, { y: 0.93 }), sit: P(bx, -8.75, { y: 0 }) })),
+      bedsMark: P(17.6, -7.6, { top: 2.6 }),
+      bedWindow: P(13.8, -10.6),
+      pharmBeds: P(17.6, -5.9),
+      boardOut: P(59.4, 2.6, { a: Math.PI / 2 }),
+      // 세 번째 그림자: 운동장 끝에서 꺼진 가로등 쪽 길로 온다. 서쪽 길만 본관 침상 앞에 닿는다(마지막 점에서 머문다).
+      target3: P(60, 31),
+      lanes: {
+        west: pathOf([[40, 26], [22, 15], [13.2, 5.4], [15.2, -5.6]]),
+        mid: pathOf([[44, 24], [32, 10], [30.2, 4.6]]),
+        east: pathOf([[52, 20], [47, 7], [45.6, 3.2]]),
+      },
       lampDoor, lampYard, chairShade,
       start: P(-73.5, -24.4, { a: Math.PI / 2 }),
       storeOut: P(-33.6, -15, { a: -Math.PI / 2 }),
@@ -1190,6 +1607,8 @@ export class Chapters {
       windowBed: P(-6.4, 9.2),
       doorBed: P(1.8, 9.2),
       steps: P(5.4, 14),
+      beds: P(17.6, -8.6),
+      yard: P(42, 18),
     });
 
     this._npc('pharm', 'pharm', tr('약사 한서윤'));
@@ -1203,6 +1622,9 @@ export class Chapters {
     this._npc('patientSit', 'patient', tr('낯선 환자'), { pose: 'sit', seat: 0.5 });
     this._npc('granSit', 'gran', tr('할머니'), { pose: 'sit', seat: 0.46 });
     this._npc('jeongSit', 'jeong', tr('오정석'), { pose: 'sit', seat: 0.46 });
+    // 본관 처마 밑 병상의 환자 다섯(생김새는 깨어난 이웃들과 같은 묶음을 돌려 쓴다). 이름표 다섯이 겹치지 않게 이름표는 없다.
+    ['patient', 'n1', 'n2', 'n3', 'patient'].forEach((look, i) => this._npc(`bp${i}`, look, null, { lie: true }));
+    this._npc('bp11sit', 'patient', tr('깨어난 사람'), { pose: 'sit', seat: 0.62 });
 
     const add = (s) => this.spots.push({ stage: st, ...s });
     const on4 = () => this.ch === 4 && this.story.isSeen('roll');
@@ -1217,6 +1639,68 @@ export class Chapters {
       act: () => this._readClue('tag'),
     });
     add({ id: 'return', ...P(40.3, -1.5), reach: 2.2, top: 2.4, show: () => this.step === 'back', label: tr('약사에게 명부와 짐표 반납하기'), dur: 0.8, act: () => this.api.openDoc(clueById('transfer')) });
+    // 3장 본관 침상 다섯(#58): 바구니에서 봉투를 하나 들고(누를 때마다 다음 봉투로 바꾼다) 짝이 맞는 침상에 놓는다.
+    const bagLeft = () => BEDS.filter((id) => !this.story.isFound(id));
+    const nextBag = () => {
+      const left = bagLeft();
+      return left[(left.indexOf(this.carry) + 1) % left.length];
+    };
+    const bagNo = (id) => id.slice(3);
+    add({
+      id: 'basket', ...P(46.1, -5.5), reach: 1.4, top: 2.0, show: () => this.step === 'beds' && bagLeft().length > 0,
+      label: () => {
+        const n = nextBag();
+        const v = [bagNo(n), clueById(n).bag];
+        return this.carry ? tr('봉투 바꾸기 · {0}번 — {1}', v) : tr('봉투 들기 · {0}번 — {1}', v);
+      },
+      dur: 0.5,
+      act: () => {
+        this.carry = nextBag();
+        this.api.sound('pickup');
+        this.api.toast(tr('{0}번 봉투를 들었다 — {1}', [bagNo(this.carry), clueById(this.carry).bag]));
+      },
+    });
+    for (const b of st.bedSpots) {
+      add({
+        id: b.id, x: b.x, z: b.z, reach: 1.2, top: 1.8, show: () => this.step === 'beds' && !this.story.isFound(b.id),
+        label: () => tr('봉투 놓기 · {0}번', [bagNo(this.carry ?? b.id)]),
+        blocked: () => (this.carry ? null : tr('빈 표찰 · {0} — 바구니에서 봉투를 가져오자', [clueById(b.id).cue])),
+        dur: 0.6,
+        act: () => {
+          if (this.carry !== b.id) {
+            this.api.toast(tr('짝이 맞지 않는다. 이분에게 남은 것: {0}', [clueById(b.id).cue]), 'warn');
+            return;
+          }
+          this.carry = null;
+          this.api.openDoc(clueById(b.id));
+        },
+      });
+    }
+    add({
+      id: 'carrybook', clue: 'carrybook', ...P(44.9, -5.5), reach: 1.3, top: 1.8, show: () => this.ch === 3 && this.story.isSeen('count'),
+      label: () => tr('{0} · 약사의 이송 수첩', [this.story.isFound('carrybook') ? tr('다시 읽기') : tr('읽기')]), act: () => this._readClue('carrybook'),
+    });
+    // 4장 이름표 다섯(찾지 않아도 된다)
+    for (const t of st.nameTags) {
+      add({
+        id: t.id, ...t.spot, reach: 1.4, top: 1.4, show: () => this.ch === 4 && !this.story.isFound(t.id),
+        label: tr('주워 보기 · 이름표'), dur: 0.5, act: () => this._readClue(t.id),
+      });
+    }
+    // 4장 세 번째 그림자: 운동장 당직실 배전반(셋 중 둘만 켠다). 누를 때마다 끄는 가로등이 다음으로 바뀐다.
+    const nextOff = () => LANE_ORDER[(LANE_ORDER.indexOf(this.off) + 1) % LANE_ORDER.length];
+    add({
+      id: 'board', ...P(60.3, 2.6), reach: 1.6, top: 2.4, show: () => this.step === 'route',
+      label: () => tr('배전반 · {0} 가로등 끄기', [LANE_NAMES[nextOff()]]),
+      dur: 0.8,
+      act: () => {
+        this.off = nextOff();
+        this.api.sound('power');
+        this.api.toast(tr('{0} 가로등을 끄고 나머지 둘을 켰다.', [LANE_NAMES[this.off]]), 'good');
+        this.links.shades.setPath('t3', st.lanes[this.off]);
+        this._dress();
+      },
+    });
     const lampAct = (f, where) => () => {
       this._setFlag(f);
       this.api.sound('power');
