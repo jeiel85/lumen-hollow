@@ -384,6 +384,17 @@ test('이야기 진행: 앱에서 온 몫(app)을 같은 기간으로 따로 준
   assert.deepEqual((await s.call('/api/summary?range=1d')).body.story.app, [], '기간 밖은 빠진다');
 });
 
+test('이야기 진행: 전체 합계와 앱 몫은 같은 batch(트랜잭션)에서 읽는다 — 웹 = 전체 − 앱이 어긋나지 않게(#73 리뷰)', async () => {
+  const s = setup();
+  const batches = [];
+  const spy = { ...s.db, batch: (stmts) => { batches.push(stmts.map((x) => x.sql)); return s.db.batch(stmts); } };
+  const r = await s.call('/api/summary', { env: { ...s.adminEnv, DB: spy } });
+  assert.equal(r.status, 200);
+  const together = batches.filter((b) => b.some((q) => /FROM story_daily/.test(q)) && b.some((q) => /FROM story_app_daily/.test(q)));
+  assert.equal(together.length, 1, '앱 몫을 따로 읽는 batch가 없다');
+  assert.equal(batches.filter((b) => b.some((q) => /FROM story_app_daily/.test(q))).length, 1);
+});
+
 test('마이그레이션 0002 전(story_app_daily 없음)에는 앱 몫만 null이고 나머지는 그대로 나온다', async (t) => {
   t.mock.method(console, 'error', () => {});
   const s = setup();
