@@ -31,7 +31,7 @@ const STEER = `
 let r = await B.ev(`
   ${STEER}
   for (const id of ${JSON.stringify(CH1)}) lumen.story.markSeen(id);
-  lumen.startChapter(); lumen.step(0.5); skip();
+  lumen.startChapter(); lumen.step(2.0); skip(); // 장 시작 장면(배웅·둑길 위의 자국)은 제목 카드 뒤 1.6초에 나온다
   const df = lumen.chapters.story.dockPier; const s = lumen.chapters.spot('boatVillage');
   W.route = [[0, -2.6], [0, 3.6]].map(([x, z]) => ({ x: df.px(x, z), z: df.pz(x, z) })).concat([s]);
   lumen.step(8, 1 / 60);
@@ -44,7 +44,7 @@ r = await B.ev(`
   ${STEER}
   for (const id of ['ferry', 'landing', 'relief', 'bowls']) lumen.story.markSeen(id);
   lumen.story.markFound('islandbook'); lumen.story.markFound('spare');
-  lumen.backToTitle(); lumen.step(0.3); lumen.startChapter(); lumen.step(0.5); skip();
+  lumen.backToTitle(); lumen.step(0.3); lumen.startChapter(); lumen.step(2.0); skip(); // 장 시작 장면(배웅·둑길 위의 자국)은 제목 카드 뒤 1.6초에 나온다
   const RV = { x: 300, z: 0 };
   const from = { x: RV.x - 78, z: -26 };
   lumen.player.pos.set(from.x, lumen.ground.heightAt(from.x, from.z), from.z);

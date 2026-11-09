@@ -7,6 +7,7 @@ export const EN = {
   speakers: {
     me: 'Me', gran: 'Grandma', other: 'Strange Voice', nar: '',
     owner: 'Diner Owner', pharm: 'Pharmacist', kid: 'Child', doha: 'Doha', jeong: 'Oh Jeong-seok', patient: 'Stranger', mom: 'Mom',
+    neighbor: 'Woken Neighbor',
   },
 
   chapters: {
@@ -22,6 +23,7 @@ export const EN = {
     vigil: 'Keep all four oil lamps lit until dawn — radio from the stone steps on the hour',
     search: 'Get ready to call the next watchkeeper — the handover log in the watch room and the locker on the dock',
     call: 'Call the next watchkeeper from the dock',
+    tour: 'Go to the lighthouse door — Grandma is handing over the First Light',
     leave: 'Take the ferry boat back to town',
     go: 'Ask after your family at the relief station across the river',
     beds: 'Find each of the five beds its luggage bag — the basket is on the relief station table',
@@ -209,6 +211,20 @@ export const EN = {
     },
 
     // ---------------------------------------------------------------- 2장 · Handover
+    depart: {
+      title: 'Seeing Me Off',
+      lines: [
+        'Afternoon at the landing. Along the lanes where the lights had come back overnight, people had come out of their doors one by one.',
+        'Heading to the island? To old Yun?',
+        'Yes. Do you know my grandma?',
+        'She\'s a regular at my place. The night they put out the light, she finished a bowl of soup before she went out to the island.',
+        'I put a bottle in the bottom of the boat. The last of my lamp oil. Town\'s got power again now.',
+        'Come with me. Grandma would be glad to see you.',
+        'Me? One look at the water and my stomach turns over. You tell her for me.',
+        'Tell her to eat something while she\'s at it.',
+        'The diner owner never once set foot on the planks of the landing.',
+      ],
+    },
     ferry: {
       title: 'At the Crossing',
       lines: [
@@ -243,11 +259,63 @@ export const EN = {
         'Grandma didn\'t lie down. She set the radio on the step beside me and closed her eyes sitting up.',
       ],
     },
+    midnight: {
+      title: 'No Answer',
+      lines: [
+        'This is Lighthouse Island. It\'s midnight. Is anyone there?',
+        'Only a long hiss of static. I called three times, then wrote \'Midnight, no answer\' in my notebook.',
+        'Write it big. So the next one can read it.',
+        'I thought you were asleep.',
+        'I wrote those words sixty times in twenty days. I know them by the sound, eyes closed.',
+        'If no one ever answered, why did you keep calling?',
+        'Not because anyone was listening. To tell myself there was still a light out here.',
+        'Tonight I\'ll tell it for you.',
+        'Instead of answering, Grandma leaned a little closer to me.',
+      ],
+    },
+    threeam: {
+      title: 'Static at Three',
+      lines: [
+        'The radio on the stone steps crackled all on its own.',
+        '…kssh… nine… ten… eleven…',
+        'Someone was counting. Before I could tune it in, the sound cut out.',
+        'Grandma! There was someone just now.',
+        'I heard. Write it down. Three o\'clock, a voice counting.',
+        'It wasn\'t an answer, though.',
+        'It\'s the first human voice in twenty days. That\'s enough.',
+        'For the first time, I wrote down something other than \'no answer.\'',
+      ],
+    },
+    morning: {
+      title: 'Turning Down the Wicks',
+      lines: [
+        'Dawn broke. Grandma got up and turned the wicks down one by one.',
+        'The wicks burned even. You kept watch all night.',
+        'You had your eyes closed.',
+        'I can tell by the smell of the soot. Twenty days I\'ve been breathing it.',
+        'Someone has to watch the light tonight too. What do we do now?',
+        'That\'s why we look at the handover logs. One on the watch room wall, one in the locker on the dock.',
+        'A watch is handed over looking the next one in the face. That\'s the oldest rule on this island.',
+      ],
+    },
+    tally: {
+      title: 'Asking for Help',
+      lines: [
+        'On the last page of the handover log, only Grandma\'s name, twenty-three times. Every space for the one taking over was blank.',
+        'Grandma, why didn\'t you ever ask anyone for help?',
+        'If the one who put out the light asks for help, who\'s going to come?',
+        'I came.',
+        'You didn\'t come because I called. You came looking.',
+        'Then this time I\'ll call. For you.',
+        '…Tell them we\'ll set the shifts together. I\'m the last one who stands a watch alone.',
+        'Grandma nodded toward the spare radio by the dock.',
+      ],
+    },
     relief: {
       title: 'The Stand-In',
       lines: [
         'This is Lighthouse Island. Looking for one person to keep the First Light. We\'ll work out the shifts together.',
-        'I run the diner. Left the soup pot with a neighbor. I\'ll come.',
+        'It\'s the diner, from the landing yesterday. Left the soup pot with a neighbor. I\'ll come.',
         'You, with that seasickness of yours? Coming out here?',
         'That\'s why I haven\'t eaten either.',
         'A little later, a work boat from town pulled in. The voice I\'d been hearing on the radio was suddenly right next to me.',
@@ -255,6 +323,18 @@ export const EN = {
         'My door wouldn\'t open, would it? The latch bent on the inside. I got my customers out the back.',
         'Watch the light make one full turn, then sign your name in the handover log.',
         'Grandma didn\'t pick up her coat until he\'d finished the last stroke.',
+      ],
+    },
+    switch: {
+      title: 'Decided by Two',
+      lines: [
+        'Grandma opened the lighthouse door. On the wall inside was a single switch, worn smooth by hands.',
+        'This is the First Light. The council told me to put it out, and I pulled it down.',
+        'I know. And I know you finished a bowl of soup at my place that night before you left.',
+        'So don\'t touch this alone. Down or up, decide it between two people.',
+        'Then don\'t you decide things alone either, old Yun. Starting with whether to eat.',
+        'For the first time, Grandma laughed out loud. A cough caught at the end of it.',
+        'I\'ll write it at the end of the handover log. The switch takes two.',
       ],
     },
     bowls: {
@@ -265,11 +345,37 @@ export const EN = {
         'This is the shelter across the river. We\'ve moved patients here from the city. Anyone looking for family, please come.',
         'From Mom\'s neighborhood too?',
         'Some of them have lost their names. When you come, we\'ll go through their belongings together first.',
-        'We stacked the empty bowls and pushed off in the ferry boat. From the town landing, we walked along the riverbank.',
+        'We stacked the empty bowls. Grandma buttoned her coat all the way to the top.',
+      ],
+    },
+    farewell: {
+      title: 'With the Island Behind Her',
+      lines: [
+        'The ferry boat pulled away from the pier. Grandma didn\'t take the oars. She sat in the bow.',
+        'This is Lighthouse Island. …Is that how you say it?',
+        'That\'s it. Three times, even if no one answers.',
+        'And if someone does answer?',
+        'Then ask their name. And write it down.',
+        'For twenty days she had never once turned her back on the island. Now she sat with it behind her.',
+        'Aren\'t you going to look back?',
+        'The light\'s on. That\'s enough. Now I have to look ahead.',
+        'From the town landing, we walked along the riverbank.',
       ],
     },
 
     // ---------------------------------------------------------------- 3장 · The Empty Stretcher
+    riverside: {
+      title: 'Tracks on the Levee',
+      lines: [
+        'We reached the landing across the river. Someone had chalked \'Relief station → follow the levee\' on the signpost.',
+        'Twenty days of sitting, and these legs feel like someone else\'s.',
+        'Take it slow. This time I\'ll wait for you.',
+        'Beside the flooded old road, one levee path was left. In the mud were rows and rows of stretcher-leg tracks.',
+        'Someone carried people down that road. More than once.',
+        'Do you think Mom came that way too?',
+        'We\'ll know when we get there. Save the asking for then.',
+      ],
+    },
     count: {
       title: 'The Twelfth Space',
       lines: [
@@ -280,6 +386,17 @@ export const EN = {
         'The people from the city are in beds under the eaves of the main building. The rain blew in and smeared five of their bed tags.',
         'Could Mom be there?',
         'Go and look. And find each luggage bag in the basket its own bed. The ones who\'ve woken will help.',
+      ],
+    },
+    neighbors: {
+      title: 'The Ones Who Woke First',
+      lines: [
+        'When I set the bag down, a neighbor standing by wiped the bed rail with a sleeve.',
+        'They say I was lying just like that. Carried all the way here from the pharmacy, and I don\'t remember a thing.',
+        'What was it like, waking up?',
+        'In my dream, someone kept shining a light on me. It was so bright I opened my eyes, and my shadow had gotten to my feet before me.',
+        'So I looked for my shoes first. To see if my shadow was stuck to my feet.',
+        'I thought I understood now why everyone who woke looked for their shoes first.',
       ],
     },
     fivebeds: {
@@ -313,6 +430,18 @@ export const EN = {
         'At the end of every sentence, the child let go of her dad\'s radio button too soon. Those short silences didn\'t scare me anymore.',
       ],
     },
+    marks: {
+      title: 'Marks Under the Light',
+      lines: [
+        'In the mud under the streetlamp were square dents. A place where they\'d set the stretchers down to rest.',
+        'Lines were chalked on the post. Six lines. Below them, six more.',
+        'Grandma, I think they rested here. There are lines drawn on the post.',
+        'How many lines?',
+        'Six, and then six.',
+        'They counted their way here. Counting\'s better when you\'re scared. You count your way too. To the next light.',
+        'I counted my steps to the next streetlamp.',
+      ],
+    },
     stretchers: {
       title: 'The Road That Brought Twelve',
       lines: [
@@ -325,6 +454,29 @@ export const EN = {
         'I can only say I brought all of them once the last one wakes up.',
       ],
     },
+    handback: {
+      title: 'The Empty Stretcher',
+      lines: [
+        'The pharmacist took the register and the bag and laid them neatly on the empty stretcher.',
+        'Why is this stretcher empty?',
+        'After eleven of them woke, I almost put it away. But you never know who might still come.',
+        'On Lighthouse Island, at three in the morning, I heard a voice counting.',
+        '…That was me. At three I count their breathing. I didn\'t know the radio was on.',
+        'Number 17 is in the east classroom of the annex. The windows face east, so the morning sun gets there first.',
+        'Go on. I\'ll give you a note to read on the way.',
+      ],
+    },
+    doorstep: {
+      title: 'At the Door',
+      lines: [
+        'Grandma had gotten to the annex steps ahead of me and was standing there. She kept fiddling with a button on her coat.',
+        'Child, you go in first.',
+        'Let\'s go together.',
+        'When your mother opens her eyes, the first face she sees shouldn\'t be mine. The face of the one who put out the light.',
+        'Mom can\'t wake up yet. Her shadow has to come back first.',
+        'I know. So tonight I\'ll stay outside the door. A watch can be stood outside a door too.',
+      ],
+    },
     chair: {
       title: 'The Guardian\'s Chair',
       lines: [
@@ -332,6 +484,18 @@ export const EN = {
         'Child, what I have to tell your mother, I\'ll tell her myself.',
         'Okay. But first I\'m going to hold Mom\'s hand.',
         'On Mom\'s palm was a callus the same width as the flashlight\'s grip. My thumb fit right into it.',
+      ],
+    },
+    outside: {
+      title: 'The Watch Outside the Door',
+      lines: [
+        'At dawn I opened the door. Grandma was sitting on the top step with the flashlight standing on her knee.',
+        'Were you out here all night?',
+        'I counted your mother\'s breathing. Counting, the night went by.',
+        'You could have come in.',
+        'You can hear breathing through one door. It\'s closer than the radio was for twenty days.',
+        'Come in today. The seat next to Mom is yours.',
+        '…All right. Once the sun\'s up, I\'ll come in. After I wash my face.',
       ],
     },
 
@@ -346,6 +510,31 @@ export const EN = {
         'Then tonight, let\'s keep them both inside the light.',
       ],
     },
+    watchman: {
+      title: 'The Man by the Door',
+      lines: [
+        'With both lamps lit, the shadow of Oh Jeong-seok, sitting in the chair by the door, settled onto the classroom floor.',
+        'Doha asked me once. Why do you always sit right by the door, Dad?',
+        'Why do you?',
+        'That night, I was the one guarding the shelter door. My kid called from outside, and I couldn\'t open it. I\'m the one who put up the sign saying don\'t look outside at night.',
+        'This man\'s family might be knocking on some door somewhere. So this time, I sat by the door.',
+        'Doha doesn\'t blame you. She said she slept behind the diner with her flashlight on.',
+        'I know. She forgave me a long time ago. It\'s taking me a while to forgive myself.',
+      ],
+    },
+    stairs: {
+      title: 'On the Steps',
+      lines: [
+        'The sun was going down. Grandma came out of the classroom and sat on the step beside me.',
+        'Your mother went to this school. In third grade she fell on these steps and split her knee.',
+        'I carried her on my back and rowed her out to the island. Once I put medicine on it under the lighthouse lamp, she finally stopped crying.',
+        'Mom never told me that.',
+        'After that, she only ever cried under the light. She wouldn\'t have cried in front of you.',
+        'When Mom wakes up, what are you going to say first?',
+        'I don\'t know. Twenty days I\'ve practiced nothing else, and I still haven\'t picked the first word.',
+        'The far end of the schoolyard went dark. Grandma went back into the classroom and sat beside Mom.',
+      ],
+    },
     firsthome: {
       title: 'By the Door',
       lines: [
@@ -356,6 +545,18 @@ export const EN = {
         'I thought it was Mom.',
         'Want to sit down a minute? I\'ll take the light.',
         'Just a sip of water, please. I can still shine.',
+      ],
+    },
+    water: {
+      title: 'Thirteen',
+      lines: [
+        'The pharmacist twisted the cap off a bottle of water and pressed it into my hand.',
+        'The man by the door woke up. Asked for his shoes first.',
+        'I can finally say I brought all twelve.',
+        'Are you going to write it in your notebook again?',
+        'Yes. One more line next to \'transfer safe.\' All twelve awake.',
+        'Mom isn\'t one of those twelve.',
+        'So count one more. This time, let\'s count together. Thirteen.',
       ],
     },
     secondhome: {
@@ -384,6 +585,19 @@ export const EN = {
         'We sat perched on the edge of the same chair and ate the cold rice. Nobody got up first.',
       ],
     },
+    island: {
+      title: 'A Call from the Island',
+      lines: [
+        'The radio on the windowsill crackled.',
+        'This is Lighthouse Island. Hourly call. All four oil lamps still burning.',
+        'Heard you. Write it down.',
+        'Written. Funny thing, though. Once someone answers, there\'s more to write.',
+        'Mom, who is that?',
+        'The next watch. There\'s one more person minding the light on the island.',
+        'So you don\'t stand it alone anymore.',
+        'Grandma stood the radio back up on the windowsill. Long after the static stopped, she kept looking that way.',
+      ],
+    },
     third: {
       title: 'The Window Left',
       lines: [
@@ -392,6 +606,22 @@ export const EN = {
         'Then if I turn one off, it\'ll have a path. I\'ll shine on the dark spot myself.',
         'Go on. This time we\'ll be watching from the window.',
         'Go. Someone else\'s window is still a window.',
+      ],
+    },
+    rollcall: {
+      title: 'Morning Roll Call',
+      lines: [
+        'The morning sun came in through the east windows first. Grandma copied the roll board onto the classroom blackboard.',
+        'Roll call. By the window, the Yun daughter.',
+        'Here.',
+        'By the door.',
+        '…Here. My name hasn\'t come back to me yet.',
+        'On watch, Oh Jeong-seok. Here.',
+        'The twelve from the pharmacy. All here.',
+        'The island.',
+        'Here. And I ate, too.',
+        'You\'re here too, Grandma.',
+        'At the very bottom of the roll board, for the first time, Grandma wrote her own name. Not in the watch column, but in the column for the ones who sat beside someone.',
       ],
     },
     broadcast: {

@@ -348,7 +348,8 @@ export class Chapters {
       if (S('bowls')) return { ch: 2, step: 'leave' };
       if (!S('ferry')) return { ch: 2, step: 'ferry' };
       if (!S('landing')) return { ch: 2, step: 'landing' };
-      if (S('relief')) return { ch: 2, step: 'bowls' };
+      // 대타 뒤에는 등대 문 앞에서 첫 불을 넘기고(장마다 12장면 보강) 두 그릇
+      if (S('relief')) return { ch: 2, step: S('switch') ? 'bowls' : 'tour' };
       if (!LANTERNS.every(G)) return { ch: 2, step: 'oil' };
       if (!S('rules')) return { ch: 2, step: 'rules' };
       if (!G('vigil')) return { ch: 2, step: 'vigil' };
@@ -373,10 +374,11 @@ export class Chapters {
       if (!G('home2')) return { ch: 4, step: !fresh && this.restDone ? 'night2' : 'rest' };
       if (!S('secondhome')) return { ch: 4, step: 'secondhome' };
       if (!S('truth')) return { ch: 4, step: 'class' };
+      // 장마다 12장면 보강: 세 사람 뒤 섬에서 온 정시 무전, 세 번째 그림자 뒤 아침 점호(그 뒤 차례를 지난 저장은 건너뛴다)
       if (!S('broadcast')) {
-        if (!S('third')) return { ch: 4, step: 'third' };
+        if (!S('third')) return { ch: 4, step: S('island') ? 'third' : 'island' };
         if (!G('home3')) return { ch: 4, step: 'route' };
-        return { ch: 4, step: 'broadcast' };
+        return { ch: 4, step: S('rollcall') ? 'broadcast' : 'rollcall' };
       }
       return { ch: 4, step: 'reports' };
     }
@@ -385,10 +387,10 @@ export class Chapters {
 
   get objective() {
     return OBJECTIVES[{
-      ferry: 'ferry', landing: 'ferry', oil: 'oil', rules: 'oil', vigil: 'vigil', search: 'search', call: 'call', bowls: 'call', leave: 'leave',
+      ferry: 'ferry', landing: 'ferry', oil: 'oil', rules: 'oil', vigil: 'vigil', search: 'search', call: 'call', tour: 'tour', bowls: 'call', leave: 'leave',
       go: 'go', beds: 'beds', fivebeds: 'beds', store: 'store', compare: 'store', key: 'store', knock: 'levee', levee: 'levee', back: 'back', annex: 'annex',
       roll: 'lamps', lamps: 'lamps', wait: 'wait', night1: 'night', firsthome: 'night', rest: 'rest', night2: 'night',
-      secondhome: 'night', class: 'class', third: 'route', route: 'route', broadcast: 'broadcast', reports: 'broadcast',
+      secondhome: 'night', class: 'class', third: 'route', route: 'route', rollcall: 'broadcast', broadcast: 'broadcast', reports: 'broadcast',
     }[this.step]] ?? '';
   }
 
@@ -454,6 +456,7 @@ export class Chapters {
       this.story.parkBoat();
       if (d.step === 'ferry') {
         at = this.villageStart;
+        if (!this.story.isSeen('depart')) play.push('depart');
       } else {
         this._moorAtIsland();
         at = this.pierEnd;
@@ -472,8 +475,10 @@ export class Chapters {
       this.story.parkBoat();
       hour = 10.5;
       if (d.ch === 3) {
-        if (d.step === 'go') at = this.river.start;
-        else if (['beds', 'fivebeds', 'back', 'annex'].includes(d.step)) at = this.river.tentOut;
+        if (d.step === 'go') {
+          at = this.river.start;
+          if (!this.story.isSeen('riverside')) play.push('riverside');
+        } else if (['beds', 'fivebeds', 'back', 'annex'].includes(d.step)) at = this.river.tentOut;
         else at = this.river.storeOut;
         if (d.step === 'fivebeds') play.push('fivebeds');
         if (d.step === 'key') play.push('key');
@@ -490,24 +495,27 @@ export class Chapters {
           play.push('roll');
           sub = tr('이튿날 오후'); // 3장이 밤(보호자 자리)으로 끝난다
         }
-        if (['firsthome', 'rest', 'secondhome', 'class', 'third', 'route'].includes(d.step)) {
+        if (['firsthome', 'rest', 'secondhome', 'class', 'island', 'third', 'route'].includes(d.step)) {
           this.night = true;
           hour = 20.6;
         }
         if (d.step === 'firsthome') play.push('firsthome');
         if (d.step === 'secondhome') play.push('secondhome');
-        if (d.step === 'third') {
+        if (d.step === 'island' || d.step === 'third') {
           at = this.river.classOut;
-          play.push('third');
+          play.push(d.step);
         }
         if (d.step === 'route') at = this.river.boardOut;
-        if (d.step === 'broadcast' || d.step === 'reports') {
-          at = this.river.podiumOut;
+        if (['rollcall', 'broadcast', 'reports'].includes(d.step)) {
+          at = d.step === 'rollcall' ? this.river.classOut : this.river.podiumOut;
           hour = 7.2;
         }
-        if (d.step === 'reports') play.push('reports');
+        if (d.step === 'rollcall' || d.step === 'reports') play.push(d.step);
       }
     }
+    // 차례가 바뀔 때 트는 장면도 이어 하기에서는 제목 카드 뒤에 튼다(_refresh가 먼저 틀지 않게 줄 세워 둔다).
+    const onStep = { call: 'tally', wait: 'watchman' }[d.step];
+    if (onStep && !this.story.isSeen(onStep)) play.push(onStep);
     for (const id of play) this.queued.add(id);
     this._refresh();
     return { ch: d.ch, title: CHAPTERS[d.ch - 1].title, sub, x: at.x, z: at.z, facing: at.a ?? 0, hour, rainy, play };
@@ -543,7 +551,14 @@ export class Chapters {
     const api = this.links?.api;
     if (!api) return;
     // 진행만으로 정해지는 장면은 바로 튼다(이미 줄 섰으면 두 번 세우지 않는다).
-    if (['landing', 'rules', 'bowls', 'fivebeds', 'key', 'roll', 'firsthome', 'secondhome', 'third', 'reports'].includes(this.step)) this._play(this.step);
+    if (['landing', 'rules', 'bowls', 'fivebeds', 'key', 'roll', 'firsthome', 'secondhome', 'island', 'third', 'rollcall', 'reports'].includes(this.step)) this._play(this.step);
+    // 차례가 바뀌면 바로 트는 장면(장마다 12장면 보강): 인계부·보관함을 다 본 뒤, 예비등 둘을 다 이은 뒤
+    if (this.step === 'call') this._play('tally');
+    if (this.step === 'wait') this._play('watchman');
+    // 본관 침상에 첫 봉투를 제자리에 놓은 뒤(표찰을 닫으면). 다섯을 다 놓은 뒤에는 「다섯 자리」가 먼저라 틀지 않는다.
+    if (this.step === 'beds' && BEDS.some((id) => this.story.isFound(id))) this._play('neighbors');
+    if (this.step === 'tour' && this._first('tour')) api.toast(tr('할머니가 식당 주인을 데리고 등대 문 앞으로 갔다.'), 'story');
+    if (this.step === 'annex' && this._first('annex')) api.toast(tr('할머니가 먼저 별관 쪽으로 걸어갔다.'), 'story');
     if (this.step === 'knock' && this.knockAt === null) {
       // 창고를 나서는 길에 걸려 오는 무전
       this.knockAt = 1;
@@ -576,6 +591,9 @@ export class Chapters {
         this.timer = 12; // 첫 빛먹이까지
         api.later(0.8, () => api.toast(tr('해가 졌다. 등잔 넷을 새벽까지 지키자. 정시마다 돌계단 무전기로 부른다.'), 'warn'));
         break;
+      case 'morning':
+        api.later(0.8, () => api.toast(tr('인계부는 당직실 벽에, 예비 송수신기는 부두 보관함에 있다.')));
+        break;
       case 'relief':
         api.toast(tr('식당 주인이 인계부에 이름을 적었다.'), 'story');
         api.later(2.6, () => api.toast(tr('식당 주인이 부두 등잔 밑 깡통에 접은 종이를 넣었다.'), 'story'));
@@ -583,9 +601,17 @@ export class Chapters {
       case 'bowls':
         api.later(0.8, () => api.toast(tr('섬을 떠날 때다. 부두의 나룻배로 가자.')));
         break;
+      case 'farewell':
+        // 섬을 떠났다. 3장으로.
+        api.next();
+        return;
       case 'count':
         api.later(0.8, () => api.toast(tr('짐 바구니는 구호소 탁자에 있다. 봉투를 하나씩 들고 침상으로 가자.')));
         break;
+      case 'handback':
+        // 반납을 마치면 약사의 인계 쪽지(다 읽고 닫으면 별관 차례)
+        api.openDoc(clueById('transfer'));
+        return;
       case 'fivebeds':
         api.later(0.8, () => api.toast(tr('약사에게 창고 열쇠를 받았다.'), 'good'));
         break;
@@ -600,12 +626,27 @@ export class Chapters {
         this.links.shades.clear();
         break;
       case 'chair':
+        // 이튿날 새벽, 문 밖에서 밤을 새운 할머니(「문 밖의 당직」). 차례는 다시 세지 않는다(4장 차례가 3장에서 틀지 않게).
+        this._show('gran', null);
+        this._show('granSit', this.river.granStepsSit, this.river.granStepsSit.a);
+        this._play('outside');
+        return;
+      case 'outside':
         // 3장이 끝났다. 같은 무대에서 4장을 시작한다.
         api.next();
+        return;
+      case 'watchman':
+        api.later(0.8, () => api.toast(tr('두 등이 켜지자 문가와 창가 의자 밑에 그림자가 생겼다. 두 사람의 몸 밑만 여전히 비어 있다.'), 'story'));
+        break;
+      case 'stairs':
+        this._nightfall();
         return;
       case 'firsthome':
         api.later(0.6, () => api.toast(tr('약사가 물병을 들고 계단 아래에 서 있다.')));
         break;
+      case 'water':
+        this._rest();
+        return;
       case 'truth':
         // 아직 밤이다. 이어서 「남은 창」(#58).
         this.links.shades.clear();
@@ -665,6 +706,7 @@ export class Chapters {
       list = this._callDue() ? [this.spot('radio')] : out;
     } else if (st === 'search') list = unread(['islandbook', 'spare']);
     else if (st === 'call') list = [this.spot('call')];
+    else if (st === 'tour') list = [this.lakeRefs.towerMark];
     else if (st === 'leave') list = [this.spot('boatIsland')];
     else if (st === 'go') list = [this.river.tentMark];
     else if (st === 'beds') list = this.carry ? BEDS.filter((id) => !this.story.isFound(id)).map((id) => this.spot(id)) : [this.spot('basket')];
@@ -726,7 +768,15 @@ export class Chapters {
     const sh = this.links.shades;
     const near = (p, r) => Math.hypot(px - p.x, pz - p.z) < r;
     if (this.step === 'go' && near(R.tentMark, 8)) this._play('count');
+    if (this.step === 'tour' && near(this.lakeRefs.towerMark, 3.2)) this._play('switch');
+    if (this.step === 'annex' && near(R.stepsMark, 9) && !this.story.isSeen('doorstep') && !this.queued.has('doorstep')) {
+      // 할머니가 먼저 와서 계단 앞에 서 있다(장면 첫 줄의 암전 동안 세운다).
+      this._play('doorstep');
+      this._dress();
+    }
     if (this.step === 'annex' && near(R.stepsMark, 3.6)) this._play('chair');
+    // 둑길 밤길의 절반(가운데 가로등)을 지나면 들것을 내려놓고 쉬어 간 자리를 본다.
+    if (this.step === 'levee' && px > R.restLamp.x - 2) this._play('marks');
     if (this.step === 'levee' && near(R.tentMark, 7)) this._play('stretchers');
     if (this.step === 'beds' && near(R.bedsMark, 6) && this._first('beds')) {
       this.api.toast(tr('칸막이를 걷었다. 엄마가 아니었다. 이분들을 찾는 사람도 어딘가 있을 것이다.'), 'story');
@@ -735,6 +785,8 @@ export class Chapters {
       // 정시마다 한 번 알린다(21·0·3시). 빛먹이는 하나씩, 등잔이 켜져 있는 동안 깨어난다.
       const slot = this._slot();
       if (slot >= 0 && !this.calls.has(slot) && this._first(`call${slot}`)) this.api.toast(tr('정시다. 돌계단 무전기로 부르자.'), 'warn');
+      // 새벽 세 시: 부르지 않아도 무전기가 저 혼자 지직거린다(「세 시의 잡음」).
+      if (slot === 2) this._play('threeam');
       this.timer -= dt;
       if (this.stage.night > 0.75 && this.timer <= 0 && sh.count('eater') < 1 && this.lanterns.some((L) => L.on)) {
         if (sh.spawnKind(px, pz, this.stage, 'eater', 1.7)) {
@@ -826,6 +878,28 @@ export class Chapters {
     return true;
   }
 
+  // 4장: 계단에서 밤을 기다린 뒤 마지막 밤이 시작된다(「계단에서」 다음, 이어 하기면 바로).
+  _nightfall() {
+    if (this.ch !== 4) return;
+    this.night = true;
+    this.timer = 2.5;
+    this.api.card(tr('그날 밤'));
+    this.api.setHour(20.6);
+    this.api.place(this.river.stepsOut);
+    this.api.later(1.2, () => this.api.toast(tr('운동장 끝에서 무언가 움직인다. 계단의 불빛 안에서 비추자.'), 'warn'));
+    this._refresh();
+  }
+
+  // 4장: 약사에게 물을 받고 다시 비춘다(「열셋」 다음, 이어 하기면 바로).
+  _rest() {
+    if (this.ch !== 4) return;
+    this.restDone = true;
+    this.timer = 2.5;
+    this.links.player.hp = Math.min(100, this.links.player.hp + 30);
+    this.api.toast(tr('물을 마셨다. 운동장 끝을 다시 비춘다.'), 'good');
+    this._refresh();
+  }
+
   // 4장 마지막 밤이 끝나고 이튿날 아침(세 번째 그림자를 보낸 뒤)
   _morning() {
     if (this.ch !== 4) return;
@@ -846,7 +920,8 @@ export class Chapters {
       if (ev === 'dawn') {
         this._setFlag('vigil');
         this._refresh();
-        return [tr('날이 밝았다. 할머니가 심지를 하나씩 내렸다.'), 'good'];
+        this._play('morning'); // 할머니가 심지를 내리며 인계부를 보라고 한다
+        return null;
       }
       return null;
     }
@@ -970,14 +1045,21 @@ export class Chapters {
       if (b.id === 'bed11') this._show('bp11sit', up ? b.sit : null, 0);
     });
     if (this.ch === 2) {
+      // 마을 선착장에서 배웅하는 식당 주인(「배웅」), 등대 문 앞에서 첫 불을 넘기는 두 사람(「둘이 정할 것」)
+      if (this.step === 'ferry') this._show('owner', L.ownerDock, L.ownerDock.a);
       if (this.step === 'ferry' || this.step === 'landing') this._show('gran', L.granPier, L.granPier.a);
       else if (this.step === 'rules' || this.step === 'vigil') this._show('granSit', L.granSteps, L.granSteps.a);
+      else if (this.step === 'tour') this._show('gran', L.towerGran, L.towerGran.a);
       else this._show('gran', L.granTable, L.granTable.a);
-      if (S('relief')) this._show('ownerSit', L.ownerSteps, L.ownerSteps.a);
+      if (this.step === 'tour') this._show('owner', L.towerOwner, L.towerOwner.a);
+      else if (S('relief')) this._show('ownerSit', L.ownerSteps, L.ownerSteps.a);
     } else if (this.ch === 3) {
       const atBeds = this.step === 'beds' || this.step === 'fivebeds';
       this._show('pharm', atBeds ? R.pharmBeds : R.pharmTent, atBeds ? Math.PI : 0);
-      this._show('gran', S('count') ? R.granTent : R.granStart, S('count') ? 0 : Math.PI / 2);
+      // 별관 차례에는 할머니가 먼저 계단 앞에 와 있다(「문 앞에서」를 틀 때 세운다)
+      if (this.step === 'annex' && (S('doorstep') || this.queued.has('doorstep'))) this._show('gran', R.granDoor, R.granDoor.a);
+      else if (this.step === 'annex') this._show('gran', null);
+      else this._show('gran', S('count') ? R.granTent : R.granStart, S('count') ? 0 : Math.PI / 2);
       this._show('patientTent', R.stretcher, 0);
       R.villagers.forEach((v, i) => this._show(`n${i + 1}`, v, 0));
       this._show('momLie', R.windowBedLie, 0);
@@ -1165,6 +1247,9 @@ export class Chapters {
       pf.add(pb, geo.box(), -0.15, 0.56, R - 0.3, 0.34, 0.22, 0.18, 0x3a3f44);
       pf.add(pb, geo.cyl(6), -0.05, 0.8, R - 0.3, 0.03, 0.3, 0.03, 0x2a2a2a);
     });
+    // 등대 문(부두 쪽). 「둘이 정할 것」에서 할머니가 연다.
+    pf.add(b, geo.box(), 0, ISLAND.top + 0.78, 1.56, 0.72, 1.56, 0.1, 0x4b3a32);
+    pf.add(b, geo.box(), 0.22, ISLAND.top + 0.82, 1.62, 0.06, 0.06, 0.04, 0xb08a4a);
     // 당직실 벽의 인계부
     hf.add(b, geo.box(), -1.05, 1.55, 1.34, 0.62, 0.78, 0.05, 0x5d4a3a);
     hf.add(b, geo.box(), -1.05, 1.55, 1.37, 0.5, 0.64, 0.02, 0xf2ecdc);
@@ -1202,6 +1287,12 @@ export class Chapters {
       ownerSteps: at(pf, -0.75, R - 0.3, 0, 0.18),
       granSteps: at(pf, -0.75, R - 0.3, 0, 0.18), // 첫 밤 당직(식당 주인이 오기 전)
       stepsOut: at(pf, 0.3, R - 1.6, Math.PI),
+      // 「배웅」: 마을 선착장 빈터에서 시작 자리를 보고 선 식당 주인(판자에는 오르지 않는다)
+      ownerDock: at(df, -2.2, -3.6, Math.atan2(2.8, -1.2)),
+      // 「둘이 정할 것」: 등대 문 앞의 할머니와 식당 주인(등대 아래 등잔과 겹치지 않게 서쪽으로)
+      towerGran: at(pf, -0.5, 2.4, Math.PI, ISLAND.top),
+      towerOwner: at(pf, -1.5, 3.1, Math.PI - 0.7, ISLAND.top),
+      towerMark: { x: pf.px(0, 3.4), z: pf.pz(0, 3.4), top: 2.6 },
     };
     this.villageStart = at(df, 0.6, -4.8);
     this.pierEnd = at(pf, 0, ISLAND.pier - 0.8, Math.PI);
@@ -1210,9 +1301,11 @@ export class Chapters {
       pier: at(pf, 0, R + 1.6),
       table: at(hf, 0.75, 2.6),
       stoneSteps: at(pf, -0.4, R - 0.6),
+      towerDoor: at(pf, -0.4, 2.6),
     };
 
     this._npc('gran', 'gran', tr('할머니'));
+    this._npc('owner', 'owner', tr('식당 주인'));
     this._npc('ownerSit', 'owner', tr('식당 주인'), { pose: 'sit', seat: 0.36 });
 
     const add = (s) => this.spots.push({ stage: st, ...s });
@@ -1222,7 +1315,8 @@ export class Chapters {
       label: () => tr('{0} · 인계부', [this.story.isFound('islandbook') ? tr('다시 읽기') : tr('읽기')]), act: () => this._readClue('islandbook'),
     });
     add({
-      id: 'spare', clue: 'spare', x: pf.px(0.25, 12.4), z: pf.pz(0.25, 12.4), top: 1.6, show: () => this.story.isUnlocked('spare'),
+      // 섬을 떠날 차례에는 숨긴다: 부두 끝에서 매어 둔 나룻배보다 보관함이 가까워 배에 오르기를 가로챈다(수첩에서 다시 볼 수 있다).
+      id: 'spare', clue: 'spare', x: pf.px(0.25, 12.4), z: pf.pz(0.25, 12.4), top: 1.6, show: () => this.story.isUnlocked('spare') && this.step !== 'leave',
       label: () => (this.story.isFound('spare') ? tr('다시 읽기 · 예비 송수신기 종이띠') : tr('보관함 열기 · 예비 송수신기')), act: () => this._readClue('spare'),
     });
     add({ id: 'call', x: pf.px(0, R - 1.0), z: pf.pz(0, R - 1.0), top: 2.0, show: () => this.step === 'call', label: tr('예비 무전기로 다음 당직자 부르기'), dur: 1.0, act: () => this._play('relief') });
@@ -1255,10 +1349,15 @@ export class Chapters {
         const slot = this._slot();
         this.calls.add(slot);
         this.api.sound('hint');
-        this.api.toast(slot === 2 ? tr('대답 없음. …멀리서 지직 소리가 한 번 났다.') : tr('대답 없음. 할머니처럼 적어 두었다.'), 'story');
+        // 자정 무전은 장면으로(「대답 없음」). 세 시에는 이미 저 혼자 지직거린 뒤다(「세 시의 잡음」).
+        if (slot === 1 && !this.story.isSeen('midnight')) this._play('midnight');
+        else this.api.toast(slot === 2 ? tr('다시 불렀다. 숫자를 세던 목소리는 다시 들리지 않았다.') : tr('대답 없음. 할머니처럼 적어 두었다.'), 'story');
       },
     });
-    add({ id: 'boatIsland', x: this.lakeRefs.mooring.x, z: this.lakeRefs.mooring.z, reach: 2.3, top: 1.2, show: () => this.step === 'leave', label: tr('나룻배로 마을에 돌아가기'), dur: 0.8, act: () => this.api.next() });
+    add({
+      id: 'boatIsland', x: this.lakeRefs.mooring.x, z: this.lakeRefs.mooring.z, reach: 2.3, top: 1.2, show: () => this.step === 'leave', label: tr('나룻배로 마을에 돌아가기'), dur: 0.8,
+      act: () => (this.story.isSeen('farewell') ? this.api.next() : this._play('farewell')),
+    });
     return st;
   }
 
@@ -1596,6 +1695,11 @@ export class Chapters {
       granChair: P(-5.9, 9.2, { y: 0.52 }),
       jeongChair: P(2.5, 9.2, { y: 0.52 }),
       pharmSteps: P(7.4, 16.6),
+      // 장마다 12장면 보강: 별관 계단 앞에 선 할머니(3장 「문 앞에서」), 계단 맨 위에 앉은 할머니(3장 「문 밖의 당직」, 4장 「계단에서」),
+      // 둑길 가운데 가로등(3장 「불 밑의 자국」)
+      granDoor: P(9.0, 13.2, { a: -Math.PI / 2 }),
+      granStepsSit: P(5.0, 12.9, { y: -0.04, a: Math.PI / 2 }),
+      restLamp: P(-6, -20.6),
       // 4장 목표 그림자: 첫째는 문가 쪽(서쪽) 골대를 돌아 들어오고, 둘째는 운동장 끝(동쪽)에서 곧장 온다.
       target1: P(21, 37, { path: [P(17, 28), P(10.6, 23.6), P(9.6, 19.6)] }),
       target2: P(59, 22, { path: [P(44, 20), P(28, 17)] }),
@@ -1609,6 +1713,8 @@ export class Chapters {
       steps: P(5.4, 14),
       beds: P(17.6, -8.6),
       yard: P(42, 18),
+      crossing: P(-74, -23.4),
+      restLamp: P(-6, -21.4),
     });
 
     this._npc('pharm', 'pharm', tr('약사 한서윤'));
@@ -1638,7 +1744,10 @@ export class Chapters {
       label: () => (!this.flag('flip') && this.story.isFound('manifest') ? tr('17번 맞춰 보기 · 명부와 봉투') : tr('{0} · 17번 소지품 봉투', [this.story.isFound('tag') ? tr('다시 보기') : tr('열어 보기')])),
       act: () => this._readClue('tag'),
     });
-    add({ id: 'return', ...P(40.3, -1.5), reach: 2.2, top: 2.4, show: () => this.step === 'back', label: tr('약사에게 명부와 짐표 반납하기'), dur: 0.8, act: () => this.api.openDoc(clueById('transfer')) });
+    add({
+      id: 'return', ...P(40.3, -1.5), reach: 2.2, top: 2.4, show: () => this.step === 'back', label: tr('약사에게 명부와 짐표 반납하기'), dur: 0.8,
+      act: () => (this.story.isSeen('handback') ? this.api.openDoc(clueById('transfer')) : this._play('handback')),
+    });
     // 3장 본관 침상 다섯(#58): 바구니에서 봉투를 하나 들고(누를 때마다 다음 봉투로 바꾼다) 짝이 맞는 침상에 놓는다.
     const bagLeft = () => BEDS.filter((id) => !this.story.isFound(id));
     const nextBag = () => {
@@ -1705,7 +1814,8 @@ export class Chapters {
       this._setFlag(f);
       this.api.sound('power');
       this.api.toast(tr('{0} 예비등을 이었다.', [where]), 'good');
-      if (this.flag('lampDoor') && this.flag('lampYard')) {
+      // 둘 다 이으면 「문가의 당번」(_refresh가 튼다). 의자 밑 그림자 안내는 그 장면 뒤에 띄운다.
+      if (this.flag('lampDoor') && this.flag('lampYard') && this.story.isSeen('watchman')) {
         this.api.later(1.4, () => this.api.toast(tr('두 등이 켜지자 문가와 창가 의자 밑에 그림자가 생겼다. 두 사람의 몸 밑만 여전히 비어 있다.'), 'story'));
       }
       this._refresh();
@@ -1724,24 +1834,18 @@ export class Chapters {
     add({
       id: 'wait', ...P(5.6, 15.4), top: 2.4, show: () => this.step === 'wait', label: tr('계단에 앉아 밤을 기다리기'), dur: 0.8,
       act: () => {
-        this.night = true;
-        this.timer = 2.5;
-        this.api.card(tr('그날 밤'));
-        this.api.setHour(20.6);
-        this.api.place(this.river.stepsOut);
-        this.api.later(1.2, () => this.api.toast(tr('운동장 끝에서 무언가 움직인다. 계단의 불빛 안에서 비추자.'), 'warn'));
-        this._refresh();
+        if (this.story.isSeen('stairs')) {
+          this._nightfall();
+          return;
+        }
+        // 할머니가 나와 곁에 앉는다(「계단에서」). 끝나면 밤이 온다.
+        this._show('granSit', st.granStepsSit, st.granStepsSit.a);
+        this._play('stairs');
       },
     });
     add({
       id: 'water', ...P(7.4, 16.6), reach: 2.0, top: 2.4, show: () => this.step === 'rest', label: tr('물 한 모금 받고 다시 비추기'), dur: 0.8,
-      act: () => {
-        this.restDone = true;
-        this.timer = 2.5;
-        this.links.player.hp = Math.min(100, this.links.player.hp + 30);
-        this.api.toast(tr('물을 마셨다. 운동장 끝을 다시 비춘다.'), 'good');
-        this._refresh();
-      },
+      act: () => (this.story.isSeen('water') ? this._rest() : this._play('water')),
     });
     add({ id: 'class', ...P(4.0, 14), reach: 2.2, top: 2.6, show: () => this.step === 'class', label: tr('교실로 들어가기'), dur: 0.6, act: () => this._play('truth') });
     add({ id: 'podium', ...P(26, 0.9), reach: 2.0, top: 2.6, show: () => this.step === 'broadcast', label: tr('송신 단추 누르기'), dur: 1.0, act: () => this._play('broadcast') });

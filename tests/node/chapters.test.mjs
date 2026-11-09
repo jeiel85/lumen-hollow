@@ -91,9 +91,12 @@ test('진행 계산: 순서가 자유로운 곳은 어느 쪽을 먼저 해도 �
     story.found.add(order[1]);
     assert.equal(C._derive(true).step, 'call');
   }
-  // 0.23.0까지의 저장: 이미 대타를 불렀으면 등잔·첫 밤을 건너뛴다
+  // 0.23.0까지의 저장: 이미 대타를 불렀으면 등잔·첫 밤을 건너뛴다.
+  // 대타 뒤에는 등대 문 앞(「둘이 정할 것」)을 거쳐 두 그릇(장마다 12장면 보강, 두 그릇 전이라 이 저장도 거친다)
   C.flags = new Set();
   seen([...CH1, 'ferry', 'landing', 'relief']);
+  assert.equal(C._derive(true).step, 'tour');
+  seen([...CH1, 'ferry', 'landing', 'relief', 'switch']);
   assert.equal(C._derive(true).step, 'bowls');
   // 3장(#58): 열두 번째 칸 → 침상 다섯(봉투 순서 자유) → 다섯 자리 → 창고
   seen([...CH1, 'ferry', 'landing', 'relief', 'bowls', 'count']);
@@ -136,14 +139,19 @@ test('진행 계산: 순서가 자유로운 곳은 어느 쪽을 먼저 해도 �
   // 첫 귀환 직후 닫혔다가 다시 열면: 첫 귀환 장면부터
   C.flags = new Set(['lampDoor', 'lampYard', 'home1']);
   assert.equal(C._derive(true).step, 'firsthome');
-  // 4장 끝(#58): 세 사람 → 남은 창 → 길 내기 → 아침 방송 → 첫 제보 다음 → 끝
+  // 4장 끝(#58): 세 사람 → (섬에서 온 무전) → 남은 창 → 길 내기 → (아침 점호) → 아침 방송 → 첫 제보 다음 → 끝
+  // 괄호는 장마다 12장면 보강에서 끼운 차례. 남은 창을 이미 본 저장은 무전을 건너뛴다.
   const CH4 = [...CH1, 'ferry', 'landing', 'relief', 'bowls', 'count', 'key', 'knock', 'chair', 'roll', 'firsthome', 'secondhome', 'truth'];
   C.flags = new Set(['lampDoor', 'lampYard', 'home1', 'home2']);
   seen(CH4);
+  assert.equal(C._derive(true).step, 'island');
+  seen([...CH4, 'island']);
   assert.equal(C._derive(true).step, 'third');
   seen([...CH4, 'third']);
   assert.equal(C._derive(true).step, 'route');
   C.flags.add('home3');
+  assert.equal(C._derive(true).step, 'rollcall');
+  seen([...CH4, 'third', 'rollcall']);
   assert.equal(C._derive(true).step, 'broadcast');
   // 0.23.0에서 방송까지 마친 저장은 세 번째 그림자 없이 「첫 제보 다음」만 본다
   C.flags.delete('home3');

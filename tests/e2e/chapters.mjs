@@ -102,6 +102,13 @@ check('2장 시작: 마을 선착장, 목표 배 타기', r.ch === 2 && r.step =
 await B.sleep(200);
 r = await B.ev(`lumen.step(2.0); return { st: T.st(), card: document.getElementById('chapter-card').className, objective: document.getElementById('objective').textContent }`);
 check('장 제목 카드와 목표 문구', r.objective.includes('배를 타고'), r);
+// 장마다 12장면 보강: 2장 시작에 마을 선착장의 배웅(식당 주인)
+r = await B.ev(`const ok = T.until('depart'); lumen.step(0.3); return { ok, scene: lumen.dialogue.scene?.id, owner: lumen.chapters.npcs.owner.mesh.visible }`);
+check('2장 시작: 선착장에서 식당 주인이 배웅한다', r.ok && r.scene === 'depart' && r.owner, r);
+await B.ev(`T.peek(3); return 1`);
+await B.shot('03a-depart');
+r = await B.ev(`T.watch(); return T.st()`);
+check('배웅을 다 보면 다시 배 타기 차례', r.state === 'play' && r.step === 'ferry', r);
 await B.shot('03-ch2-village-dock');
 r = await B.ev(`return T.use('boatVillage')`);
 check('나룻배에 오르기', r === '나룻배에 오르기', r);
@@ -146,6 +153,16 @@ r = await B.ev(`
   const label = T.use('radio');
   return { due, label, after: lumen.chapters.spot('radio').show() }`);
 check('정시(21시)에 돌계단 무전기로 부른다', r.due && String(r.label).includes('정시 무전') && !r.after, r);
+// 자정 무전은 장면으로(「대답 없음」)
+r = await B.ev(`
+  lumen.env.setHour(0.05); lumen.player.hp = 100; lumen.step(0.3);
+  const due = !!lumen.chapters.spot('radio').show();
+  const label = T.use('radio');
+  lumen.step(0.3);
+  const scene = lumen.dialogue.scene?.id;
+  T.watch();
+  return { due, label, scene, seen: lumen.story.isSeen('midnight'), st: T.st() }`);
+check('자정에 무전기로 부르면 대답 없음 장면', r.due && r.scene === 'midnight' && r.seen && r.st.step === 'vigil', r);
 r = await B.ev(`
   const C = lumen.chapters, L = C.lanterns.find((l) => l.id === 'lampHut');
   T.goto(C.lakeRefs.stepsOut.x, C.lakeRefs.stepsOut.z);
@@ -160,12 +177,24 @@ check('빛먹이가 등잔에 붙으면 등잔이 꺼지고, 다시 붙일 수 �
 await B.shot('06d-vigil-eater');
 r = await B.ev(`lumen.shades.clear(); T.use('lampHut'); const L = lumen.chapters.lanterns.find((l) => l.id === 'lampHut'); return { out: L.out, on: L.on }`);
 check('꺼진 등잔을 다시 붙였다', !r.out && r.on, r);
+// 새벽 세 시에는 부르지 않아도 무전기가 지직거린다(「세 시의 잡음」). 그 뒤 세 시 무전은 다른 안내
+r = await B.ev(`
+  lumen.shades.clear(); lumen.env.setHour(3.05); lumen.player.hp = 100; lumen.step(0.3);
+  const scene = lumen.dialogue.scene?.id;
+  T.watch();
+  const label = T.use('radio');
+  return { scene, seen: lumen.story.isSeen('threeam'), label, st: T.st() }`);
+check('세 시에 저절로 세 시의 잡음 장면', r.scene === 'threeam' && r.seen && String(r.label).includes('정시 무전'), r);
 r = await B.ev(`
   lumen.env.setHour(5.7);
   let t = 0;
   for (; t < 30 && !lumen.chapters.flag('vigil'); t += 0.5) { lumen.player.hp = 100; lumen.step(0.5); }
-  return { t, st: T.st() }`);
+  lumen.step(0.3);
+  const scene = lumen.dialogue.scene?.id;
+  return { t, scene, st: T.st() }`);
 check('새벽이 오면 첫 밤 당직이 끝나고 인계부·보관함 차례', r.st.flags.includes('vigil') && r.st.step === 'search', r);
+r = await B.ev(`T.watch(); return { seen: lumen.story.isSeen('morning'), st: T.st() }`);
+check('당직이 끝난 새벽에 심지를 내리며 장면', r.seen && r.st.state === 'play', r);
 r = await B.ev(`return T.use('spare')`);
 check('부두 보관함 열기(순서 자유: 보관함 먼저)', String(r).includes('보관함'), r);
 r = await B.ev(`T.settle(); return { st: T.st(), found: lumen.story.isFound('spare') }`);
@@ -173,29 +202,44 @@ check('예비 송수신기 종이띠를 수첩에 적음', r.found, r);
 r = await B.ev(`return T.use('book')`);
 await B.ev(`lumen.step(0.3); return 1`);
 await B.shot('07-islandbook');
-r = await B.ev(`T.settle(); return T.st()`);
-check('두 물건 확인 뒤 교대 요청 목표', r.step === 'call', r);
+r = await B.ev(`T.settle(); return { st: T.st(), tally: lumen.story.isSeen('tally') }`);
+check('두 물건 확인 뒤 도와 달라는 말 장면과 교대 요청 목표', r.st.step === 'call' && r.tally, r);
+r = r.st;
 // 밤: 고정등 아래 돌계단
 r = await B.ev(`lumen.env.setHour(20.5); T.goto(lumen.chapters.spot('call').x, lumen.chapters.spot('call').z); lumen.player.flashOn = true; lumen.step(6); return { st: T.st(), lit: !!lumen.ground.lightAt(lumen.player.pos.x, lumen.player.pos.z), shades: lumen.shades.list.filter(s => s.active).length }`);
 check('밤에 돌계단은 고정등 불빛 안', r.lit, r);
 await B.shot('08-island-night');
 r = await B.ev(`return T.use('call')`);
 check('교대 요청', String(r).includes('부르기'), r);
-r = await B.ev(`lumen.step(0.3); const s = lumen.dialogue.scene?.id; const ok = T.until('bowls'); return { s, ok, st: T.st() }`);
-check('대타 장면 뒤 두 그릇 장면', r.s === 'relief' && r.ok, r);
+r = await B.ev(`lumen.step(0.3); const s = lumen.dialogue.scene?.id; T.watch(); return { s, st: T.st(), gran: lumen.chapters.npcs.gran.mesh.visible, owner: lumen.chapters.npcs.owner.mesh.visible }`);
+check('대타 장면 뒤 등대 문 앞으로 가는 차례(할머니·식당 주인이 서 있다)', r.s === 'relief' && r.st.step === 'tour' && r.st.obj.includes('등대 문') && r.gran && r.owner, r);
+r = await B.ev(`const m = lumen.chapters.lakeRefs.towerMark; T.goto(m.x + 1.5, m.z + 1.5); lumen.step(0.4); const s = lumen.dialogue.scene?.id; T.peek(2); return s`);
+check('등대 문 앞에 가면 둘이 정할 것 장면', r === 'switch', r);
+await B.shot('08b-switch');
+r = await B.ev(`const ok = T.until('bowls'); return { ok, st: T.st() }`);
+check('둘이 정할 것 뒤 두 그릇 장면', r.ok, r);
 await B.ev(`T.peek(2); return 1`);
 await B.shot('09-bowls');
 r = await B.ev(`T.watch(); return T.st()`);
 check('2장 마무리: 마을로 돌아가기 목표', r.step === 'leave', r);
 await B.shot('10-island-leave');
+r = await B.ev(`const l = T.use('boatIsland'); lumen.step(0.3); const s = lumen.dialogue.scene?.id; T.peek(3); return { l, s }`);
+check('나룻배에 오르면 섬을 등지고 장면', r.s === 'farewell', r);
+await B.shot('10b-farewell');
+r = await B.ev(`T.watch(); lumen.step(2.0); return { st: T.st(), scene: lumen.dialogue.scene?.id, q: [...lumen.storyQueue] }`);
+check('섬을 떠나면 3장: 강 건너 나루의 둑길 위의 자국', r.st.ch === 3 && r.st.step === 'go' && (r.scene === 'riverside' || r.q.includes('riverside')), r);
+await B.ev(`T.peek(4); return 1`);
+await B.shot('10c-riverside');
+r = await B.ev(`T.watch(); return T.st()`);
 
-// 재시작 확인: 2장 도중 저장이 이어지는지(처음 화면 → 장 단추)
+// 재시작 확인: 3장 도중 저장이 이어지는지(처음 화면 → 장 단추)
 r = await B.ev(`lumen.backToTitle(); lumen.step(0.2); return document.getElementById('chapter-btn').textContent`);
 check('2장 끝낸 뒤 처음 화면 단추는 3장', r.includes('3장'), r);
 
 // ---------------------------------------------------------------- 3장
-r = await B.ev(`document.getElementById('chapter-btn').click(); lumen.step(2.0); return T.st()`);
-check('3장 시작: 강 건너 구호소 목표', r.ch === 3 && r.step === 'go', r);
+r = await B.ev(`document.getElementById('chapter-btn').click(); lumen.step(2.0); return { st: T.st(), scene: lumen.dialogue.scene?.id }`);
+check('3장 다시 열기: 강 건너 구호소 목표(본 나루 장면은 다시 안 나온다)', r.st.ch === 3 && r.st.step === 'go' && !r.scene, r);
+r = r.st;
 await B.shot('11-ch3-start');
 r = await B.ev(`const t = lumen.chapters.river.tentMark; T.goto(t.x - 4, t.z + 4); lumen.step(0.5); return { scene: lumen.dialogue.scene?.id }`);
 check('구호소에 다가가면 열두 번째 칸 장면', r.scene === 'count', r);
@@ -221,8 +265,8 @@ r = await B.ev(`
     out.push(document.getElementById('doc-title').textContent);
     T.settle();
   }
-  return { out, st: T.st() }`);
-check('봉투 다섯을 제 침상에 놓으면 표찰 다섯', r.out.filter((x) => String(x).startsWith('새 표찰')).length === 5, r);
+  return { out, st: T.st(), neighbors: lumen.story.isSeen('neighbors') }`);
+check('봉투 다섯을 제 침상에 놓으면 표찰 다섯(첫 봉투 뒤 먼저 깬 사람 장면)', r.out.filter((x) => String(x).startsWith('새 표찰')).length === 5 && r.neighbors, r);
 await B.shot('12b-beds');
 r = await B.ev(`lumen.step(0.6); const s = lumen.dialogue.scene?.id; T.watch(); return { s, seen: lumen.story.isSeen('fivebeds'), st: T.st() }`);
 check('다섯 자리 장면 뒤 창고 목표', r.seen && r.st.step === 'store', r);
@@ -251,21 +295,34 @@ r = await B.ev(`
   return { off, on }`);
 check('둑길 가로등이 저마다 꺼졌다 켜진다(출렁임)', r.off.every((n) => n > 0) && r.on.every((n) => n > 0), r);
 await B.shot('13b-levee-night');
+r = await B.ev(`const m = lumen.chapters.river.restLamp; T.goto(m.x + 0.5, m.z - 1.2); lumen.step(0.5); const s = lumen.dialogue.scene?.id; T.peek(2); return s`);
+check('둑길 가운데 가로등을 지나면 불 밑의 자국 장면', r === 'marks', r);
+await B.shot('13b2-marks');
+r = await B.ev(`T.watch(); return T.st()`);
 r = await B.ev(`const t = lumen.chapters.river.tentMark; T.goto(t.x - 3, t.z + 3); lumen.step(0.5); const s = lumen.dialogue.scene?.id; T.peek(3); return s`);
 check('구호소에 닿으면 열둘을 데려온 길 장면', r === 'stretchers', r);
 await B.sleep(900);
 await B.shot('13c-stretchers');
 r = await B.ev(`T.watch(); return T.st()`);
 check('약사에게 반납 목표', r.step === 'back', r);
-r = await B.ev(`return T.use('return')`);
-r = await B.ev(`lumen.step(0.2); return document.getElementById('doc-title').textContent`);
+r = await B.ev(`T.use('return'); lumen.step(0.3); const s = lumen.dialogue.scene?.id; T.peek(4); return s`);
+check('반납하면 빈 들것 장면(세 시의 목소리가 밝혀진다)', r === 'handback', r);
+r = await B.ev(`T.watch(); lumen.step(0.2); return document.getElementById('doc-title').textContent`);
 check('약사의 인계 쪽지', r === '약사의 인계 쪽지', r);
-r = await B.ev(`T.settle(); return T.st()`);
-check('별관 목표', r.step === 'annex', r);
-r = await B.ev(`const t = lumen.chapters.river.stepsMark; T.goto(t.x + 2.5, t.z); lumen.step(0.5); return { scene: lumen.dialogue.scene?.id }`);
-check('별관 입구에서 보호자 자리 장면', r.scene === 'chair', r);
+r = await B.ev(`T.settle(); return { st: T.st(), gran: lumen.chapters.npcs.gran.mesh.visible }`);
+check('별관 목표(할머니는 먼저 갔다)', r.st.step === 'annex' && !r.gran, r);
+r = await B.ev(`const t = lumen.chapters.river.stepsMark; T.goto(t.x + 2.5, t.z); lumen.step(0.5); return { scene: lumen.dialogue.scene?.id, gran: lumen.chapters.npcs.gran.mesh.visible }`);
+check('별관 계단 앞에서 문 앞에서 장면(할머니가 먼저 와 있다)', r.scene === 'doorstep' && r.gran, r);
+await B.ev(`T.peek(2); return 1`);
+await B.shot('14b-doorstep');
+r = await B.ev(`const ok = T.until('chair'); return { ok }`);
+check('이어서 보호자 자리 장면', r.ok, r);
 await B.ev(`T.peek(2); return 1`);
 await B.shot('15-chair-classroom');
+r = await B.ev(`const ok = T.until('outside'); lumen.step(0.3); T.peek(1); return { ok, scene: lumen.dialogue.scene?.id, sit: lumen.chapters.npcs.granSit.mesh.visible }`);
+check('보호자 자리 뒤 새벽, 문 밖의 당직(할머니가 계단에 앉아 있다)', r.ok && r.scene === 'outside' && r.sit, r);
+await B.sleep(900);
+await B.shot('15b-outside');
 r = await B.ev(`T.watch(); lumen.step(0.4); const card = document.getElementById('chapter-card-text').textContent; lumen.step(1.6); return { st: T.st(), scene: lumen.dialogue.scene?.id, card }`);
 check('4장으로 넘어가 이튿날 오후, 두 사람 장면', r.st.ch === 4 && r.card.includes('이튿날 오후') && (r.scene === 'roll' || r.st.q.includes('roll')), r);
 
@@ -279,13 +336,18 @@ await B.ev(`lumen.step(0.2); return 1`);
 await B.shot('16-roster');
 await B.ev(`T.settle(); return 1`);
 r = await B.ev(`return T.use('lampDoor')`);
-r = await B.ev(`lumen.step(2); return T.st()`);
-check('두 등을 켜면 밤을 기다리기', r.step === 'wait', r);
+r = await B.ev(`lumen.step(0.5); const s = lumen.dialogue.scene?.id; T.peek(2); return { s, st: T.st() }`);
+check('두 등을 켜면 문가의 당번 장면, 밤을 기다리기', r.st.step === 'wait' && r.s === 'watchman', r);
+await B.shot('16b-watchman');
+r = await B.ev(`T.watch(); return T.st()`);
 r = await B.ev(`const l = T.use('tag1991'); lumen.step(0.3); const t = document.getElementById('doc-title').textContent; T.settle(); return { l, t, n: lumen.chapters.nameTags }`);
 check('이름표 하나를 줍는다(교실 뒤 책상 서랍)', String(r.l).includes('이름표') && r.n.found === 1, r);
 await B.shot('17-lamps-day');
-r = await B.ev(`return T.use('wait')`);
-r = await B.ev(`lumen.step(2.0); return T.st()`);
+r = await B.ev(`T.use('wait'); lumen.step(0.3); const s = lumen.dialogue.scene?.id; T.peek(1); return { s, sit: lumen.chapters.npcs.granSit.mesh.position.x - lumen.chapters.river.granStepsSit.x }`);
+check('계단에 앉으면 계단에서 장면(할머니가 곁에 앉는다)', r.s === 'stairs' && Math.abs(r.sit) < 0.01, r);
+await B.sleep(600);
+await B.shot('17b-stairs');
+r = await B.ev(`T.watch(); lumen.step(2.0); return T.st()`);
 check('밤이 되고 첫 목표 그림자', r.step === 'night1' && r.hour > 20, r);
 // 목표 그림자가 다가오게 두고, 계단 불빛 안에서 비춘다.
 r = await B.ev(`
@@ -307,7 +369,8 @@ r = await B.ev(`T.watch(); return T.st()`);
 check('쉬는 시간: 물 받고 다시 비추기', r.step === 'rest', r);
 r = await B.ev(`lumen.step(6); return { active: lumen.shades.list.filter(s => s.active).length }`);
 check('쉬는 동안 그늘이가 오지 않는다', r.active === 0, r);
-r = await B.ev(`return T.use('water')`);
+r = await B.ev(`T.use('water'); lumen.step(0.3); const s = lumen.dialogue.scene?.id; T.watch(); return { s, st: T.st() }`);
+check('물을 받으면 열셋 장면 뒤 다시 비추기', r.s === 'water' && r.st.step === 'night2', r);
 r = await B.ev(`
   const P = lumen.player; P.flashOn = true;
   T.goto(lumen.chapters.river.stepsOut.x, lumen.chapters.river.stepsOut.z);
@@ -329,8 +392,10 @@ r = await B.ev(`return T.use('class')`);
 r = await B.ev(`lumen.step(0.3); const s = lumen.dialogue.scene?.id; T.peek(6); return s`);
 check('세 사람 장면', r === 'truth', r);
 await B.shot('21-truth');
-r = await B.ev(`const ok = T.until('third'); return { ok, st: T.st() }`);
-check('세 사람 뒤 아직 밤, 남은 창 장면', r.ok && r.st.hour > 20, r);
+r = await B.ev(`const ok = T.until('island'); return { ok, st: T.st() }`);
+check('세 사람 뒤 섬에서 온 무전', r.ok, r);
+r = await B.ev(`const ok = T.until('third'); return { ok, st: T.st(), island: lumen.story.isSeen('island') }`);
+check('섬에서 온 무전 뒤 아직 밤, 남은 창 장면', r.ok && r.island && r.st.hour > 20, r);
 r = await B.ev(`T.watch(); lumen.step(2.5); const R = lumen.chapters.river; return { st: T.st(), lamps: Object.fromEntries(Object.entries(R.laneLamps).map(([k, L]) => [k, L.on])), t3: lumen.shades.hasTarget('t3') }`);
 check('길 내기 목표: 천막 쪽만 꺼져 있고 세 번째 그림자가 나온다', r.st.step === 'route' && r.lamps.west && r.lamps.mid && !r.lamps.east && r.t3, r);
 await B.shot('21b-route');
@@ -365,7 +430,10 @@ r = await B.ev(`
   return { lamps, t, home3: C.flag('home3') }`);
 check('서쪽 길로 온 그림자를 침상 앞에서 비추면 본관 창으로', !r.lamps.west && r.lamps.mid && r.lamps.east && r.home3, r);
 await B.shot('21c-third-home');
-r = await B.ev(`lumen.step(4); return T.st()`);
+r = await B.ev(`lumen.step(4); const s = lumen.dialogue.scene?.id; T.peek(3); return { s, st: T.st() }`);
+check('이튿날 아침 점호 장면', r.s === 'rollcall' && r.st.step === 'rollcall', r);
+await B.shot('21d-rollcall');
+r = await B.ev(`T.watch(); return T.st()`);
 check('아침 방송 목표', r.step === 'broadcast' && r.hour < 8, r);
 await B.shot('22-morning');
 r = await B.ev(`return T.use('podium')`);
