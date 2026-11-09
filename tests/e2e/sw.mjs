@@ -3,7 +3,7 @@
 // 첫 설치부터 실패 → '아직 안 됐어요(이유)'.
 // 저장소를 빌드 번호를 찍어 임시 폴더에 복사하고 그 폴더를 직접 띄운다(배포 워크플로의 __BUILD__ 치환과 같다). python이 필요하다.
 //   node tests/e2e/sw.mjs [포트]
-import { cpSync, rmSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, readdirSync, mkdtempSync } from 'node:fs';
+import { cpSync, rmSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, readdirSync, mkdtempSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
@@ -14,6 +14,10 @@ const REPO = fileURLToPath(new URL('../../', import.meta.url));
 const SITE = mkdtempSync(join(tmpdir(), 'lumen-sw-'));
 const PORT = Number(process.argv[2] ?? 8790);
 
+// 파이썬 http.server의 Last-Modified는 초 단위다. 두 빌드를 같은 1초 안에 찍으면 브라우저가 sw.js·페이지를 조건부로 다시 물을 때
+// (If-Modified-Since) 304가 돌아와 앞 빌드의 sw.js가 그대로 설치된다 — 4-1 '한 시간 뒤 새 버전 확인'이 이 때문에 자주 실패했다
+// (앞 단계 dddd4444와 ffff6666을 0.4초 차이로 찍음). 실제 배포(GitHub Pages)는 ETag로 비교해 이 문제가 없다. 빌드마다 수정 시각을 1초 이상 늘린다.
+let stampedAt = 0;
 function stamp(build, { drop = null, pageBuild = build } = {}) {
   mkdirSync(SITE, { recursive: true });
   for (const e of readdirSync(SITE)) rmSync(join(SITE, e), { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); // Windows: 서버가 막 내준 파일이 잠깐 잠겨 있을 수 있다
@@ -21,6 +25,8 @@ function stamp(build, { drop = null, pageBuild = build } = {}) {
   writeFileSync(join(SITE, 'index.html'), readFileSync(join(SITE, 'index.html'), 'utf8').replaceAll('__BUILD__', pageBuild));
   writeFileSync(join(SITE, 'sw.js'), readFileSync(join(SITE, 'sw.js'), 'utf8').replaceAll('__BUILD__', build));
   if (drop) unlinkSync(join(SITE, drop));
+  stampedAt = Math.max(stampedAt + 1, Math.floor(Date.now() / 1000));
+  for (const f of ['index.html', 'sw.js']) utimesSync(join(SITE, f), stampedAt, stampedAt);
 }
 
 const ok = [];
