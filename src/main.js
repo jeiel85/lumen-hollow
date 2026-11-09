@@ -1390,7 +1390,8 @@ function startChapter() {
   game.nights = 1;
   hud.setChapter({ label: chapters.label });
   hud.setObjective(chapters.objective);
-  showCard(tr('{0}장 · {1}', [plan.ch, plan.title]));
+  // 장 제목 카드. 시간이 건너뛴 장(4장: 3장이 밤으로 끝난다)은 그 때를 함께 적는다(#58).
+  showCard(plan.sub ? tr('{0}장 · {1} — {2}', [plan.ch, plan.title, plan.sub]) : tr('{0}장 · {1}', [plan.ch, plan.title]));
   // 진행에 따라 바로 이어 틀 장면은 제목 카드가 걷힌 뒤에 튼다.
   if (plan.play.length) later(1.6, () => plan.play.forEach((id) => storyQueue.includes(id) || storyQueue.push(id)));
 }
@@ -1534,7 +1535,8 @@ function finishStory() {
   sound.play('win');
   $('end-title').textContent = isKo ? `《${FINALE.title}》` : `“${FINALE.title}”`;
   $('end-text').textContent = FINALE.text;
-  if ($('end-best')) $('end-best').textContent = '';
+  const tags = chapters.nameTags;
+  if ($('end-best')) $('end-best').textContent = tr('옛 학교에서 찾은 이름표 {0}/{1}', [tags.found, tags.total]);
   endButtons({ retry: false, journal: true });
   setScreen('end');
 }
@@ -1671,6 +1673,7 @@ chapters.attach({
     sound: (name) => sound.play(name),
     card: (text) => showCard(text),
     setHour: (h) => env.setHour(h),
+    hour: () => env.hour,
     next: () => {
       online.noteStory('clear', String(game.chapter));
       startChapter();
