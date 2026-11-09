@@ -14,7 +14,7 @@ const ART_WAIT = 2.5;
 
 const B = await launch(url, +w, +h);
 const waitReady = async () => { for (let i = 0; i < 60; i++) { if (await B.ev('return !!(window.lumen && lumen.game.ready)')) return; await B.sleep(500); } };
-const until = async (expr, ms = 8000) => { for (let t = 0; t < ms; t += 100) { const v = await B.ev(expr); if (v) return v; await B.sleep(100); } return null; };
+const until = async (expr, ms = 8000) => { for (let t = 0; t < ms; t += 100) { const v = await B.ev(expr); if (v && !v.error) return v; await B.sleep(100); } return null; };
 
 // 그림 요청 가로채기: 이름(파일 이름 일부) → { delay } 또는 { status: 404 }
 const rules = new Map();
