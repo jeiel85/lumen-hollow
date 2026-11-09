@@ -55,19 +55,27 @@ class InstallError extends Error {
 const pathOf = (req) => new URL(req.url).pathname.split('/').slice(-2).join('/');
 
 // addAll은 하나라도 실패하면 전부 넣지 않지만 어느 파일인지 알려 주지 않는다. 실패했을 때만 다시 물어 원인을 찾는다.
+// addAll이 실패하며 동시에 받던 요청들을 끊은 직후라, 물음이 끊긴 연결에 걸려 실패할 수 있다. 곧바로 한 번 더 물어도
+// 같은 연결에 걸려 빠진 파일을 '연결이 끊겼어요'로 잘못 알렸다(시험 서버에서 8번 중 2번). 잠깐씩 쉬며 세 번까지 묻는다.
+// 정말 오프라인이면 세 번 다 실패해 'network'가 된다(그때 더 기다리는 것은 0.75초).
+async function head(req) {
+  for (let i = 0; ; i++) {
+    try {
+      return await fetch(req.clone(), { method: 'HEAD', cache: 'no-store' });
+    } catch (err) {
+      if (i >= 2) throw err;
+      await new Promise((r) => setTimeout(r, 250 * (i + 1)));
+    }
+  }
+}
+
 async function diagnose(reqs) {
   for (const req of reqs) {
     let res;
     try {
-      res = await fetch(req.clone(), { method: 'HEAD', cache: 'no-store' });
+      res = await head(req);
     } catch {
-      // addAll이 실패하며 동시에 받던 요청들을 끊은 직후라, 첫 물음이 끊긴 연결에 걸려 실패할 수 있다.
-      // 한 번만 다시 물어, 빠진 파일을 '연결이 끊겼어요'로 잘못 알리지 않게 한다.
-      try {
-        res = await fetch(req.clone(), { method: 'HEAD', cache: 'no-store' });
-      } catch {
-        return new InstallError('network');
-      }
+      return new InstallError('network');
     }
     if (!res.ok) return new InstallError('missing', `${pathOf(req)} ${res.status}`);
   }

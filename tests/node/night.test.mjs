@@ -7,6 +7,7 @@ import { makeGame, load } from './env.mjs';
 const { scene, world } = await makeGame();
 const { Shades } = await load('src/shades.js');
 const { LAMP_RADIUS } = await load('src/world.js');
+const { Rng } = await load('src/rng.js');
 
 // 손전등을 든 플레이어 대역: facing 쪽 ±25° 30m 안을 세기 1로 비춘다(건물 너머까지 닿는 거리).
 function fakePlayer(x, z, facing = 0, flash = false) {
@@ -126,8 +127,20 @@ test('첫 밤에는 아무 방향, 다섯 번째 밤부터는 등 뒤에서 깨�
     }
     return back / all;
   };
-  const first = behindShare(0);
-  const deep = behindShare(6);
-  // 3000번에서 첫 밤 약 0.29, 깊은 밤 약 0.39(차이의 표준편차 약 0.012)
+  // 그늘이가 깨어나는 자리는 Math.random이라 그대로 두면 CI에서 드물게 흔들린다(2026-11-09 0.31 → 0.37로 실패).
+  // 3000번씩 200회 재면 첫 밤 0.298, 깊은 밤 0.391, 차이 0.093(표준편차 0.011)이라 0.06 아래로 떨어질 확률이 약 0.2%다.
+  // 기준은 그대로 두고 Math.random만 고정 시드로 바꿔 매번 같은 값을 잰다.
+  const seeded = (seed, fn) => {
+    const real = Math.random;
+    const rng = new Rng(seed);
+    Math.random = () => rng.next();
+    try {
+      return fn();
+    } finally {
+      Math.random = real;
+    }
+  };
+  const first = seeded(1, () => behindShare(0));
+  const deep = seeded(2, () => behindShare(6));
   assert.ok(deep > first + 0.06, `등 뒤 비율 첫 밤 ${first.toFixed(2)} → 깊은 밤 ${deep.toFixed(2)}`);
 });
