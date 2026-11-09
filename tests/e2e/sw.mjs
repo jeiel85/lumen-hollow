@@ -99,7 +99,9 @@ try {
   stamp('eeee5555', { drop: 'icons/maskable-512.png' });
   B = await launch(url, 1280, 720);
   await waitReady(B);
-  await until(B, `return document.getElementById('offline-status').textContent.includes('아직 안 됐어요')`);
+  // 워커가 redundant가 되는 소식이 sw.js의 이유 메시지보다 먼저 오면 잠깐 일반 문구('설치가 중간에 멈췄어요')가 보였다가
+  // 이유로 바뀐다. 그 사이를 읽지 않게 이유(파일 이름)나 '연결이 끊겼어요'가 나올 때까지 기다린다. 판정은 그대로다.
+  await until(B, `const t = document.getElementById('offline-status').textContent; return t.includes('아직 안 됐어요') && (t.includes('(') || t.includes('끊겼'))`);
   r = await B.ev(state);
   check('첫 설치가 실패하면 아직 안 됐어요 + 이유, 게임은 그대로 열린다', r.offline.includes('아직 안 됐어요') && r.offline.includes('maskable-512.png') && !r.ctrl, r.offline);
   await B.ev(`document.getElementById('settings-btn').click(); return true`);

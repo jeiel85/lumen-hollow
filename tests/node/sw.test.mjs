@@ -66,3 +66,28 @@ test('그림(art/)이 쓰는 곳·사전 캐시·폴더와 짝이 맞는다', as
   assert.deepEqual([...files].filter((p) => !used.has(p)), [], 'art/에 있지만 쓰지 않는 그림(배포 크기만 늘린다)');
   assert.match(read('.github/workflows/pages.yml'), /cp -r [^\n]*\bart\b[^\n]*_site\//, '배포 단계가 art/를 _site로 옮기지 않는다');
 });
+
+test('설치 실패 진단: 끊긴 연결에 걸린 물음은 쉬었다가 다시 묻고, 세 번 다 실패해야 연결 끊김으로 알린다', async () => {
+  // fetch가 차례대로 내는 결과: 'throw'(연결 끊김) 또는 HTTP 상태. 쉬는 시간(setTimeout)은 바로 넘긴다.
+  const run = async (plan) => {
+    let calls = 0;
+    const ctx = {
+      self: { addEventListener() {}, location: { origin: 'https://example.test' } },
+      URL,
+      setTimeout: (fn) => fn(),
+      fetch: async () => {
+        const o = plan[Math.min(calls++, plan.length - 1)];
+        if (o === 'throw') throw new TypeError('Failed to fetch');
+        return { ok: o >= 200 && o < 300, status: o };
+      },
+    };
+    const { diagnose } = vm.runInNewContext(`${read('sw.js')}\n;({ diagnose })`, ctx);
+    const req = { url: 'https://example.test/lumen-hollow/icons/maskable-512.png', clone() { return this; } };
+    const err = await diagnose([req]);
+    return { code: err?.code ?? null, detail: err?.detail ?? null, calls };
+  };
+  assert.deepEqual(await run([404]), { code: 'missing', detail: 'icons/maskable-512.png 404', calls: 1 });
+  assert.deepEqual(await run(['throw', 'throw', 404]), { code: 'missing', detail: 'icons/maskable-512.png 404', calls: 3 }, '두 번 끊겨도 세 번째 물음으로 빠진 파일을 찾는다');
+  assert.deepEqual(await run(['throw', 'throw', 'throw', 404]), { code: 'network', detail: '', calls: 3 }, '세 번 다 끊기면 연결 끊김');
+  assert.deepEqual(await run([200]), { code: null, detail: null, calls: 1 });
+});
