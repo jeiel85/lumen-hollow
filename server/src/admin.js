@@ -195,10 +195,22 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
     // 마이그레이션 0002가 더한 앱 표(story_app_daily). 웹 몫은 '전체 − 앱'이라 두 합계가 같은 순간의 것이어야 해서
     // 전체 조회와 같은 batch(트랜잭션)로 읽는다. 따로 읽으면 그사이 들어온 앱 요청이 앱 쪽에만 잡혀 웹 수치가 사라진다(#73 리뷰).
     // 앱 표가 없으면(0002 전) 앱 조회를 빼고 다시 읽어, 앱 몫만 '모름'(null)으로 두고 전체 수치는 그대로 보인다.
-    // 행 제한을 두지 않는다: 앱 행은 전체 행의 부분집합이라 장면·장 id 수(대본 크기)를 넘지 않는다.
+    // 서버는 id 형식만 보므로(대본 목록을 모른다) 아무 id나 쌓일 수 있다. 그래서 돌려주는 행을 묶는다(#73 리뷰):
+    // ① 전체 표에 보이는 상위 STORY_ROWS개와 같은 (kind, id)의 앱 몫(웹 = 전체 − 앱 빼기용) ∪ ② 앱 몫 상위 STORY_ROWS개(앱 화면용).
+    // 많아야 2 × STORY_ROWS행이다. 읽는 행은 전체 조회와 마찬가지로 기간 안의 행이다.
     const appStmt = db.prepare(
-      'SELECT kind, id, sum(n) AS n, sum(skipped) AS skipped FROM story_app_daily WHERE day >= ?1 GROUP BY kind, id ORDER BY kind, id',
-    ).bind(utcDay(periodFrom));
+      `SELECT kind, id, n, skipped FROM (
+         SELECT kind, id, sum(n) AS n, sum(skipped) AS skipped FROM story_app_daily WHERE day >= ?1 GROUP BY kind, id
+       ) WHERE (kind, id) IN (
+         SELECT kind, id FROM story_daily WHERE day >= ?1 AND kind <> 'total' GROUP BY kind, id ORDER BY sum(n) DESC, kind, id LIMIT ?2
+       )
+       UNION
+       SELECT kind, id, n, skipped FROM (
+         SELECT kind, id, sum(n) AS n, sum(skipped) AS skipped FROM story_app_daily WHERE day >= ?1 GROUP BY kind, id
+         ORDER BY n DESC, kind, id LIMIT ?2
+       )
+       ORDER BY kind, id`,
+    ).bind(utcDay(periodFrom), STORY_ROWS);
     let extra = null;
     let appRes = null;
     try {

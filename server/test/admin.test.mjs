@@ -395,6 +395,28 @@ test('이야기 진행: 전체 합계와 앱 몫은 같은 batch(트랜잭션)�
   assert.equal(batches.filter((b) => b.some((q) => /FROM story_app_daily/.test(q))).length, 1);
 });
 
+test('이야기 진행: 아무 id나 많이 쌓여도 앱 몫은 많이 도달한 것과 전체 표에 보이는 것만 돌려준다(#73 리뷰)', async () => {
+  const s = setup();
+  const send = async (events, origin) => {
+    const res = await s.game.fetch(new Request('https://api.test/v1/story', {
+      method: 'POST', headers: { Origin: origin, 'CF-Connecting-IP': '203.0.113.50', 'Content-Type': 'application/json' }, body: JSON.stringify({ events }),
+    }), s.gameEnv);
+    assert.equal(res.status, 200);
+  };
+  // 웹에서 많이 본 장면 85개(전체 표 상위 80에 든다), 앱에서 한 번씩 본 엉뚱한 id 300개, 앱에서 많이 본 장면 하나.
+  for (let k = 0; k < 85; k++) await send(Array.from({ length: 5 }, () => ({ kind: 'scene', id: `web${k}` })), ORIGIN);
+  for (let k = 0; k < 85; k++) await send([{ kind: 'scene', id: `web${k}` }], RULES.storyAppOrigin);
+  for (let k = 0; k < 300; k += 20) await send(Array.from({ length: 20 }, (_, j) => ({ kind: 'scene', id: `junk${k + j}` })), RULES.storyAppOrigin);
+  await send(Array.from({ length: 20 }, () => ({ kind: 'scene', id: 'apponly' })), RULES.storyAppOrigin);
+  const story = (await s.call()).body.story;
+  assert.equal(story.rows.length, 80, '전체 표는 80행');
+  assert.ok(story.app.length <= 160, `앱 몫은 많아야 160행 (${story.app.length})`);
+  const app = new Map(story.app.map((r) => [`${r.kind}|${r.id}`, r.n]));
+  for (const r of story.rows) assert.ok(app.has(`${r.kind}|${r.id}`) || r.id.startsWith('junk'), `전체 표의 ${r.id}에 맞는 앱 몫이 있다`);
+  assert.equal(app.get('scene|apponly'), 20, '앱에서 많이 본 것은 전체 표 밖이어도 앱 화면에 나온다');
+  assert.ok(story.rows.filter((r) => r.id.startsWith('web')).every((r) => app.get(`${r.kind}|${r.id}`) === 1), '빼기에 쓸 앱 몫이 맞다');
+});
+
 test('마이그레이션 0002 전(story_app_daily 없음)에는 앱 몫만 null이고 나머지는 그대로 나온다', async (t) => {
   t.mock.method(console, 'error', () => {});
   const s = setup();
