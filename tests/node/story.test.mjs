@@ -40,3 +40,11 @@ test('한 번 배포한 옷가지 id는 그대로 있다(바꾸거나 빼면 옛
   const missing = fixture('wardrobe-ids.json').filter((id) => !now.has(id));
   assert.deepEqual(missing, [], 'DECISIONS.md "옷장": 배포한 id는 바꾸지 않는다');
 });
+
+test('컷신 그림마다 화면 낭독기용 설명이 있다(#45)', async () => {
+  const { SCENES } = await load('src/script.js');
+  const { ART_ALT } = await load('src/dialogue.js');
+  const used = new Set(SCENES.flatMap((s) => s.lines.filter((l) => l.art).map((l) => l.art)));
+  assert.deepEqual([...used].filter((n) => !ART_ALT[n]), [], '대본 줄의 art에 맞는 설명이 src/dialogue.js ART_ALT에 없다');
+  assert.deepEqual(Object.keys(ART_ALT).filter((n) => !used.has(n)), [], '대본이 쓰지 않는 그림의 설명');
+});

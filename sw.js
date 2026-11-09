@@ -28,14 +28,13 @@ const UNVERSIONED = [
   'favicon.svg', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png',
   'icons/apple-touch-icon.png',
   // 처음 화면·메뉴 그림(index.html·style.css가 가리킨다). 버전 쿼리 없이 같은 주소라 옛 탭도 새 캐시에서 찾는다.
+  // 그래서 그림 내용을 바꿀 때는 파일 이름을 바꾼다(같은 이름이면 HTTP 캐시 10분·이 캐시에 옛 그림이 남는다, tools/art/README.md).
   'art/title-wide.webp', 'art/title-tall.webp', 'art/logo-wide.webp', 'art/logo-stack.webp', 'art/logo-wide-en.webp', 'art/logo-stack-en.webp', 'art/panel.webp',
   'art/btn-lit.webp', 'art/btn-dark.webp', 'art/icon-closet.webp', 'art/icon-journal.webp', 'art/icon-settings.webp',
   'art/icon-install.webp', 'art/icon-grid.webp',
-  // 이야기 장면의 컷신 그림(src/script.js 줄의 art). 오프라인에서도 장면이 그림과 함께 나오게 미리 받는다.
-  ...['prologue-hand', 'prologue-road', 'confession-switch', 'finale-firstlight', 'ferry-row', 'landing-hands',
-    'bowls-riceballs', 'count-shoes', 'key-photo', 'chair-hands', 'mom-wakes', 'three-riceball', 'broadcast-morning',
-    'watch-hands', 'stretchers-levee', 'reports-memo',
-  ].map((n) => `art/story/${n}.webp`),
+  // 1장 이야기 장면의 컷신 그림(src/script.js 줄의 art). 오프라인에서도 장면이 그림과 함께 나오게 미리 받는다.
+  // 웹판은 1장 데모라(#50) 2~4장 그림(약 0.9MB)은 받지 않는다 — 앱은 그림을 앱 안에 담고 서비스 워커를 쓰지 않는다(#45).
+  ...['prologue-hand', 'prologue-road', 'confession-switch', 'finale-firstlight'].map((n) => `art/story/${n}.webp`),
 ];
 const NAV_TIMEOUT = 4000;
 

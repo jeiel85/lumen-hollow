@@ -1,0 +1,8 @@
+Cinematic cutscene still for "Lumen Hollow", a quiet, emotional post-blackout survival story set in a small Korean lakeside valley town. Match the look of the attached reference image: stylized low-poly 3D, flat-shaded simple geometry, soft cinematic lighting, gentle depth of field, muted deep teal-black shadows with warm amber lamplight (#ffcf86) as the key light. Characters are simple low-poly figures with soft, rounded, stylized features (not realistic humans); faces are mostly hidden, turned away, in shadow or out of frame, so the emotion comes from hands, posture, light and objects. Tasteful and gentle, no gore, no horror imagery.
+
+No text, no letters, no readable writing, no logos, no subtitles, no UI, no watermark.
+
+Wide cinematic 16:9 landscape composition (generate at the largest landscape size available, 16:9 if possible, otherwise 1536x1024). Keep the bottom quarter of the frame calm and darker, because subtitles are shown there.
+
+SCENE:
+Clear night after rain. Seen from the lakeshore near a small wooden dock: a lighthouse on a small rocky island in the middle of a dark lake has just been relit. A strong warm beam sweeps across the water; the calm lake reflects it; the darkness at the forest edge pulls back like smoke. In the foreground, the small yellow-raincoat figure with a backpack stands on the dock, seen from behind, holding a handheld radio. Stars appear. Hopeful, triumphant but quiet.

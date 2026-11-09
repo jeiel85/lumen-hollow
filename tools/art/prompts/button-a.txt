@@ -1,0 +1,11 @@
+Two game UI buttons for a rainy-night survival game about relighting a blacked-out town, shown one above the other, centered, with a large empty gap between them. Seen perfectly straight on: flat, orthographic, no perspective, no drop shadow on the background.
+
+Both are the same wide pill shape (fully rounded ends, about 5 times wider than tall) with a thin dark aged-brass bezel, like illuminated push-buttons on an old electrical control panel.
+- Top button: LIT — the glass inside glows warm amber from within (#ffe3b0 at the center fading to #f4b45c toward the edges), soft inner glow, tiny surface scratches, a faint horizontal highlight near the top.
+- Bottom button: UNLIT — the same bezel, but the glass is dark smoky amber-brown (#2a2116 to #1a150e), only a faint warm reflection along the top edge.
+
+The middle part of each button must be evenly lit along its length (no hotspot in the center) so the button can be stretched horizontally.
+
+Background: pure flat black (#000000) everywhere. No text, no icons, no symbols, no watermark.
+
+Wide landscape image, 1536x1024.

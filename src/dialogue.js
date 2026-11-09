@@ -10,7 +10,31 @@ const CPS = 42; // 글자가 찍히는 속도(초당 글자 수)
 const FADE = 0.42; // 암전 시간(초). style.css의 .story-fade 전환 시간과 맞춘다.
 const ADVANCE_KEYS = new Set(['Space', 'Enter', 'NumpadEnter', 'KeyE']);
 // 컷신 그림(대본 줄의 art). 서비스 워커가 미리 받아 두는 목록(sw.js)과 tests/node/sw.test.mjs가 짝을 맞춘다.
+// 그림 내용을 바꿀 때는 파일 이름도 바꾼다(같은 주소면 Pages 10분 캐시·서비스 워커 캐시에 옛 그림이 남는다, tools/art/README.md).
 const artUrl = (name) => `art/story/${name}.webp`;
+// 그림이 아직 오지 않았으면 암전을 이만큼 더 잡아 둔다(초). 그래도 안 오면 그림 자리만 깔고 넘어간다(#45).
+const ART_WAIT = 2.5;
+
+// 컷신 그림의 짧은 설명(#45). 그림은 aria-hidden이라, 그림이 깔리거나 바뀐 줄에서 화면 낭독기에 대사 앞에 읽어 준다.
+// 대본 줄의 art 이름마다 하나씩 둔다(빠지면 tests/node/story.test.mjs가 잡는다). 대사로 전하지 않는 것만 보이게 짧게.
+export const ART_ALT = {
+  'prologue-hand': tr('어두운 방, 엄마의 두 손이 켜진 손전등을 내 손에 쥐여 준다.'),
+  'prologue-road': tr('비 오는 밤, 노란 우비를 입은 내가 버려진 차와 꺼진 전봇대를 지나 골짜기로 난 빈 길을 걷는다.'),
+  'confession-switch': tr('등대 꼭대기 등실, 할머니가 큰 렌즈 옆에서 쇠 스위치를 내린다. 호수 건너 마을에는 아직 불이 켜져 있다.'),
+  'finale-firstlight': tr('비 그친 밤, 섬 등대가 다시 켜져 호수 위로 빛줄기를 보낸다. 선착장에 선 나는 무전기를 들고 있다.'),
+  'ferry-row': tr('안개 낀 호수, 나는 나룻배를 저어 등대섬으로 간다. 섬 선착장에서 할머니가 손을 흔든다.'),
+  'landing-hands': tr('빗속의 돌 선착장, 엄지에 반창고를 감은 할머니 손이 배에 탄 내 손을 끌어 올린다.'),
+  'watch-hands': tr('밤의 돌계단, 할머니 손이 내 손을 등잔 불빛 안으로 끌어 넣는다. 뒤로 꺼진 등대와 호수 건너 마을 불빛.'),
+  'bowls-riceballs': tr('빗속 처마 밑 탁자에 밥그릇 둘과 라디오. 할머니가 주먹밥을 뭉쳐 내 손에 하나 올려 준다.'),
+  'count-shoes': tr('운동장의 구호 천막, 간이침대 한 줄 앞에 신발 열한 켤레가 가지런하다. 마지막 침대에서 한 사람이 아직 잔다.'),
+  'key-photo': tr('창고 선반에서 손수건을 펼치니 열쇠와 17번 짐표, 뒷면에 글씨가 적힌 사진 한 장이 나온다.'),
+  'stretchers-levee': tr('밤의 둑길, 우비 입은 사람들이 손전등을 비추며 들것 여섯을 줄지어 나른다.'),
+  'chair-hands': tr('등잔을 켠 교실 병상, 나는 잠든 엄마의 손을 잡고 있다. 옆에는 빈 나무 의자.'),
+  'mom-wakes': tr('비 오는 밤 교실 병상, 할머니가 무전기를 깨어난 엄마의 손에 대 준다. 창밖 운동장에 작은 불빛 하나.'),
+  'three-riceball': tr('할머니, 담요를 두른 엄마, 내가 침대 끝에 나란히 앉아 주먹밥 조각을 하나씩 들고 있다.'),
+  'broadcast-morning': tr('해 뜨는 학교 운동장, 구령대 탁자에서 나는 무전기 송신 단추를 누른다.'),
+  'reports-memo': tr('아침 햇살 속 탁자, 내가 무전기를 들고 엄마가 운동화 그림이 그려진 제보를 받아 적는다.'),
+};
 
 export class Dialogue {
   constructor({ sound }) {
@@ -27,7 +51,9 @@ export class Dialogue {
     // 컷신 그림(줄의 art). 옛 index.html과 섞여 없으면 그림 없이 3D 장면으로만 튼다(ok에 넣지 않는다).
     this.artEl = $('story-art');
     this.artImg = this.artEl?.querySelector('img') ?? null;
-    this.art = null; // 지금 깔린 그림 이름
+    this.art = null; // 지금 깔린 그림 이름(받지 못한 그림이면 이름만 두고 화면에는 깔지 않는다)
+    this.artState = new Map(); // 그림 이름 → 'loading' | 'ok' | 'fail'
+    this.artSaid = null; // 다음 줄에서 화면 낭독기에 읽어 줄 그림 설명
     this.reduce = matchMedia('(prefers-reduced-motion: reduce)');
     this.scene = null; // 재생 중인 장면
     this.docOpen = null; // 열린 읽기 화면의 닫기 콜백
@@ -119,7 +145,7 @@ export class Dialogue {
     // 카메라가 움직이거나 그림을 깐 장면은 끝날 때 암전한 뒤 게임 화면으로 돌아온다.
     this.moved = scene.lines.some((l) => l.cam || l.art);
     // 그림은 암전 중에 바꾸므로 미리 받아 둔다(서비스 워커가 받아 둔 뒤라면 바로 나온다).
-    if (this.artImg) for (const l of scene.lines) if (l.art) new Image().src = artUrl(l.art);
+    this.preload(scene);
     const r = this.el.root;
     r.classList.remove('hidden', 'leaving');
     r.classList.add('on');
@@ -160,7 +186,10 @@ export class Dialogue {
     el.box.dataset.radio = radio ? '1' : '';
     el.name.textContent = SPEAKERS[who] ?? '';
     el.who.classList.toggle('hidden', who === 'nar');
-    el.live.textContent = `${SPEAKERS[who] ? `${SPEAKERS[who]}${radio ? tr('(무전)') : ''}: ` : ''}${text}`;
+    // 이 줄에서 그림이 깔렸으면 그림 설명을 먼저 읽는다(한 번에 바꿔야 낭독기가 앞 글을 건너뛰지 않는다).
+    const pic = this.artSaid ? `${tr('그림: {0}', [this.artSaid])} ` : '';
+    this.artSaid = null;
+    el.live.textContent = `${pic}${SPEAKERS[who] ? `${SPEAKERS[who]}${radio ? tr('(무전)') : ''}: ` : ''}${text}`;
     // 무전 속 목소리가 새로 들릴 때마다 스퀠치 소리(내가 송신하는 줄은 빼고)
     if (radio && who !== 'me' && this.prevWho !== who) this.sound.play('radio');
     this.prevWho = radio ? who : null;
@@ -198,12 +227,39 @@ export class Dialogue {
     return !!this.artImg && line.art !== undefined && (line.art ?? null) !== this.art;
   }
 
+  // 장면의 그림을 미리 받는다. 처음 화면에서 첫 장면 그림을 받아 둘 때도 부른다(느린 회선의 첫 판, #45).
+  // 지난번에 받지 못한 그림(오프라인이었다 등)은 다시 시도한다.
+  preload(scene) {
+    if (!this.artImg || !scene) return;
+    for (const l of scene.lines) {
+      const name = l.art;
+      if (!name || (this.artState.has(name) && this.artState.get(name) !== 'fail')) continue;
+      this.artState.set(name, 'loading');
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = artUrl(name);
+      // decode()는 받기와 풀기가 끝나야 이루어진다. 받았는데 풀기만 거절되는 브라우저도 있어 크기로 한 번 더 본다.
+      img.decode().then(
+        () => this.artState.set(name, 'ok'),
+        () => this.artState.set(name, img.complete && img.naturalWidth > 0 ? 'ok' : 'fail'),
+      );
+    }
+  }
+
+  // 그림을 기다리는 중인지: 깔 그림이 아직 오는 중이고, 암전을 잡아 둔 시간이 ART_WAIT를 넘지 않았다.
+  _artPending(line, waited) {
+    return this._artChanges(line) && !!line.art && this.artState.get(line.art) === 'loading' && waited < ART_WAIT;
+  }
+
   // 컷신 그림을 깔거나(name) 걷는다(null). 바꿀 때마다 천천히 다가가는 움직임을 처음부터 다시 튼다.
+  // 받지 못한 그림(404·오프라인에 캐시 없음)은 깔지 않는다: 검은 바탕 대신 3D 장면이 보인다(#45).
   _setArt(name) {
     if (!this.artImg) return;
     this.art = name ?? null;
-    this.artEl.classList.toggle('on', !!this.art);
-    if (!this.art) return;
+    const show = !!this.art && this.artState.get(this.art) !== 'fail';
+    this.artEl.classList.toggle('on', show);
+    this.artSaid = show ? ART_ALT[this.art] ?? null : null;
+    if (!show) return;
     this.artImg.src = artUrl(this.art);
     // 세로 화면에서 그림 띠 위아래를 채우는 흐린 바탕(style.css .story-art::before)
     this.artEl.style.setProperty('--art', `url("${artUrl(this.art)}")`);
@@ -265,6 +321,8 @@ export class Dialogue {
       this.t += dt;
       if (this.t >= FADE) {
         const line = this.scene.lines[this.i];
+        // 느린 회선의 첫 방문: 그림이 오기 전에 밝아지면 검은 화면에 자막만 보인다. 그림이 올 때까지 암전을 잡아 둔다.
+        if (this._artPending(line, this.t - FADE)) return;
         this.cbs.onCam(line.cam);
         if (this._artChanges(line)) this._setArt(line.art);
         this.phase = 'in';

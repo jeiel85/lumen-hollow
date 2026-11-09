@@ -1,0 +1,11 @@
+Game title logo for "Lumen Hollow", an isometric survival game about relighting a blacked-out small Korean town on a rainy night.
+
+Text, spelled exactly and nothing else:
+- Main wordmark on one line: LUMEN HOLLOW
+- Below it, smaller Korean subtitle: 빛으로 버티는 밤
+
+Design: the main letters look like they are made of warm light — glowing tungsten filament / sodium streetlamp light, cream-white cores (#fff3dc) fading to warm amber (#ffcf86, #f4b45c) with a soft bloom halo. Elegant, slightly condensed, high-contrast serif capitals with generous letter spacing, a little worn and hand-made, like an old enamel sign lit from within. The first letter O in HOLLOW is a small glowing light bulb whose filament is the brightest point of the logo. A few thin diagonal rain streaks pass faintly in front of the letters. The Korean subtitle is in a clean, refined Korean gothic (sans-serif) typeface, warm off-white, evenly spaced, with a thin horizontal line on each side.
+
+Background: pure flat black (#000000) everywhere, no texture, no vignette, no scenery. The logo is centered with wide empty margins on all sides (at least 15% of the width). No other text, no tagline, no watermark, no signature.
+
+Wide landscape image, 1536x1024.

@@ -1,4 +1,4 @@
-// 헤드리스 Chrome을 CDP로 조종하는 작은 도구. launch(url, w, h) → { ev, shot, sleep, close, logs, send }
+// 헤드리스 Chrome을 CDP로 조종하는 작은 도구. launch(url, w, h) → { ev, shot, sleep, close, logs, send, on }
 // Chrome 위치는 환경 변수 CHROME, 없으면 운영체제별 기본 위치. Windows는 GPU(d3d11), 그 밖은 소프트웨어 GL.
 import { spawn } from 'node:child_process';
 import { writeFileSync, mkdtempSync, mkdirSync, existsSync } from 'node:fs';
@@ -87,9 +87,11 @@ export async function launch(url, w = 1280, h = 720, { outDir } = {}) {
   let id = 0;
   const pending = new Map();
   const logs = [];
+  const handlers = new Map(); // CDP 이벤트 이름 → 받는 함수들(on으로 단다, 예: Fetch.requestPaused)
   ws.addEventListener('message', (e) => {
     const msg = JSON.parse(e.data);
     if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
+    if (msg.method) for (const fn of handlers.get(msg.method) ?? []) fn(msg.params);
     if (msg.method === 'Runtime.consoleAPICalled') logs.push(`${msg.params.type}: ${msg.params.args.map((a) => a.value ?? a.description).join(' ')}`);
     if (msg.method === 'Runtime.exceptionThrown') logs.push(`exception: ${msg.params.exceptionDetails.exception?.description ?? msg.params.exceptionDetails.text}`);
   });
@@ -123,5 +125,6 @@ export async function launch(url, w = 1280, h = 720, { outDir } = {}) {
     try { ws.close(); } catch { /* */ }
     proc.kill();
   };
-  return { ev, shot, sleep, close, logs, send, hangul };
+  const on = (method, fn) => { if (!handlers.has(method)) handlers.set(method, []); handlers.get(method).push(fn); };
+  return { ev, shot, sleep, close, logs, send, hangul, on };
 }

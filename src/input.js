@@ -46,7 +46,11 @@ export class Input {
     canvas.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse' && e.button === 0) this.pressed.add('MouseLeft');
     });
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    // 우클릭·길게 누르기 메뉴는 캔버스만이 아니라 메뉴·이야기·기록 종이 위에서도 막는다(#47, 글자 선택을 게임 전체에서
+    // 막은 것과 같은 결정). 글을 넣는 칸(마을 번호 등)과 링크(개인정보 처리방침)에서는 붙여넣기·새 탭을 위해 그대로 둔다.
+    addEventListener('contextmenu', (e) => {
+      if (!e.target.closest?.('input, textarea, select, a[href], [contenteditable]')) e.preventDefault();
+    });
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       this.wheel += Math.sign(e.deltaY);

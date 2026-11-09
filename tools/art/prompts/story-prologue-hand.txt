@@ -1,0 +1,8 @@
+Cinematic cutscene still for "Lumen Hollow", a quiet, emotional post-blackout survival story set in a small Korean lakeside valley town. Match the look of the attached reference image: stylized low-poly 3D, flat-shaded simple geometry, soft cinematic lighting, gentle depth of field, muted deep teal-black shadows with warm amber lamplight (#ffcf86) as the key light. Characters are simple low-poly figures with soft, rounded, stylized features (not realistic humans); faces are mostly hidden, turned away, in shadow or out of frame, so the emotion comes from hands, posture, light and objects. Tasteful and gentle, no gore, no horror imagery.
+
+No text, no letters, no readable writing, no logos, no subtitles, no UI, no watermark.
+
+Wide cinematic 16:9 landscape composition (generate at the largest landscape size available, 16:9 if possible, otherwise 1536x1024). Keep the bottom quarter of the frame calm and darker, because subtitles are shown there.
+
+SCENE:
+Night, the first night of the blackout, inside a dark city apartment. Close-up of two pairs of hands: a mother's hands gently folding a child's small fingers around an old plastic flashlight, holding them closed over a battery cover that has slipped loose. The flashlight beam is the only light, spilling warm-white across a blanket and a tiled floor. The mother's face is out of frame; only her sleeve and hands. Intimate, quiet, sad.
