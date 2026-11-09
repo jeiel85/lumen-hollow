@@ -29,6 +29,13 @@ Lumen Hollow 비공개 테스트에 참여해 주셔서 고맙습니다.
 · 설정 → 화면 → 'FPS 표시'를 켜면 화면 구석에 숫자가 나와요. 버벅일 때 그 숫자를 알려 주세요.
 · 설정 → 온라인 보급품은 켜 둔 채로 두면 좋아요. 이야기 장면을 어디까지 봤는지가 이름 없이 날짜별 횟수로만 집계돼서, 어디서 그만두게 되는지 고치는 데 써요(개인정보처리방침 3절).
 
+■ 다 해 보신 뒤 짧게 답해 주세요(답하기 편한 것만)
+1) 1장을 끝까지 하셨나요? 그만두셨다면 어디쯤에서, 왜였나요?
+2) 2~4장을 하셨다면 장마다 대략 몇 분 걸렸나요? 어림이어도 돼요.
+3) 4장까지 끝내셨다면 어느 쪽에 가까웠나요? ㉠ 더 하고 싶었다 ㉡ 이걸로 됐다 ㉢ 길게 느껴졌다
+4) 2~4장의 할 일(등잔에 기름 채우기, 짐 봉투 놓기, 배전반 등)은 이야기의 일부처럼 느껴졌나요, 숙제처럼 느껴졌나요?
+5) 정식판에서 2~4장이 한 번 결제라면 얼마까지 내실 것 같나요? 안 사실 것 같다면 그렇게 적어 주셔도 돼요.
+
 ■ 의견 보내는 법
 · 플레이 스토어 앱 페이지의 '비공개 의견'(테스터에게만 보여요), 또는 메일 jeiel85@gmail.com
 · 적어 주시면 고치기 쉬운 것: 폰 기종·안드로이드 버전, 어디서 막혔는지/헷갈렸는지, 어색한 문장, 버벅인 장면과 FPS 숫자, 스크린샷
@@ -51,6 +58,13 @@ What helps most
 - Chapters 2-4 are unlocked in the test build. Please continue if you have time.
 - Settings -> Display -> "Show FPS" puts a number in the corner. Tell us that number when the game stutters.
 - Please leave Settings -> Online supply caches on. Story scenes reached are counted only as daily totals without any ID, to find where players stop (see the privacy policy).
+
+After playing, please answer briefly (skip any you like)
+1) Did you finish Chapter 1? If you stopped, where and why?
+2) If you played Chapters 2-4, roughly how many minutes did each take? A guess is fine.
+3) If you finished Chapter 4, which is closest? (a) I wanted more (b) That was enough (c) It felt long
+4) Did the tasks in Chapters 2-4 (filling the oil lamps, placing the luggage bags, the switchboard, etc.) feel like part of the story, or like chores?
+5) If Chapters 2-4 were a one-time purchase in the full version, how much would you pay? "I wouldn't buy it" is a fine answer.
 
 Feedback
 - "Private feedback" on the Play Store page (only visible to testers), or email jeiel85@gmail.com
@@ -96,5 +110,13 @@ https://jeiel85.github.io/lumen-hollow/
 - **그만두는 지점**: 장면 표에서 앞 장면보다 횟수가 크게 줄어드는 곳. 대본 순서는 `src/script.js`의 `SCENES`.
 - **건너뛰는 장면**: 장면 표의 '비율'(건너뜀 ÷ 끝남)이 높은 장면은 길거나 지루하다는 뜻일 수 있다.
 - **2~4장**: 장 표의 2~4장 '들어감'·'마침'. 테스트판은 잠금이 없어 결제 전환은 여기서 보지 않는다.
+- **2~4장 분량·가격 판단**(2026-11-09 사용자와 정함): 안내문 '다 해 보신 뒤' 질문 2)~5)의 답을 #53에 모아 아래처럼 정한다. 분량을 값에 맞추려고 같은 행동(모으기·채우기)을 더 얹지 않는다 — 늘린다면 이야기가 이유인 할 일, 1장의 배전·밤 버티기를 새 상황에 다시 쓰는 쪽으로.
+
+  | 테스터 반응 | 뜻 | 할 일 |
+  |---|---|---|
+  | "짧은데 더 하고 싶었다"(질문 3 ㉠)가 많다 | 진짜 수요 | 이야기 중심으로 늘린다 |
+  | "이걸로 됐다"(㉡)가 많다 | 길이는 문제가 아니다 | 가격을 분량에 맞춘다(하한 2,500원부터) |
+  | 2장 전에 그만둔다(질문 1, 장 표) | 2~4장 문제가 아니다 | 1장 앞부분을 고친다 |
+  | 할 일이 숙제 같다(질문 4) | 지금 보강이 작위적이다 | 그 할 일을 줄이거나 이야기와 더 묶는다 |
 - 개발자의 에뮬레이터 시험도 앱으로 잡힌다. 테스트를 연 날 이전 값은 빼고 본다(기간 단추 '최근 7일' 등).
 - 의견은 #53 댓글에 모으고, 고칠 것은 #53 체크리스트나 새 버그 이슈로 옮긴다.
