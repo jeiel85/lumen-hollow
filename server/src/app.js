@@ -393,6 +393,8 @@ export function createApp({ now = () => Date.now(), rules = RULES, verify = (url
   // 하루 전체 상한(storyMaxEventsPerDay)을 넘으면 그날은 더 세지 않는다. 남용이 게임의 D1 쓰기 한도를 다 쓰지 못하게 하기 위해서다.
   // 상한 확인과 더하기는 한 batch(트랜잭션)에서 한다: ① 그날 받은 사건 수(kind='total' 행)를 올리되, 넘치면 '가득 참'(상한+1)으로 둔다
   // → ② 가득 차지 않았을 때만 id별 행을 더한다. 이미 가득 찬 날의 요청은 ①도 행을 바꾸지 않아 D1에 쓰지 않는다.
+  // 안드로이드 앱(Origin이 rules.storyAppOrigin)에서 온 요청이면 ②를 앱 표(story_app_daily)에도 한다(#53). 출처는 헤더로만 가린다:
+  // 클라이언트를 고치지 않아도 되고, 이미 나간 앱 빌드도 나뉜다. 헤더가 없거나 다르면 웹으로 친다.
   async function story(env, request, t) {
     const b = await readJson(request, rules.storyMaxBodyBytes);
     const events = b.events;
@@ -412,17 +414,21 @@ export function createApp({ now = () => Date.now(), rules = RULES, verify = (url
     const db = env.DB;
     const day = utcDay(t);
     const cap = rules.storyMaxEventsPerDay;
+    const fromApp = request.headers.get('Origin') === rules.storyAppOrigin;
+    const add = (table, c) => db.prepare(
+      `INSERT INTO ${table} (day, kind, id, n, skipped)
+       SELECT ?1, ?2, ?3, ?4, ?5 WHERE (SELECT n FROM story_daily WHERE day = ?1 AND kind = 'total' AND id = '') <= ?6
+       ON CONFLICT (day, kind, id) DO UPDATE SET n = n + excluded.n, skipped = skipped + excluded.skipped`,
+    ).bind(day, c.kind, c.id, c.n, c.skipped, cap);
+    const rows = [...counts.values()];
     const res = await db.batch([
       db.prepare(
         `INSERT INTO story_daily (day, kind, id, n, skipped) VALUES (?1, 'total', '', ?2, 0)
          ON CONFLICT (day, kind, id) DO UPDATE SET n = CASE WHEN n + excluded.n <= ?3 THEN n + excluded.n ELSE ?3 + 1 END
          WHERE n <= ?3`,
       ).bind(day, events.length, cap),
-      ...[...counts.values()].map((c) => db.prepare(
-        `INSERT INTO story_daily (day, kind, id, n, skipped)
-         SELECT ?1, ?2, ?3, ?4, ?5 WHERE (SELECT n FROM story_daily WHERE day = ?1 AND kind = 'total' AND id = '') <= ?6
-         ON CONFLICT (day, kind, id) DO UPDATE SET n = n + excluded.n, skipped = skipped + excluded.skipped`,
-      ).bind(day, c.kind, c.id, c.n, c.skipped, cap)),
+      ...rows.map((c) => add('story_daily', c)),
+      ...(fromApp ? rows.map((c) => add('story_app_daily', c)) : []),
       db.prepare("SELECT n FROM story_daily WHERE day = ?1 AND kind = 'total' AND id = ''").bind(day),
     ]);
     const total = res.at(-1).results[0]?.n ?? 0;
@@ -483,6 +489,7 @@ export function createApp({ now = () => Date.now(), rules = RULES, verify = (url
       ).bind(cutoff),
       db.prepare('DELETE FROM rate_daily WHERE day < ?1').bind(utcDay(t - rules.rateKeepDays * DAY_MS)),
       db.prepare('DELETE FROM story_daily WHERE day < ?1').bind(utcDay(t - rules.storyKeepDays * DAY_MS)),
+      db.prepare('DELETE FROM story_app_daily WHERE day < ?1').bind(utcDay(t - rules.storyKeepDays * DAY_MS)),
     ];
     let deleted;
     try {

@@ -182,20 +182,48 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
     }
     // 마이그레이션 0001이 더한 표(cron_runs, story_daily)는 따로 묻는다. 표가 아직 없어도(코드를 먼저 배포한 경우)
     // 나머지 화면은 그대로 보이고, 이 부분만 '기록 없음'으로 둔다.
+    const extraStmts = [
+      db.prepare('SELECT at, ok, ms, deleted, error FROM cron_runs ORDER BY id DESC LIMIT 1'),
+      db.prepare('SELECT max(at) AS at FROM cron_runs WHERE ok = 1'),
+      db.prepare('SELECT at, error FROM cron_runs WHERE ok = 0 ORDER BY id DESC LIMIT 1'),
+      db.prepare(
+        `SELECT kind, id, sum(n) AS n, sum(skipped) AS skipped FROM story_daily
+         WHERE day >= ?1 AND kind <> 'total' GROUP BY kind, id ORDER BY n DESC, kind, id LIMIT ?2`,
+      ).bind(utcDay(periodFrom), STORY_ROWS),
+      db.prepare("SELECT n FROM story_daily WHERE day = ?1 AND kind = 'total' AND id = ''").bind(utcDay(t)),
+    ];
+    // 마이그레이션 0002가 더한 앱 표(story_app_daily). 웹 몫은 '전체 − 앱'이라 두 합계가 같은 순간의 것이어야 해서
+    // 전체 조회와 같은 batch(트랜잭션)로 읽는다. 따로 읽으면 그사이 들어온 앱 요청이 앱 쪽에만 잡혀 웹 수치가 사라진다(#73 리뷰).
+    // 앱 표가 없으면(0002 전) 앱 조회를 빼고 다시 읽어, 앱 몫만 '모름'(null)으로 두고 전체 수치는 그대로 보인다.
+    // 서버는 id 형식만 보므로(대본 목록을 모른다) 아무 id나 쌓일 수 있다. 그래서 돌려주는 행을 묶는다(#73 리뷰):
+    // ① 전체 표에 보이는 상위 STORY_ROWS개와 같은 (kind, id)의 앱 몫(웹 = 전체 − 앱 빼기용) ∪ ② 앱 몫 상위 STORY_ROWS개(앱 화면용).
+    // 많아야 2 × STORY_ROWS행이다. 읽는 행은 전체 조회와 마찬가지로 기간 안의 행이다.
+    const appStmt = db.prepare(
+      `SELECT kind, id, n, skipped FROM (
+         SELECT kind, id, sum(n) AS n, sum(skipped) AS skipped FROM story_app_daily WHERE day >= ?1 GROUP BY kind, id
+       ) WHERE (kind, id) IN (
+         SELECT kind, id FROM story_daily WHERE day >= ?1 AND kind <> 'total' GROUP BY kind, id ORDER BY sum(n) DESC, kind, id LIMIT ?2
+       )
+       UNION
+       SELECT kind, id, n, skipped FROM (
+         SELECT kind, id, sum(n) AS n, sum(skipped) AS skipped FROM story_app_daily WHERE day >= ?1 GROUP BY kind, id
+         ORDER BY n DESC, kind, id LIMIT ?2
+       )
+       ORDER BY kind, id`,
+    ).bind(utcDay(periodFrom), STORY_ROWS);
     let extra = null;
+    let appRes = null;
     try {
-      extra = await db.batch([
-        db.prepare('SELECT at, ok, ms, deleted, error FROM cron_runs ORDER BY id DESC LIMIT 1'),
-        db.prepare('SELECT max(at) AS at FROM cron_runs WHERE ok = 1'),
-        db.prepare('SELECT at, error FROM cron_runs WHERE ok = 0 ORDER BY id DESC LIMIT 1'),
-        db.prepare(
-          `SELECT kind, id, sum(n) AS n, sum(skipped) AS skipped FROM story_daily
-           WHERE day >= ?1 AND kind <> 'total' GROUP BY kind, id ORDER BY n DESC, kind, id LIMIT ?2`,
-        ).bind(utcDay(periodFrom), STORY_ROWS),
-        db.prepare("SELECT n FROM story_daily WHERE day = ?1 AND kind = 'total' AND id = ''").bind(utcDay(t)),
-      ]);
-    } catch (err) {
-      console.error('[admin] cron_runs·story_daily 조회 실패(마이그레이션 0001을 적용했는지 확인)', err);
+      const r = await db.batch([...extraStmts, appStmt]);
+      extra = r.slice(0, extraStmts.length);
+      appRes = r.at(-1);
+    } catch (appErr) {
+      try {
+        extra = await db.batch(extraStmts);
+        console.error('[admin] story_app_daily 조회 실패(마이그레이션 0002를 적용했는지 확인)', appErr);
+      } catch (err) {
+        console.error('[admin] cron_runs·story_daily 조회 실패(마이그레이션 0001을 적용했는지 확인)', err);
+      }
     }
 
     const rows = res.map((r) => r.results);
@@ -225,6 +253,8 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
       story = {
         from: utcDay(periodFrom),
         rows: storyRows.map((s) => ({ kind: s.kind, id: s.id, n: s.n, skipped: s.skipped })),
+        // 앱에서 온 몫(rows의 부분집합). null: 앱 표가 없다(마이그레이션 0002 전). 웹 몫은 rows − app
+        app: appRes ? appRes.results.map((s) => ({ kind: s.kind, id: s.id, n: s.n, skipped: s.skipped })) : null,
         today: { events: Math.min(todayEvents, rules.storyMaxEventsPerDay), max: rules.storyMaxEventsPerDay, full: todayEvents > rules.storyMaxEventsPerDay },
       };
     }
@@ -240,7 +270,7 @@ export function createAdmin({ now = () => Date.now(), rules = RULES } = {}) {
 
     const limits = { place: rules.maxPlacesPerIpPerDay, use: rules.maxUsesPerIpPerDay };
     let rowsRead = null;
-    for (const r of [...res, ...(extra ?? [])]) if (typeof r.meta?.rows_read === 'number') rowsRead = (rowsRead ?? 0) + r.meta.rows_read;
+    for (const r of [...res, ...(extra ?? []), ...(appRes ? [appRes] : [])]) if (typeof r.meta?.rows_read === 'number') rowsRead = (rowsRead ?? 0) + r.meta.rows_read;
 
     return {
       now: t,

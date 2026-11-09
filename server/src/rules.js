@@ -32,6 +32,8 @@ export const RULES = Object.freeze({
   storyMaxBodyBytes: 2048,
   storyMaxEventsPerDay: 10000, // 하루(UTC) 전체 상한. D1 하루 쓰기 한도(10만 행)를 게임과 함께 쓰므로 그 10%로 묶는다
   storyKeepDays: 400, // 이야기 집계를 남기는 날 수(익명 집계라 다른 기록보다 길게 둔다)
+  // 이 출처(Origin 헤더)에서 온 이야기 사건은 앱 표(story_app_daily)에도 센다. Capacitor 앱의 WebView 출처다(wrangler.toml ALLOWED_ORIGINS와 같은 값)
+  storyAppOrigin: 'https://localhost',
 });
 
 // 클라이언트에 알려 주는 규칙 수치(GET /v1/caches 응답의 rules). 안내 문구가 서버 수치를 따라가게 한다.

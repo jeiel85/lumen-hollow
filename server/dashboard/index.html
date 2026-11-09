@@ -115,8 +115,13 @@
           </details>
 
           <h3 class="sub">이야기 진행 <span class="muted">(UTC 날짜 단위, 기간 시작 날부터)</span></h3>
+          <div class="filters" role="group" aria-label="이야기 진행 출처">
+            <button type="button" data-src="all" aria-pressed="true">전체</button>
+            <button type="button" data-src="web" aria-pressed="false">웹판</button>
+            <button type="button" data-src="app" aria-pressed="false">안드로이드 앱</button>
+          </div>
           <p id="story-note" class="muted small"></p>
-          <p class="muted small">온라인을 켠 플레이어의 기기가 보낸 익명 횟수입니다. 누가 보냈는지는 서버에 없어서, 같은 사람이 같은 장면을 다시 보면 다시 셉니다.</p>
+          <p class="muted small">온라인을 켠 플레이어의 기기가 보낸 익명 횟수입니다. 누가 보냈는지는 서버에 없어서, 같은 사람이 같은 장면을 다시 보면 다시 셉니다. 앱은 비공개 테스트·Play 설치본이고(출처 <code>https://localhost</code>), 웹판은 전체에서 앱을 뺀 값입니다.</p>
           <div class="grid two">
             <article class="card">
               <h3>장</h3>

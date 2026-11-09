@@ -18,4 +18,4 @@ Lumen Hollow 안드로이드 앱(`com.jeiel85.lumenhollow`)을 Play Console에 �
 2. 앱 콘텐츠: [app-content.md](app-content.md)대로 답한다.
 3. 스토어 등록정보: [listing.md](listing.md)의 문구와 그래픽을 넣는다.
 4. 테스트 → 비공개 테스트 → 트랙 만들기 → 테스터(구글 계정 이메일 목록, 12명 이상) → 새 버전에 AAB(`android/app/build/outputs/bundle/release/app-release.aab`)를 올린다. 처음 올릴 때 Play 앱 서명을 사용하도록 동의한다(업로드 키는 `android/README.md`).
-5. 검토가 끝나면 테스터에게 참여 링크를 보내고, 12명 이상이 14일 연속 참여하도록 한다. 그동안 사전 출시 보고서(실기기 자동 실행)를 본다 — #53.
+5. 검토가 끝나면 테스터에게 참여 링크를 보내고, 12명 이상이 14일 연속 참여하도록 한다. 그동안 사전 출시 보고서(실기기 자동 실행)를 본다 — #53. 테스터 모으기(구글 그룹)·안내문·Threads 모집 글 초안·테스트 동안 볼 수치는 [testing.md](testing.md).

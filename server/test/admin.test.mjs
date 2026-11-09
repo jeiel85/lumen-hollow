@@ -357,6 +357,79 @@ test('이야기 진행: 고른 기간의 UTC 날짜부터 장·장면별로 합�
   assert.deepEqual([later.rows, later.today.events], [[], 0]);
 });
 
+test('이야기 진행: 앱에서 온 몫(app)을 같은 기간으로 따로 준다(#53)', async () => {
+  const s = setup();
+  const story = async (events, origin) => {
+    const res = await s.game.fetch(new Request('https://api.test/v1/story', {
+      method: 'POST', headers: { Origin: origin, 'CF-Connecting-IP': '203.0.113.50', 'Content-Type': 'application/json' }, body: JSON.stringify({ events }),
+    }), s.gameEnv);
+    assert.equal(res.status, 200);
+  };
+  await story([{ kind: 'scene', id: 'arrival' }, { kind: 'scene', id: 'arrival', skipped: true }], ORIGIN);
+  await story([{ kind: 'scene', id: 'arrival', skipped: true }, { kind: 'clear', id: '1' }], RULES.storyAppOrigin);
+  s.clock.t += DAY;
+  await story([{ kind: 'scene', id: 'dusk' }], RULES.storyAppOrigin);
+  const all = (await s.call()).body.story;
+  assert.deepEqual(all.rows, [
+    { kind: 'scene', id: 'arrival', n: 3, skipped: 2 },
+    { kind: 'clear', id: '1', n: 1, skipped: 0 },
+    { kind: 'scene', id: 'dusk', n: 1, skipped: 0 },
+  ]);
+  assert.deepEqual(all.app, [
+    { kind: 'clear', id: '1', n: 1, skipped: 0 },
+    { kind: 'scene', id: 'arrival', n: 1, skipped: 1 },
+    { kind: 'scene', id: 'dusk', n: 1, skipped: 0 },
+  ]);
+  s.clock.t += 2 * DAY;
+  assert.deepEqual((await s.call('/api/summary?range=1d')).body.story.app, [], '기간 밖은 빠진다');
+});
+
+test('이야기 진행: 전체 합계와 앱 몫은 같은 batch(트랜잭션)에서 읽는다 — 웹 = 전체 − 앱이 어긋나지 않게(#73 리뷰)', async () => {
+  const s = setup();
+  const batches = [];
+  const spy = { ...s.db, batch: (stmts) => { batches.push(stmts.map((x) => x.sql)); return s.db.batch(stmts); } };
+  const r = await s.call('/api/summary', { env: { ...s.adminEnv, DB: spy } });
+  assert.equal(r.status, 200);
+  const together = batches.filter((b) => b.some((q) => /FROM story_daily/.test(q)) && b.some((q) => /FROM story_app_daily/.test(q)));
+  assert.equal(together.length, 1, '앱 몫을 따로 읽는 batch가 없다');
+  assert.equal(batches.filter((b) => b.some((q) => /FROM story_app_daily/.test(q))).length, 1);
+});
+
+test('이야기 진행: 아무 id나 많이 쌓여도 앱 몫은 많이 도달한 것과 전체 표에 보이는 것만 돌려준다(#73 리뷰)', async () => {
+  const s = setup();
+  const send = async (events, origin) => {
+    const res = await s.game.fetch(new Request('https://api.test/v1/story', {
+      method: 'POST', headers: { Origin: origin, 'CF-Connecting-IP': '203.0.113.50', 'Content-Type': 'application/json' }, body: JSON.stringify({ events }),
+    }), s.gameEnv);
+    assert.equal(res.status, 200);
+  };
+  // 웹에서 많이 본 장면 85개(전체 표 상위 80에 든다), 앱에서 한 번씩 본 엉뚱한 id 300개, 앱에서 많이 본 장면 하나.
+  for (let k = 0; k < 85; k++) await send(Array.from({ length: 5 }, () => ({ kind: 'scene', id: `web${k}` })), ORIGIN);
+  for (let k = 0; k < 85; k++) await send([{ kind: 'scene', id: `web${k}` }], RULES.storyAppOrigin);
+  for (let k = 0; k < 300; k += 20) await send(Array.from({ length: 20 }, (_, j) => ({ kind: 'scene', id: `junk${k + j}` })), RULES.storyAppOrigin);
+  await send(Array.from({ length: 20 }, () => ({ kind: 'scene', id: 'apponly' })), RULES.storyAppOrigin);
+  const story = (await s.call()).body.story;
+  assert.equal(story.rows.length, 80, '전체 표는 80행');
+  assert.ok(story.app.length <= 160, `앱 몫은 많아야 160행 (${story.app.length})`);
+  const app = new Map(story.app.map((r) => [`${r.kind}|${r.id}`, r.n]));
+  for (const r of story.rows) assert.ok(app.has(`${r.kind}|${r.id}`) || r.id.startsWith('junk'), `전체 표의 ${r.id}에 맞는 앱 몫이 있다`);
+  assert.equal(app.get('scene|apponly'), 20, '앱에서 많이 본 것은 전체 표 밖이어도 앱 화면에 나온다');
+  assert.ok(story.rows.filter((r) => r.id.startsWith('web')).every((r) => app.get(`${r.kind}|${r.id}`) === 1), '빼기에 쓸 앱 몫이 맞다');
+});
+
+test('마이그레이션 0002 전(story_app_daily 없음)에는 앱 몫만 null이고 나머지는 그대로 나온다', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const s = setup();
+  await seed(s);
+  await s.game.scheduled(s.gameEnv);
+  s.db.raw.exec('DROP TABLE story_app_daily;');
+  const r = await s.call();
+  assert.equal(r.status, 200);
+  assert.ok(r.body.status.cronLog, '실행 기록은 그대로');
+  assert.deepEqual([Array.isArray(r.body.story.rows), r.body.story.app], [true, null]);
+  assert.equal(console.error.mock.callCount(), 1, '원인은 로그로 남긴다');
+});
+
 test('분당 한도(RL_ADMIN): 토큰 확인 전에 걸고, 키는 원문 IP가 아니다', async () => {
   const s = setup();
   const keys = [];
