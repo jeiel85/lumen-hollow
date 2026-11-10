@@ -15,6 +15,7 @@
 //   node tests/e2e/autoplay.mjs [url] [난이도(쉼표) 기본 easy,normal,hard] [시드(쉼표, 또는 1-10) 기본 1-5] [조준(쉼표) 기본 mouse,touch,none] [결과 JSON 경로(선택)]
 import { writeFileSync } from 'node:fs';
 import { launch } from './cdp.mjs';
+import { navKit } from './botnav.mjs';
 
 const [,, url = 'http://127.0.0.1:8000/?debug', levelsArg = 'easy,normal,hard', seedsArg = '1-5', aimsArg = 'mouse,touch,none', outPath = null] = process.argv;
 const seeds = /^\d+-\d+$/.test(seedsArg)
@@ -23,12 +24,11 @@ const seeds = /^\d+-\d+$/.test(seedsArg)
 const MAX_DAYS = 30;
 
 // ---------------------------------------------------------------- 페이지 안에서 도는 봇(문자열로 넣으므로 바깥 이름을 쓰지 않는다)
-function installBot() {
+function installBot(navKit) {
   const L = window.lumen;
   const { world, player, env, shades, input, game, camera, THREE, car } = L;
   const BOUND = 87, CELL = 0.4, HOUR = 7.5, R = 0.36, VWALK = 4.4, FLASH = 13;
   const n = Math.floor((BOUND * 2) / CELL) + 1;
-  const N = n * n;
   let blocked = null;
 
   // 걸을 수 있는 칸: 정적 충돌체를 플레이어 반지름 + 0.12m로 부풀리고, 세워 둔 트럭 둘레 1.6m도 막는다
@@ -43,92 +43,10 @@ function installBot() {
         if (Math.abs(z - car.pos.z) <= 7 && car.distanceTo(x, z) < 1.6) blocked[i * n + j] = 1;
       }
     }
+    ({ idxOf, kx, kz, freeNear, dijkstra, pathTo } = navKit({ x0: -BOUND, z0: -BOUND, nx: n, nz: n, cell: CELL, blocked }));
   }
-  const ci = (v) => Math.round((v + BOUND) / CELL);
-  const idxOf = (x, z) => { const i = ci(x), j = ci(z); return i < 0 || j < 0 || i >= n || j >= n ? -1 : i * n + j; };
-  const kx = (k) => Math.floor(k / n) * CELL - BOUND;
-  const kz = (k) => (k % n) * CELL - BOUND;
-  // (x, z)에서 rad 안의 막히지 않은(ok도 만족하는) 가장 가까운 칸
-  function freeNear(x, z, rad, ok) {
-    let best = -1, bd = rad * rad;
-    for (let i = Math.max(0, ci(x - rad)); i <= Math.min(n - 1, ci(x + rad)); i++) {
-      for (let j = Math.max(0, ci(z - rad)); j <= Math.min(n - 1, ci(z + rad)); j++) {
-        const k = i * n + j;
-        if (blocked[k] || (ok && !ok(k))) continue;
-        const d = (i * CELL - BOUND - x) ** 2 + (j * CELL - BOUND - z) ** 2;
-        if (d <= bd) { bd = d; best = k; }
-      }
-    }
-    return best;
-  }
-
-  // 다익스트라(8방향, 모서리는 자르지 않음). 거리는 Float64로 둔다(Float32면 반올림 때문에 꺼낸 거리가 저장한 거리보다
-  // 커 보여 건너뛰면서 몇 칸에서 멈춘다).
-  const DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [-1, -1, Math.SQRT2]];
-  function dijkstra(sources) {
-    const dist = new Float64Array(N).fill(Infinity);
-    const prev = new Int32Array(N).fill(-1);
-    const hk = [], hp = [];
-    const push = (k, p) => {
-      let i = hk.length;
-      hk.push(k); hp.push(p);
-      while (i > 0) { const q = (i - 1) >> 1; if (hp[q] <= p) break; hk[i] = hk[q]; hp[i] = hp[q]; i = q; }
-      hk[i] = k; hp[i] = p;
-    };
-    const pop = () => {
-      const k = hk[0], p = hp[0];
-      const lk = hk.pop(), lp = hp.pop();
-      if (hk.length) {
-        let i = 0;
-        for (;;) {
-          let c = 2 * i + 1;
-          if (c >= hk.length) break;
-          if (c + 1 < hk.length && hp[c + 1] < hp[c]) c++;
-          if (hp[c] >= lp) break;
-          hk[i] = hk[c]; hp[i] = hp[c]; i = c;
-        }
-        hk[i] = lk; hp[i] = lp;
-      }
-      return [k, p];
-    };
-    for (const s of sources) if (s >= 0 && !blocked[s]) { dist[s] = 0; push(s, 0); }
-    while (hk.length) {
-      const [k, d] = pop();
-      if (d > dist[k]) continue;
-      const i = (k / n) | 0, j = k - i * n;
-      for (const [di, dj, c] of DIRS) {
-        const ni = i + di, nj = j + dj;
-        if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
-        const nk = ni * n + nj;
-        if (blocked[nk] || (di && dj && (blocked[i * n + nj] || blocked[ni * n + j]))) continue;
-        const nd = d + c * CELL;
-        if (nd < dist[nk]) { dist[nk] = nd; prev[nk] = k; push(nk, nd); }
-      }
-    }
-    return { dist, prev };
-  }
-  function los(ax, az, bx, bz) {
-    const s = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.15));
-    for (let t = 0; t <= s; t++) {
-      const k = idxOf(ax + ((bx - ax) * t) / s, az + ((bz - az) * t) / s);
-      if (k < 0 || blocked[k]) return false;
-    }
-    return true;
-  }
-  // 플레이어에서 퍼진 장으로 goal까지의 길을 곧게 편 점들
-  function pathTo(field, goal) {
-    const cells = [];
-    for (let k = goal; k >= 0; k = field.prev[k]) cells.push(k);
-    cells.reverse();
-    const pts = [];
-    for (let i = 0; i < cells.length - 1;) {
-      let j = Math.min(cells.length - 1, i + 80);
-      while (j > i + 1 && !los(kx(cells[i]), kz(cells[i]), kx(cells[j]), kz(cells[j]))) j--;
-      pts.push({ x: kx(cells[j]), z: kz(cells[j]) });
-      i = j;
-    }
-    return pts;
-  }
+  // 격자 계산·길찾기는 botnav.mjs navKit(격자를 만든 뒤 채운다)
+  let idxOf, kx, kz, freeNear, dijkstra, pathTo;
 
   // ------------------------------------------------------------ 상태·기록
   let M = null;
@@ -501,7 +419,7 @@ async function open(reload) {
     if (await B.ev('return !!(window.lumen && lumen.game.ready && !window.__bot)')) break;
     await B.sleep(500);
   }
-  const ok = await B.ev(`lumen.post.render = () => {}; (${installBot.toString()})(); return !!window.__bot;`);
+  const ok = await B.ev(`lumen.post.render = () => {}; (${installBot})(${navKit}); return !!window.__bot;`);
   if (ok !== true) throw new Error(`봇을 넣지 못했다: ${JSON.stringify(ok)}`);
 }
 const results = [];
