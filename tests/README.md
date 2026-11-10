@@ -34,7 +34,7 @@ node --disable-warning=ExperimentalWarning tests/node/gen-fixtures.mjs
 
 ## 브라우저 시험 (`tests/e2e/`)
 
-헤드리스 Chrome을 CDP로 조종해 `?debug`의 `window.lumen`으로 실제 게임을 진행한다. 저장소 폴더를 정적 서버로 띄우고 돌린다(Chrome 위치는 환경 변수 `CHROME`, 없으면 운영체제 기본 위치).
+헤드리스 Chrome을 CDP로 조종해 `?debug`의 `window.lumen`으로 실제 게임을 진행한다. 저장소 폴더를 정적 서버로 띄우고 돌린다(Chrome 위치는 환경 변수 `CHROME`, 없으면 운영체제 기본 위치). 실행마다 쓰는 Chrome 프로필은 임시 폴더의 `lumen-cdp/` 밑에 만들고 `close()`나 프로세스 종료 때 지운다. 강제 종료로 남은 것은 다음 실행이 하루 지난 것만 치운다.
 
 ```bash
 python -m http.server 8000
