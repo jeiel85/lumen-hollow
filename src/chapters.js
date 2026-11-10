@@ -21,7 +21,11 @@ const LANTERNS = ['lampTower', 'lampSteps', 'lampHut', 'lampDock'];
 // 4장 운동장 가로등 셋(서·가운데·동). 배전반은 둘만 켠다. 꺼진 쪽으로 세 번째 그림자가 지나간다.
 const LANE_NAMES = { west: tr('서쪽 골대 쪽'), mid: tr('구령대 앞'), east: tr('구호소 천막 쪽') };
 const LANE_ORDER = ['east', 'mid', 'west'];
-const BED_REACH = 10; // 세 번째 그림자를 이만큼 본관 침상 가까이에서 흩어야 그 창으로 돌아간다
+// 세 번째 그림자를 이만큼 본관 침상 가까이에서 흩어야 그 창으로 돌아간다(아니면 다시 모인다). 침상 자리에 선 사람의
+// 손전등이 닿는 곳(FLASH_RANGE 13m)과 서쪽 길의 마지막 구간(13.7m에서 시작)을 다 덮어, 보이자마자 비춰도 난이도(빠르기)와
+// 상관없이 통과한다. 10m였을 때는 느린 쉬움에서 늘 그 밖에서 흩어져 끝없이 다시 모였고 보통도 가끔 그랬다.
+// 틀린 길(가운데 17.5m·동쪽 30m)은 그대로 걸러진다(tests/node/chapters.test.mjs).
+export const BED_REACH = 14;
 
 const WARM = new THREE.Color(1.0, 0.72, 0.42);
 // 3·4장 무대(강 건너 옛 학교)의 원점. 마을 바닥(±150)과 호숫가 숲 밖이라 서로 보이지 않는다.
