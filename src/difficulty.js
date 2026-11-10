@@ -18,7 +18,7 @@ export const DIFFICULTY = {
     eater: { from: 1, max: 1 }, swarm: { from: 2, size: 3 }, surge: 1,
   },
   hard: {
-    label: tr('어려움'), count: 1.3, cap: 18, speed: 1.12, damage: 18, deep: 0, gap: 0.8, drain: 1.25, load: 1.35, tough: 1.15,
+    label: tr('어려움'), count: 1.3, cap: 18, speed: 1.12, damage: 18, deep: 0, gap: 0.8, drain: 1.25, load: 4, tough: 1.15,
     eater: { from: 0, max: 2 }, swarm: { from: 1, size: 4 }, surge: 0.75,
   },
 };
