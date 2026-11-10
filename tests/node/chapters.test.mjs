@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { makeGame, load, localStorage } from './env.mjs';
 
 const { story, chapters: C } = await makeGame({ chapters: true });
-const { SPEED, PLAYER_R } = await load('src/player.js');
-const { RIVER } = await load('src/chapters.js');
+const { SPEED, PLAYER_R, FLASH_RANGE } = await load('src/player.js');
+const { RIVER, BED_REACH } = await load('src/chapters.js');
 
 // src/player.js update()와 같은 이동 식으로 from → to를 걷는다. 남은 거리를 돌려준다.
 function walk(stage, from, to, dt, secs = 12) {
@@ -207,5 +207,28 @@ test('새 할 일 자리마다 손 닿는 거리 안에 설 자리가 있고, �
     // 그 자리에서 가장 가까운 자리가 자기 자신이어야 한다(옆 자리와 안내가 뒤섞이지 않게)
     const near = C.spots.filter((o) => o.stage === st && o !== s && Math.hypot(o.x - free.x, o.z - free.z) < Math.hypot(s.x - free.x, s.z - free.z));
     assert.deepEqual(near.map((o) => o.id).filter((o) => ids.includes(o) && !id.startsWith('bed')), [], `${id} 옆에 더 가까운 자리`);
+  }
+});
+
+// 4장 세 번째 그림자(배전반 길 내기): 화살표가 세우는 본관 침상 자리에서 손전등이 닿는 곳은 모두 인정 거리 안이라, 보이자마자
+// 비춰도 그림자 빠르기(난이도)와 상관없이 통과한다. 틀린 길(가운데·동쪽)로 온 그림자는 길 끝 둘레(약 1.3m)를 맴돌아도 걸러진다.
+test('4장 세 번째 그림자: 침상 자리에서 비추면 언제 흩어도 인정되고, 틀린 길은 걸러진다', () => {
+  const b = C.river.bedsMark;
+  const dist = (p) => Math.hypot(p.x - b.x, p.z - b.z);
+  // 길(출발점 → 길목들)에서 침상에 가장 가까운 거리
+  const closest = (pts) => {
+    let d = Infinity;
+    for (let i = 1; i < pts.length; i++) {
+      for (let t = 0; t <= 40; t++) {
+        d = Math.min(d, dist({ x: pts[i - 1].x + ((pts[i].x - pts[i - 1].x) * t) / 40, z: pts[i - 1].z + ((pts[i].z - pts[i - 1].z) * t) / 40 }));
+      }
+    }
+    return d;
+  };
+  assert.ok(BED_REACH >= FLASH_RANGE, `인정 거리 ${BED_REACH}m가 손전등 ${FLASH_RANGE}m보다 짧다`);
+  for (const p of C.river.lanes.west.slice(-2)) assert.ok(dist(p) <= BED_REACH, `서쪽 길 마지막 구간이 인정 거리 밖: ${dist(p).toFixed(1)}m`);
+  for (const lane of ['mid', 'east']) {
+    const d = closest([C.river.target3, ...C.river.lanes[lane]]);
+    assert.ok(d > BED_REACH + 2, `${lane} 길이 침상에 ${d.toFixed(1)}m까지 온다(인정 ${BED_REACH}m + 2m 안)`);
   }
 });
